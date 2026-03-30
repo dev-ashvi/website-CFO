@@ -2,6 +2,7 @@ import Background from "../components/Background.jsx";
 import Navbar from "../components/Navbar.jsx";
 import HeroSection from "../components/HeroSection.jsx";
 import WyzAiChatSection from "../components/WyzAiChatSection.jsx";
+import TrustAccuracySection from "../components/TrustAccuracySection.jsx";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
@@ -1005,6 +1006,8 @@ export default function LandingPage() {
           </motion.div>
         </div>
       </section>
+
+      <TrustAccuracySection />
 
       <section className="relative py-28 px-4 z-10 scroll-mt-28">
         <DecorativeGlow color="bg-[#1a3875]" className="bottom-0 left-0 w-[600px] h-[600px] opacity-35" />
