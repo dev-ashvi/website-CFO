@@ -63,20 +63,20 @@ const financeFrictionCards = [
   },
 ];
 
-const wyeSourceItems = [
+const wyzSourceItems = [
   { label: "Accounting (Tally, QuickBooks, Xero)", Icon: Layers },
   { label: "CRM & Sales (Salesforce, HubSpot)", Icon: Users },
   { label: "Excel & Spreadsheets", Icon: FileSpreadsheet },
   { label: "Banking & Payment Feeds", Icon: Landmark },
 ];
 
-const wyeCoreCapabilities = [
+const wyzCoreCapabilities = [
   { title: "Smart Integration", Icon: Link2 },
   { title: "Insight Engine", Icon: Sparkles },
   { title: "CFO-Grade Outputs", Icon: ShieldCheck },
 ];
 
-const wyeOutputGroups = [
+const wyzOutputGroups = [
   {
     title: "Core Financial Analysis",
     bullets: ["Trend & variance analysis", "FP&A & management reporting", "3-statement financial model"],
@@ -95,18 +95,18 @@ const wyeOutputGroups = [
   },
 ];
 
-const wyeChatSuggestedPrompts = ["What is my runway?", "Why did burn increase?", "Forecast next 6 months"];
+const wyzChatSuggestedPrompts = ["What is my runway?", "Why did burn increase?", "Forecast next 6 months"];
 
-const wyeChatCapabilities = [
+const wyzChatCapabilities = [
   { title: "Traceable Answers", Icon: Link2 },
   { title: "Driver-Level Insights", Icon: GitBranch },
   { title: "What-If Simulation", Icon: LineChart },
   { title: "Role-Based Views", Icon: Users },
 ];
 
-const wyeChatUserQuestion = "What is my EBITDA for the last 12 months?";
+const wyzChatUserQuestion = "What is my EBITDA for the last 12 months?";
 
-const wyeChatMetricReveal = {
+const wyzChatMetricReveal = {
   hidden: { opacity: 0, y: 5, filter: "blur(5px)" },
   visible: (step) => ({
     opacity: 1,
@@ -116,7 +116,7 @@ const wyeChatMetricReveal = {
   }),
 };
 
-function WyeChatTypingQuestion({ text, className }) {
+function WyzChatTypingQuestion({ text, className }) {
   const ref = useRef(null);
   const isInView = useInView(ref, { once: true, amount: 0.35 });
   const [shown, setShown] = useState("");
@@ -483,14 +483,14 @@ export default function LandingPage() {
       </section>
 
       <section
-        id="wye-platform"
+        id="wyz-platform"
         className="relative scroll-mt-28 z-10 overflow-hidden border-y border-[rgba(26,54,115,0.08)] bg-[#fafbfc] py-24 md:py-28"
       >
         <style>{`
-          @keyframes wye-connector-flow {
+          @keyframes wyz-connector-flow {
             to { stroke-dashoffset: -20; }
           }
-          @keyframes wye-core-glow {
+          @keyframes wyz-core-glow {
             0%, 100% { opacity: 0.55; transform: scale(1); }
             50% { opacity: 0.85; transform: scale(1.03); }
           }
@@ -525,7 +525,7 @@ export default function LandingPage() {
               variants={transformItem}
               className="mt-4 text-base leading-relaxed text-[rgba(26,54,115,0.7)] md:text-lg"
             >
-              Connect your financial data, unify it through Wye, and turn it into board-ready reports, forecasts, and
+              Connect your financial data, unify it through Wyz, and turn it into board-ready reports, forecasts, and
               instant answers.
             </motion.p>
           </motion.div>
@@ -539,12 +539,12 @@ export default function LandingPage() {
               aria-hidden
             >
               <defs>
-                <linearGradient id="wyeLineL" x1="0%" y1="0%" x2="100%" y2="0%">
+                <linearGradient id="wyzLineL" x1="0%" y1="0%" x2="100%" y2="0%">
                   <stop offset="0%" stopColor="rgba(26,54,115,0.2)" />
                   <stop offset="50%" stopColor="rgba(252,125,37,0.45)" />
                   <stop offset="100%" stopColor="rgba(26,54,115,0.35)" />
                 </linearGradient>
-                <linearGradient id="wyeLineR" x1="0%" y1="0%" x2="100%" y2="0%">
+                <linearGradient id="wyzLineR" x1="0%" y1="0%" x2="100%" y2="0%">
                   <stop offset="0%" stopColor="rgba(26,54,115,0.35)" />
                   <stop offset="50%" stopColor="rgba(252,125,37,0.45)" />
                   <stop offset="100%" stopColor="rgba(26,54,115,0.2)" />
@@ -558,11 +558,11 @@ export default function LandingPage() {
               />
               <path
                 d="M 120 140 C 240 60, 360 220, 500 140"
-                stroke="url(#wyeLineL)"
+                stroke="url(#wyzLineL)"
                 strokeWidth="1.35"
                 strokeLinecap="round"
                 strokeDasharray="5 7"
-                style={{ animation: "wye-connector-flow 2.8s linear infinite" }}
+                style={{ animation: "wyz-connector-flow 2.8s linear infinite" }}
               />
               <path
                 d="M 500 140 C 640 60, 760 220, 880 140"
@@ -572,11 +572,11 @@ export default function LandingPage() {
               />
               <path
                 d="M 500 140 C 640 60, 760 220, 880 140"
-                stroke="url(#wyeLineR)"
+                stroke="url(#wyzLineR)"
                 strokeWidth="1.35"
                 strokeLinecap="round"
                 strokeDasharray="5 7"
-                style={{ animation: "wye-connector-flow 2.8s linear infinite reverse" }}
+                style={{ animation: "wyz-connector-flow 2.8s linear infinite reverse" }}
               />
             </svg>
 
@@ -590,7 +590,7 @@ export default function LandingPage() {
               >
                 <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#fc7d25]">Your Financial Stack</p>
                 <ul className="mt-5 space-y-3">
-                  {wyeSourceItems.map(({ label, Icon }) => (
+                  {wyzSourceItems.map(({ label, Icon }) => (
                     <li
                       key={label}
                       className="flex items-start gap-3 rounded-xl border border-[rgba(26,54,115,0.1)] bg-white px-4 py-3 shadow-[0_2px_12px_rgba(26,54,115,0.05)]"
@@ -614,7 +614,7 @@ export default function LandingPage() {
                 >
                   <div
                     className="pointer-events-none absolute -inset-4 z-0 rounded-[28px] bg-gradient-to-br from-[#1a3673]/18 via-[#fafbfc]/0 to-[#fc7d25]/22 opacity-90 blur-2xl"
-                    style={{ animation: "wye-core-glow 5s ease-in-out infinite" }}
+                    style={{ animation: "wyz-core-glow 5s ease-in-out infinite" }}
                     aria-hidden
                   />
                   <motion.div
@@ -623,12 +623,12 @@ export default function LandingPage() {
                     transition={{ duration: 5.5, repeat: Infinity, ease: "easeInOut" }}
                   >
                     <div className="text-center">
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[#fc7d25]">Wye Core</p>
-                      <h3 className="mt-2 font-semibold tracking-tight text-[#1a3673] text-3xl md:text-4xl">Wye</h3>
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[#fc7d25]">Wyz Core</p>
+                      <h3 className="mt-2 font-semibold tracking-tight text-[#1a3673] text-3xl md:text-4xl">Wyz</h3>
                       <p className="mt-2 text-sm text-[rgba(26,54,115,0.65)]">Your financial intelligence layer</p>
                     </div>
                     <ul className="mt-8 space-y-3 border-t border-[rgba(26,54,115,0.08)] pt-6">
-                      {wyeCoreCapabilities.map(({ title, Icon }) => (
+                      {wyzCoreCapabilities.map(({ title, Icon }) => (
                         <li key={title} className="flex items-center gap-3 text-[15px] font-medium text-[#1a3673]">
                           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[rgba(252,125,37,0.12)] text-[#c55a12]">
                             <Icon size={18} strokeWidth={1.75} className="text-[#1a3673]" aria-hidden />
@@ -650,7 +650,7 @@ export default function LandingPage() {
               >
                 <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#fc7d25]">What You Get</p>
                 <div className="mt-5 flex flex-col gap-3.5">
-                  {wyeOutputGroups.map((group) => (
+                  {wyzOutputGroups.map((group) => (
                     <div
                       key={group.title}
                       className="rounded-xl border border-[rgba(26,54,115,0.1)] bg-white px-4 py-3.5 shadow-[0_2px_10px_rgba(26,54,115,0.04)] transition-all duration-200 hover:-translate-y-0.5 hover:border-[rgba(252,125,37,0.28)] hover:shadow-[0_8px_24px_rgba(26,54,115,0.08)]"
@@ -689,7 +689,7 @@ export default function LandingPage() {
       </section>
 
       <section
-        id="wye-ai-chat"
+        id="wyz-ai-chat"
         className="relative scroll-mt-28 z-10 overflow-hidden border-y border-[rgba(26,54,115,0.08)] bg-white py-24 md:py-28"
       >
         <div
@@ -722,7 +722,7 @@ export default function LandingPage() {
               variants={transformItem}
               className="mt-4 text-base leading-relaxed text-[rgba(26,54,115,0.7)] md:text-lg"
             >
-              Wye turns your financial data into answers you can trust — grounded in real numbers, not assumptions.
+              Wyz turns your financial data into answers you can trust — grounded in real numbers, not assumptions.
             </motion.p>
           </motion.div>
 
@@ -744,7 +744,7 @@ export default function LandingPage() {
                     <Sparkles size={18} strokeWidth={1.75} aria-hidden />
                   </span>
                   <div>
-                    <p className="text-[13px] font-semibold text-[#1a3673]">Wye</p>
+                    <p className="text-[13px] font-semibold text-[#1a3673]">Wyz</p>
                     <p className="text-[11px] text-[rgba(26,54,115,0.55)]">Financial intelligence · live</p>
                   </div>
                 </div>
@@ -761,8 +761,8 @@ export default function LandingPage() {
                   transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
                   className="ml-auto max-w-[92%] rounded-2xl rounded-tr-md border border-[rgba(26,54,115,0.08)] bg-[#f8fafc] px-4 py-3 text-left shadow-sm"
                 >
-                  <WyeChatTypingQuestion
-                    text={wyeChatUserQuestion}
+                  <WyzChatTypingQuestion
+                    text={wyzChatUserQuestion}
                     className="min-h-[1.4rem] text-[13px] font-medium leading-relaxed text-[#1a3673] md:text-sm"
                   />
                 </motion.div>
@@ -782,7 +782,7 @@ export default function LandingPage() {
                       <p className="flex flex-wrap items-baseline gap-x-1">
                         <motion.span
                           custom={0}
-                          variants={wyeChatMetricReveal}
+                          variants={wyzChatMetricReveal}
                           initial="hidden"
                           whileInView="visible"
                           viewport={{ once: true, amount: 0.05 }}
@@ -792,7 +792,7 @@ export default function LandingPage() {
                         </motion.span>
                         <motion.span
                           custom={1}
-                          variants={wyeChatMetricReveal}
+                          variants={wyzChatMetricReveal}
                           initial="hidden"
                           whileInView="visible"
                           viewport={{ once: true, amount: 0.05 }}
@@ -802,7 +802,7 @@ export default function LandingPage() {
                         </motion.span>
                         <motion.span
                           custom={2}
-                          variants={wyeChatMetricReveal}
+                          variants={wyzChatMetricReveal}
                           initial="hidden"
                           whileInView="visible"
                           viewport={{ once: true, amount: 0.05 }}
@@ -812,7 +812,7 @@ export default function LandingPage() {
                         </motion.span>
                         <motion.span
                           custom={3}
-                          variants={wyeChatMetricReveal}
+                          variants={wyzChatMetricReveal}
                           initial="hidden"
                           whileInView="visible"
                           viewport={{ once: true, amount: 0.05 }}
@@ -824,7 +824,7 @@ export default function LandingPage() {
                       <p className="mt-2 flex flex-wrap items-baseline gap-x-1">
                         <motion.span
                           custom={4}
-                          variants={wyeChatMetricReveal}
+                          variants={wyzChatMetricReveal}
                           initial="hidden"
                           whileInView="visible"
                           viewport={{ once: true, amount: 0.05 }}
@@ -834,7 +834,7 @@ export default function LandingPage() {
                         </motion.span>
                         <motion.span
                           custom={5}
-                          variants={wyeChatMetricReveal}
+                          variants={wyzChatMetricReveal}
                           initial="hidden"
                           whileInView="visible"
                           viewport={{ once: true, amount: 0.05 }}
@@ -844,7 +844,7 @@ export default function LandingPage() {
                         </motion.span>
                         <motion.span
                           custom={6}
-                          variants={wyeChatMetricReveal}
+                          variants={wyzChatMetricReveal}
                           initial="hidden"
                           whileInView="visible"
                           viewport={{ once: true, amount: 0.05 }}
@@ -854,7 +854,7 @@ export default function LandingPage() {
                         </motion.span>
                         <motion.span
                           custom={7}
-                          variants={wyeChatMetricReveal}
+                          variants={wyzChatMetricReveal}
                           initial="hidden"
                           whileInView="visible"
                           viewport={{ once: true, amount: 0.05 }}
@@ -867,7 +867,7 @@ export default function LandingPage() {
                       <p className="mt-2 flex flex-wrap items-baseline gap-x-1">
                         <motion.span
                           custom={8}
-                          variants={wyeChatMetricReveal}
+                          variants={wyzChatMetricReveal}
                           initial="hidden"
                           whileInView="visible"
                           viewport={{ once: true, amount: 0.05 }}
@@ -877,7 +877,7 @@ export default function LandingPage() {
                         </motion.span>
                         <motion.span
                           custom={9}
-                          variants={wyeChatMetricReveal}
+                          variants={wyzChatMetricReveal}
                           initial="hidden"
                           whileInView="visible"
                           viewport={{ once: true, amount: 0.05 }}
@@ -932,7 +932,7 @@ export default function LandingPage() {
                   <input
                     type="text"
                     readOnly
-                    placeholder="Ask Wye a question…"
+                    placeholder="Ask Wyz a question…"
                     className="min-w-0 flex-1 bg-transparent text-[13px] text-[#1a3673] outline-none placeholder:text-[rgba(26,54,115,0.45)]"
                   />
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#1a3673] text-white shadow-sm">
@@ -943,7 +943,7 @@ export default function LandingPage() {
                   Suggested
                 </p>
                 <div className="mt-2 flex flex-wrap gap-2">
-                  {wyeChatSuggestedPrompts.map((prompt) => (
+                  {wyzChatSuggestedPrompts.map((prompt) => (
                     <button
                       key={prompt}
                       type="button"
@@ -974,7 +974,7 @@ export default function LandingPage() {
             whileInView="show"
             viewport={{ once: true, amount: 0.2 }}
           >
-            {wyeChatCapabilities.map(({ title, Icon }) => (
+            {wyzChatCapabilities.map(({ title, Icon }) => (
               <motion.div
                 key={title}
                 variants={transformItem}

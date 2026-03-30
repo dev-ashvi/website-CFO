@@ -9,6 +9,7 @@ import {
   LineChart,
   PieChart,
   Sparkles,
+  TrendingDown,
   TrendingUp,
   Wallet,
 } from "lucide-react";
@@ -509,7 +510,7 @@ export default function HeroSection() {
           label="Net Burn"
           value="₹4.2L"
           hint="Optimized by AI"
-          Icon={TrendingUp}
+          Icon={TrendingDown}
           accent="blue"
           floatClass="motion-safe:animate-float-edge-slow"
           positionClass="right-[1%] top-[36%] opacity-[0.9] lg:right-[3%] xl:right-[4%]"
@@ -562,7 +563,7 @@ export default function HeroSection() {
               >
                 Clarity, Control, and Runway —{" "}
                 <br className="hidden md:block" />
-                <span className="text-[#fc7d25]">Powered by AI + CFO Experts</span>
+                <span className="text-[#fc7d25]">AI-powered finance intelligence</span>
               </motion.h1>
               <motion.p
                 className="mx-auto mt-6 max-w-2xl text-base font-light leading-relaxed text-slate-500 sm:mt-7 md:mt-6 md:text-lg"
@@ -575,8 +576,8 @@ export default function HeroSection() {
                 }
                 transition={headingEnter(0.22)}
               >
-                Get MIS reports, runway visibility, cash flow forecasts, investor-ready updates, and strategic finance support — through one
-                intelligent workspace backed by real CFOs.
+                Real-time financial clarity, investor-grade reporting, and strategic cash insight — AI-powered CFO. Built
+                for founders and CFOs who&apos;d rather build than wrestle spreadsheets.
               </motion.p>
             </div>
           </div>
@@ -745,7 +746,7 @@ export default function HeroSection() {
 
         <div className="rounded-2xl border border-[#1a3673]/12 bg-white/90 p-3.5 shadow-[0_8px_22px_rgba(26,54,115,0.07)]">
           <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.11em] text-slate-500">
-            <TrendingUp className="h-3.5 w-3.5 text-[#1a3673]" />
+            <TrendingDown className="h-3.5 w-3.5 text-[#1a3673]" />
             Net Burn
           </p>
           <p className="mt-1 text-[22px] leading-none tabular-nums tracking-tight text-[#1a3673]" style={{ fontFamily: '"DM Serif Display", serif' }}>
