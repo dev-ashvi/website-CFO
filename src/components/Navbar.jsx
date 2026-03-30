@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import topLogo from "../../ChatGPT_Image_Mar_30__2026__07_33_52_PM-removebg-preview.png";
 
@@ -9,8 +10,32 @@ const nav = [
 ];
 
 export default function Navbar() {
+  const [hidden, setHidden] = useState(false);
+  const lastY = useRef(0);
+
+  useEffect(() => {
+    lastY.current = window.scrollY;
+    const onScroll = () => {
+      const y = window.scrollY;
+      const dy = y - lastY.current;
+      lastY.current = y;
+      if (y < 48) {
+        setHidden(false);
+        return;
+      }
+      if (dy > 6) setHidden(true);
+      else if (dy < -6) setHidden(false);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
   return (
-    <nav className="fixed top-0 z-50 w-full overflow-x-clip px-3 pt-4 transition-all duration-300 md:px-8 md:pt-5">
+    <nav
+      className={`fixed top-0 z-50 w-full overflow-x-clip bg-white/95 px-3 pt-4 shadow-[0_1px_0_rgba(26,54,115,0.06)] backdrop-blur-md transition-transform duration-300 ease-out will-change-transform md:px-8 md:pt-5 ${
+        hidden ? "-translate-y-full pointer-events-none" : "translate-y-0"
+      }`}
+    >
       <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-2 px-0 py-0 sm:px-1">
         <Link to="/" className="flex min-w-0 shrink cursor-pointer items-center gap-2">
           <img
