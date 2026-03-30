@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import {
+  Activity,
   ArrowRight,
   BarChart3,
   FileText,
@@ -11,8 +12,6 @@ import {
   TrendingUp,
   Wallet,
 } from "lucide-react";
-import { DecorativeGlow } from "./reference-ui.jsx";
-import HeroSignalStrip from "./HeroSignalStrip.jsx";
 
 /** Rotating hint copy for hero input (when empty) */
 const PLACEHOLDER_HINTS = [
@@ -55,13 +54,29 @@ function replyFor(text) {
 }
 
 /** Faint edge stat cards — ghosted finance UI (lg+), gentle float */
-const EdgeStat = ({ label, value, positionClass, floatClass }) => (
+const EdgeStat = ({ label, value, hint, positionClass, floatClass, Icon, accent = "orange" }) => (
   <motion.div
     initial={false}
-    className={`pointer-events-none absolute z-20 hidden max-w-[118px] -rotate-1 select-none flex-col rounded-xl border border-white/[0.07] bg-[#0a2048]/18 px-2.5 py-2 shadow-[0_12px_40px_rgba(0,0,0,0.15)] backdrop-blur-xl motion-reduce:!animate-none lg:flex ${floatClass ?? ""} ${positionClass}`}
+    className={`pointer-events-none absolute z-20 hidden select-none flex-col rounded-2xl border border-[#1a3673]/12 bg-white/85 px-3 py-3 shadow-[0_8px_30px_rgba(26,54,115,0.06)] backdrop-blur-xl motion-reduce:!animate-none lg:flex ${floatClass ?? ""} ${positionClass}`}
   >
-    <p className="text-[8px] font-medium uppercase tracking-[0.12em] text-[#a3b8d7]/45">{label}</p>
-    <p className="mt-0.5 text-sm font-semibold tabular-nums tracking-tight text-white/55">{value}</p>
+    <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.11em] text-slate-500">
+      <Icon className={`h-3.5 w-3.5 ${accent === "orange" ? "text-[#fc7d25]" : "text-[#1a3673]"}`} />
+      {label}
+    </p>
+    <p className="mt-1 text-2xl leading-none tabular-nums tracking-tight text-[#1a3673]" style={{ fontFamily: '"DM Serif Display", serif' }}>
+      {value}
+    </p>
+    <p
+      className={`mt-1 text-[11px] ${
+        hint?.includes("+")
+          ? "inline-block w-fit rounded-md bg-emerald-50 px-2 py-0.5 font-medium text-emerald-600"
+          : hint?.toLowerCase().includes("optimized")
+            ? "inline-block w-fit rounded-md bg-[#fff3eb] px-2 py-0.5 font-medium text-[#fc7d25]"
+          : "text-slate-500"
+      }`}
+    >
+      {hint}
+    </p>
   </motion.div>
 );
 
@@ -231,6 +246,59 @@ function HeroBottomWave({ className }) {
   );
 }
 
+/** Subtle premium growth trajectory signal (background only) */
+function HeroGrowthTrajectory({ className }) {
+  return (
+    <div className={`pointer-events-none ${className}`} aria-hidden>
+      <svg className="h-full w-full" viewBox="0 0 1600 760" preserveAspectRatio="xMidYMid slice">
+        <defs>
+          <filter id="heroGrowthTipGlow" x="-40%" y="-40%" width="180%" height="180%">
+            <feGaussianBlur stdDeviation="2.2" result="blur" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+        </defs>
+
+        {/* supporting depth lines */}
+        <path
+          d="M90,620 L260,560 L380,580 L560,490 L740,515 L920,420 L1120,445 L1300,320 L1460,250"
+          fill="none"
+          stroke="rgba(120,146,182,0.25)"
+          strokeWidth="1.2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M120,640 L280,590 L420,606 L600,520 L770,548 L960,452 L1140,470 L1320,350 L1480,275"
+          fill="none"
+          stroke="rgba(255,255,255,0.2)"
+          strokeWidth="1.1"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+
+        {/* main growth line */}
+        <path
+          d="M90,650 L250,600 L390,620 L560,530 L740,555 L930,450 L1110,470 L1290,350 L1462,220"
+          fill="none"
+          stroke="rgba(252,125,37,0.55)"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+
+        {/* subtle arrow tip */}
+        <path d="M1452,225 L1462,220 L1457,232" fill="none" stroke="rgba(252,125,37,0.58)" strokeWidth="1.8" strokeLinecap="round" />
+        <circle cx="1462" cy="220" r="2.2" fill="rgba(252,125,37,0.62)" filter="url(#heroGrowthTipGlow)">
+          <animate attributeName="opacity" values="0.45;0.78;0.45" dur="4.8s" repeatCount="indefinite" />
+        </circle>
+      </svg>
+    </div>
+  );
+}
+
 const TRUST_LINE = "Backed by real CFO expertise + AI intelligence";
 
 const EASE_PREMIUM = "ease-[cubic-bezier(0.16,1,0.3,1)]";
@@ -330,7 +398,7 @@ export default function HeroSection() {
   };
 
   const inputRowClass =
-    "group/input-row flex flex-col gap-2 rounded-2xl border border-white/[0.1] bg-[#050b1a]/55 p-1.5 shadow-inner backdrop-blur-sm transition-[box-shadow,border-color,transform] duration-300 ease-out sm:flex-row sm:items-stretch hover:border-white/[0.13] hover:shadow-[0_10px_36px_rgba(0,0,0,0.3)] focus-within:border-white/[0.17] focus-within:shadow-[0_0_0_1px_rgba(252,124,35,0.12),0_16px_52px_rgba(0,0,0,0.38)] focus-within:ring-1 focus-within:ring-[#fc7c23]/22";
+    "group/input-row flex flex-col gap-2 rounded-2xl border border-[#1a3673]/18 bg-white/95 p-1.5 shadow-[0_8px_28px_rgba(26,54,115,0.08)] backdrop-blur-sm transition-[box-shadow,border-color,transform] duration-300 ease-out sm:flex-row sm:items-stretch hover:border-[#1a3673]/28 hover:shadow-[0_12px_34px_rgba(26,54,115,0.12)] focus-within:border-[#1a3673]/35 focus-within:shadow-[0_0_0_1px_rgba(252,125,37,0.2),0_14px_40px_rgba(26,54,115,0.14)] focus-within:ring-1 focus-within:ring-[#fc7d25]/25";
 
   const headingEnter = (delay) => ({
     duration: 0.55,
@@ -342,7 +410,7 @@ export default function HeroSection() {
     <>
       <div className="flex flex-1 items-center gap-3 rounded-xl bg-transparent pl-2 sm:pl-3 md:pl-4">
         <div
-          className="shrink-0 rounded-lg border border-[#fc7c23]/25 bg-[#fc7c23]/10 p-2 text-[#fc7c23] transition-transform duration-300 group-focus-within/input-row:scale-[1.03]"
+          className="shrink-0 rounded-lg border border-[#1a3673]/20 bg-[#1a3673]/8 p-2 text-[#1a3673] transition-transform duration-300 group-focus-within/input-row:scale-[1.03]"
           aria-hidden
         >
           <Wallet className="h-4 w-4" strokeWidth={2} />
@@ -360,7 +428,7 @@ export default function HeroSection() {
             onBlur={() => setInputFocused(false)}
             placeholder=""
             aria-expanded={isChatActive}
-            className="min-h-[48px] w-full bg-transparent py-2.5 text-[15px] text-white caret-[#fc7c23] focus:outline-none sm:min-h-0 sm:py-3.5 sm:text-base"
+            className="min-h-[48px] w-full bg-transparent py-2.5 text-[15px] text-slate-700 caret-[#fc7d25] focus:outline-none sm:min-h-0 sm:py-3.5 sm:text-base"
           />
           {input.length === 0 && (
             <div className="pointer-events-none absolute left-0 right-0 top-1/2 flex -translate-y-1/2 items-center gap-1.5 overflow-hidden pr-2">
@@ -373,7 +441,7 @@ export default function HeroSection() {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -4 }}
                   transition={{ duration: 0.4, ease: easePremium }}
-                  className="truncate text-[15px] text-[#6b849e] sm:text-base"
+                  className="truncate text-[15px] text-slate-400 sm:text-base"
                 >
                   {PLACEHOLDER_HINTS[placeholderIdx]}
                 </motion.span>
@@ -400,84 +468,51 @@ export default function HeroSection() {
 
   return (
     <section className="relative z-10 flex flex-col overflow-hidden px-4 pb-2 pt-[calc(10.75rem+env(safe-area-inset-top,0px))] sm:px-6 sm:pb-4 sm:pt-[calc(11rem+env(safe-area-inset-top,0px))] md:pt-[calc(10.5rem+env(safe-area-inset-top,0px))] lg:pt-[calc(10.25rem+env(safe-area-inset-top,0px))] xl:pt-[calc(10rem+env(safe-area-inset-top,0px))]">
-      <div className="pointer-events-none absolute inset-0 h-full w-full bg-gradient-to-b from-[#0d1f45] via-[#0a1635] to-[#061028]" />
+      <div className="pointer-events-none absolute inset-0 h-full w-full bg-white" />
+      <div className="pointer-events-none absolute inset-0 bg-white/0" />
       <div
-        className="pointer-events-none absolute inset-0 z-0 h-full w-full opacity-[0.028]"
+        className="pointer-events-none absolute inset-0 z-0 h-full w-full opacity-[0.32]"
         style={{
-          backgroundImage: `linear-gradient(to right, rgba(255,255,255,0.55) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.55) 1px, transparent 1px)`,
-          backgroundSize: "48px 48px",
+          backgroundImage: `linear-gradient(to right, rgba(26,54,115,0.08) 1px, transparent 1px), linear-gradient(to bottom, rgba(26,54,115,0.08) 1px, transparent 1px)`,
+          backgroundSize: "56px 56px",
           backgroundRepeat: "repeat",
           maskImage:
-            "linear-gradient(to bottom, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.65) 45%, rgba(0,0,0,0.2) 72%, transparent 100%)",
+            "linear-gradient(to bottom, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.45) 55%, transparent 100%)",
           WebkitMaskImage:
-            "linear-gradient(to bottom, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.65) 45%, rgba(0,0,0,0.2) 72%, transparent 100%)",
+            "linear-gradient(to bottom, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.45) 55%, transparent 100%)",
         }}
         aria-hidden
-      />
-      {/* Layered center light + headline halo */}
-      <div
-        className={`pointer-events-none absolute left-1/2 top-[30%] z-[1] h-[min(100%,620px)] w-[min(100vw,920px)] -translate-x-1/2 -translate-y-1/2 transition-opacity duration-700 ${EASE_PREMIUM} ${isChatActive ? "opacity-[0.38]" : "opacity-100"}`}
-        style={{
-          background:
-            "radial-gradient(ellipse 72% 58% at 50% 48%, rgba(36, 78, 158, 0.34) 0%, rgba(14, 36, 82, 0.14) 42%, transparent 68%)",
-        }}
-        aria-hidden
-      />
-      <div
-        className={`pointer-events-none absolute left-1/2 top-[36%] z-[1] h-[520px] w-[min(88vw,640px)] -translate-x-1/2 -translate-y-1/2 transition-opacity duration-700 ${EASE_PREMIUM} ${isChatActive ? "opacity-[0.14]" : "opacity-100"}`}
-        aria-hidden
-      >
-        <div
-          className="h-full w-full rounded-full blur-[72px] motion-safe:animate-breathe-glow motion-reduce:animate-none"
-          style={{
-            background:
-              "radial-gradient(circle at 50% 50%, rgba(59, 110, 212, 0.45) 0%, rgba(20, 45, 105, 0.18) 38%, transparent 62%)",
-          }}
-        />
-      </div>
-      <DecorativeGlow
-        color="bg-[#1a3875]"
-        className={`top-[22%] left-1/2 h-[580px] w-[900px] -translate-x-1/2 -translate-y-1/2 transition-opacity duration-700 ${EASE_PREMIUM} ${isChatActive ? "opacity-[0.18]" : "opacity-50"}`}
-      />
-      <DecorativeGlow
-        color="bg-[#fc7c23]"
-        className={`bottom-[-12%] right-[-6%] h-[460px] w-[540px] transition-opacity duration-700 ${EASE_PREMIUM} ${isChatActive ? "opacity-[0.05]" : "opacity-[0.16]"}`}
-      />
-      <DecorativeGlow
-        color="bg-[#6b4dc4]"
-        className={`bottom-[8%] right-[4%] h-[320px] w-[400px] blur-[110px] transition-opacity duration-700 ${EASE_PREMIUM} ${isChatActive ? "opacity-[0.04]" : "opacity-[0.12]"}`}
       />
       <HeroLayeredGraph
-        className={`pointer-events-none absolute inset-x-0 z-[1] h-[min(52vh,34rem)] max-h-[560px] w-full transition-opacity duration-700 ${EASE_PREMIUM} ${isChatActive ? "opacity-[0.14]" : "opacity-100"} bottom-[clamp(6.25rem,13.5vh,10.5rem)] sm:bottom-[clamp(6.75rem,14.5vh,11rem)] md:bottom-[clamp(7rem,15vh,11.5rem)]`}
+        className={`pointer-events-none absolute inset-x-0 z-[1] h-[min(52vh,34rem)] max-h-[560px] w-full transition-opacity duration-700 ${EASE_PREMIUM} ${isChatActive ? "opacity-[0.06]" : "opacity-[0.2]"} bottom-[clamp(6.25rem,13.5vh,10.5rem)] sm:bottom-[clamp(6.75rem,14.5vh,11rem)] md:bottom-[clamp(7rem,15vh,11.5rem)]`}
+      />
+      <HeroGrowthTrajectory
+        className={`absolute inset-0 z-[1] transition-opacity duration-700 ${EASE_PREMIUM} ${isChatActive ? "opacity-[0.2]" : "opacity-[0.42]"}`}
       />
       <HeroBottomWave
-        className={`absolute inset-x-0 bottom-0 z-[1] h-[min(5.5rem,11vh)] overflow-hidden transition-opacity duration-700 ${EASE_PREMIUM} ${isChatActive ? "opacity-[0.32]" : "opacity-100"}`}
+        className={`absolute inset-x-0 bottom-0 z-[1] h-[min(5.5rem,11vh)] overflow-hidden transition-opacity duration-700 ${EASE_PREMIUM} ${isChatActive ? "opacity-[0.05]" : "opacity-[0.16]"}`}
       />
-      <HeroSignalStrip dimmed={isChatActive} />
-      {/* Micro UI fragments — corners, very faint */}
-      <div
-        className={`pointer-events-none absolute left-[3%] top-[52%] z-[1] hidden h-14 w-[5.5rem] rounded-lg border border-white/[0.05] bg-[#050b1a]/15 blur-[0.5px] transition-opacity duration-700 md:block ${isChatActive ? "opacity-0" : "opacity-[0.35]"}`}
-        aria-hidden
-      />
-      <div
-        className={`pointer-events-none absolute right-[4%] top-[22%] z-[1] hidden h-11 w-20 rounded-md border border-white/[0.04] bg-[#0a2048]/12 transition-opacity duration-700 lg:block ${isChatActive ? "opacity-0" : "opacity-[0.32]"}`}
-        aria-hidden
-      />
-
+      {/* HeroSignalStrip intentionally hidden for clean white hero style */}
       <div
         className={`pointer-events-none absolute inset-0 mx-auto max-w-[1600px] transition-opacity duration-700 ${EASE_PREMIUM} ${isChatActive ? "opacity-0" : "opacity-100"}`}
       >
         <EdgeStat
-          label="Runway"
-          value="14.2 mo"
+          label="Cash Runway"
+          value="18 Months"
+          hint="+3 mo extension"
+          Icon={Activity}
+          accent="orange"
           floatClass="motion-safe:animate-float-edge"
-          positionClass="left-[1%] top-[38%] scale-[0.96] opacity-[0.45] lg:left-[3%] xl:left-[4%] xl:opacity-[0.52]"
+          positionClass="left-[6%] top-[56%] opacity-[0.92] lg:left-[9%] xl:left-[10%]"
         />
         <EdgeStat
-          label="Cash"
-          value="₹2.4 Cr"
+          label="Net Burn"
+          value="₹4.2L"
+          hint="Optimized by AI"
+          Icon={TrendingUp}
+          accent="blue"
           floatClass="motion-safe:animate-float-edge-slow"
-          positionClass="right-[1%] top-[40%] scale-[0.96] opacity-[0.45] lg:right-[3%] xl:right-[4%] xl:opacity-[0.52]"
+          positionClass="right-[1%] top-[36%] opacity-[0.9] lg:right-[3%] xl:right-[4%]"
         />
       </div>
 
@@ -499,7 +534,7 @@ export default function HeroSection() {
           <div className="min-h-0">
             <div className="origin-top text-center">
               <motion.div
-                className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.05] px-4 py-1.5 text-xs font-semibold tracking-wide text-[#e8eef8] shadow-[0_8px_28px_rgba(0,0,0,0.2)] backdrop-blur-md sm:mb-7"
+                className="mb-6 inline-flex items-center gap-2 rounded-full border border-[#1a3673]/14 bg-[#1a3673]/[0.03] px-4 py-1.5 text-xs font-semibold tracking-wide text-[#1a3673] shadow-[0_6px_20px_rgba(26,54,115,0.07)] sm:mb-7"
                 initial={{ opacity: 0, y: 14 }}
                 animate={
                   isChatActive
@@ -515,7 +550,8 @@ export default function HeroSection() {
                 AI + Human CFO Intelligence
               </motion.div>
               <motion.h1
-                className="mx-auto max-w-4xl text-balance text-3xl font-extrabold leading-[1.12] tracking-tight text-[#f8fafc] sm:text-4xl md:text-5xl lg:text-6xl"
+                className="mx-auto max-w-4xl text-balance text-3xl font-extrabold leading-[1.12] tracking-tight text-slate-800 sm:text-4xl md:text-5xl lg:text-6xl"
+                style={{ fontFamily: '"DM Serif Display", serif' }}
                 initial={{ opacity: 0, y: 20 }}
                 animate={
                   isChatActive
@@ -526,10 +562,11 @@ export default function HeroSection() {
               >
                 Clarity, Control, and Runway —{" "}
                 <br className="hidden md:block" />
-                <span className="text-transparent bg-gradient-to-r from-[#fc7c23] to-[#ffd2b3] bg-clip-text">Powered by AI + CFO Experts</span>
+                <span className="text-[#fc7d25]">Powered by AI + CFO Experts</span>
               </motion.h1>
               <motion.p
-                className="mx-auto mt-6 max-w-2xl text-base font-light leading-relaxed text-[#b4c8e8] sm:mt-7 md:mt-6 md:text-lg"
+                className="mx-auto mt-6 max-w-2xl text-base font-light leading-relaxed text-slate-500 sm:mt-7 md:mt-6 md:text-lg"
+                style={{ fontFamily: '"Inter", sans-serif' }}
                 initial={{ opacity: 0, y: 18 }}
                 animate={
                   isChatActive
@@ -566,7 +603,7 @@ export default function HeroSection() {
                 }`}
               />
               <motion.div
-                className="flex overflow-hidden rounded-2xl border border-white/[0.12] bg-[#0a2048]/55 shadow-[0_24px_60px_rgba(0,0,0,0.35)] ring-1 ring-white/[0.05] backdrop-blur-2xl md:rounded-[28px]"
+                className="flex overflow-hidden rounded-2xl border border-[#1a3673]/14 bg-white/95 shadow-[0_18px_40px_rgba(26,54,115,0.12)] ring-1 ring-[#1a3673]/8 backdrop-blur-xl md:rounded-[28px]"
                 initial={false}
                 animate={{ height: isChatActive ? "min(30rem, 46vh)" : "auto" }}
                 transition={{ duration: 0.58, ease: easePremium }}
@@ -602,8 +639,8 @@ export default function HeroSection() {
                               }}
                               className={`rounded-2xl border px-3.5 py-3 text-sm leading-relaxed sm:px-4 ${
                                 msg.role === "user"
-                                  ? "ml-4 border-white/10 bg-white/[0.08] text-white sm:ml-5"
-                                  : "mr-2 border-white/[0.06] bg-[#050b1a]/55 text-[#c5d4ec] sm:mr-3"
+                                  ? "ml-4 border-[#1a3673]/15 bg-[#eaf1ff] text-[#1f2a44] sm:ml-5"
+                                  : "mr-2 border-[#1a3673]/12 bg-white text-slate-600 sm:mr-3"
                               }`}
                             >
                               {msg.text}
@@ -624,7 +661,7 @@ export default function HeroSection() {
                     <div className={inputRowClass}>{inputField}</div>
                     <p
                       className={`mt-2.5 text-center text-[10px] font-medium tracking-wide transition-opacity duration-400 ${EASE_PREMIUM} md:text-[11px] ${
-                        isChatActive ? "text-[#6b849e]/42" : "text-[#6b849e]/55"
+                        isChatActive ? "text-slate-400" : "text-slate-500"
                       }`}
                     >
                       {TRUST_LINE}
@@ -659,15 +696,15 @@ export default function HeroSection() {
                                 inputRef.current?.focus();
                               }
                             }}
-                            className="inline-flex min-h-[2.75rem] items-center gap-2 rounded-full border border-white/[0.09] bg-white/[0.04] px-3.5 py-2 text-left text-xs font-medium leading-tight text-[#d6e2f5] antialiased transition-[border-color,background-color,color,transform] duration-300 ease-out hover:border-[#fc7c23]/40 hover:bg-white/[0.08] hover:text-white active:scale-[0.98] sm:min-h-0 sm:px-4 sm:py-2 sm:text-[13px] sm:leading-none"
+                            className="inline-flex min-h-[2.75rem] items-center gap-2 rounded-full border border-[#1a3673]/14 bg-[#f4f8ff] px-3.5 py-2 text-left text-xs font-medium leading-tight text-[#1a3673] antialiased transition-[border-color,background-color,color,transform] duration-300 ease-out hover:border-[#fc7d25]/40 hover:bg-[#fff7f1] hover:text-[#1a3673] active:scale-[0.98] sm:min-h-0 sm:px-4 sm:py-2 sm:text-[13px] sm:leading-none"
                           >
-                            <chip.icon className="h-3.5 w-3.5 shrink-0 text-[#fc7c23]/85 sm:h-[15px] sm:w-[15px]" strokeWidth={2} />
+                            <chip.icon className="h-3.5 w-3.5 shrink-0 text-[#fc7d25] sm:h-[15px] sm:w-[15px]" strokeWidth={2} />
                             <span className="whitespace-normal text-pretty sm:whitespace-nowrap">{chip.label}</span>
                           </motion.button>
                         ))}
                       </div>
                       <motion.p
-                        className="mt-4 text-center text-[11px] leading-relaxed text-[#6b849e] sm:text-left md:mt-5"
+                        className="mt-4 text-center text-[11px] leading-relaxed text-slate-500 sm:text-left md:mt-5"
                         initial={{ opacity: 0, y: 6 }}
                         animate={{ opacity: isChatActive ? 1 : 0, y: isChatActive ? 0 : 6 }}
                         transition={{ ...T.chip, delay: isChatActive ? 0.42 : 0 }}
@@ -693,15 +730,28 @@ export default function HeroSection() {
       </div>
 
       <div
-        className={`relative z-30 mt-8 grid min-h-[5.5rem] w-full max-w-lg grid-cols-2 gap-3 sm:mx-auto sm:mt-10 sm:max-w-md xl:hidden ${isChatActive ? "invisible pointer-events-none" : ""}`}
+        className={`relative z-30 mt-8 grid w-full max-w-lg grid-cols-1 gap-3 sm:mx-auto sm:mt-10 sm:max-w-md sm:grid-cols-2 lg:hidden ${isChatActive ? "invisible pointer-events-none" : ""}`}
       >
-        <div className="rounded-xl border border-white/[0.07] bg-[#0a2048]/20 p-3 backdrop-blur-md">
-          <p className="text-[9px] font-medium uppercase tracking-[0.1em] text-[#a3b8d7]/55">Runway</p>
-          <p className="mt-1 text-sm font-semibold tabular-nums text-white/72">14.2 mo</p>
+        <div className="rounded-2xl border border-[#1a3673]/12 bg-white/90 p-3.5 shadow-[0_8px_22px_rgba(26,54,115,0.07)]">
+          <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.11em] text-slate-500">
+            <Activity className="h-3.5 w-3.5 text-[#fc7d25]" />
+            Cash Runway
+          </p>
+          <p className="mt-1 text-[22px] leading-none tabular-nums tracking-tight text-[#1a3673]" style={{ fontFamily: '"DM Serif Display", serif' }}>
+            18 Months
+          </p>
+          <p className="mt-1 inline-block rounded-md bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-600">+3 mo extension</p>
         </div>
-        <div className="rounded-xl border border-white/[0.07] bg-[#0a2048]/20 p-3 backdrop-blur-md">
-          <p className="text-[9px] font-medium uppercase tracking-[0.1em] text-[#a3b8d7]/55">Cash</p>
-          <p className="mt-1 text-sm font-semibold tabular-nums text-white/72">₹2.4 Cr</p>
+
+        <div className="rounded-2xl border border-[#1a3673]/12 bg-white/90 p-3.5 shadow-[0_8px_22px_rgba(26,54,115,0.07)]">
+          <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.11em] text-slate-500">
+            <TrendingUp className="h-3.5 w-3.5 text-[#1a3673]" />
+            Net Burn
+          </p>
+          <p className="mt-1 text-[22px] leading-none tabular-nums tracking-tight text-[#1a3673]" style={{ fontFamily: '"DM Serif Display", serif' }}>
+            ₹4.2L <span className="text-sm font-normal text-slate-400">/mo</span>
+          </p>
+          <p className="mt-1 inline-block rounded-md bg-[#fff3eb] px-2 py-0.5 text-[11px] font-medium text-[#fc7d25]">Optimized by AI</p>
         </div>
       </div>
     </section>
