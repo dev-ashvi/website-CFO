@@ -2,10 +2,12 @@ import Background from "../components/Background.jsx";
 import Navbar from "../components/Navbar.jsx";
 import HeroSection from "../components/HeroSection.jsx";
 import WyzAiChatSection from "../components/WyzAiChatSection.jsx";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { DecorativeGlow, SectionHeading } from "../components/reference-ui.jsx";
 import {
+  Activity,
   Bot,
   Braces,
   CheckCircle2,
@@ -22,6 +24,7 @@ import {
   Link2,
   Mail,
   FileSpreadsheet,
+  GitBranch,
   MessageSquare,
   Search,
   Shield,
@@ -77,21 +80,52 @@ const wyzCoreCapabilities = [
 const wyzOutputGroups = [
   {
     title: "Core Financial Analysis",
-    bullets: ["Trend & variance analysis", "FP&A & management reporting", "3-statement financial model"],
+    description:
+      "Understand performance across metrics with structured financial reporting and variance tracking.",
+    bullets: ["Trend & variance analysis", "FP&A & management reporting", "3-statement model"],
   },
   {
     title: "Forecasting",
+    description:
+      "Project future financial performance with dynamic forecasts and scenario-based planning.",
     bullets: ["Cash flow & runway visibility", "Revenue & expense projections", "Scenario planning"],
   },
   {
     title: "Predictive Insights",
-    bullets: ["Driver-based root cause analysis", "Risk signals & alerts", "What-if simulations with explainability"],
+    description: "Identify key drivers and risks early with explainable, model-based insights.",
+    bullets: ["Driver-based root cause analysis", "Risk signals", "What-if with explainability"],
   },
   {
     title: "Data-Driven Decisions",
+    description: "Translate insights into clear, actionable decisions across growth, hiring, and capital allocation.",
     bullets: ["Growth vs spend trade-offs", "Capital allocation & hiring decisions", "Investor / board reporting"],
   },
 ];
+
+const modelingItems = [
+  {
+    title: "Cash Flow Forecasting",
+    description: "Rolling 12/24-mo cash with live triggers, burn alerts, and forward visibility.",
+  },
+  {
+    title: "Runway Management",
+    description: "Live burn with hiring, spend, and revenue scenarios modeled in one pass.",
+  },
+  {
+    title: "3-Statement Model",
+    description: "Connected P&L, balance sheet, and cash flow with fully linked schedules.",
+  },
+  {
+    title: "Scenario Planning",
+    description: "Base, bull, and bear cases with transparent drivers and instant recalc.",
+  },
+  {
+    title: "Board & Investor Reporting",
+    description: "Investor-ready outputs with structured narratives and automated insights.",
+  },
+];
+
+const modelingModuleIcons = [LineChart, Activity, Layers, GitBranch, FileText];
 
 const featureBlocks = [
   {
@@ -209,6 +243,8 @@ const transformItem = {
 };
 
 export default function LandingPage() {
+  const [activeModelingIndex, setActiveModelingIndex] = useState(0);
+
   return (
     <Background>
       <Navbar />
@@ -630,6 +666,345 @@ export default function LandingPage() {
       </section>
 
       <WyzAiChatSection />
+
+      <section
+        id="modeling"
+        className="relative scroll-mt-28 z-10 overflow-hidden border-y border-[rgba(26,54,115,0.08)] bg-[#f5f7fb] py-24 md:py-28 px-4"
+      >
+        <style>{`
+          @keyframes modeling-primary-line {
+            0% { stroke-dashoffset: 360; }
+            100% { stroke-dashoffset: 0; }
+          }
+          @keyframes modeling-secondary-line {
+            0% { stroke-dashoffset: 340; }
+            100% { stroke-dashoffset: 0; }
+          }
+          @keyframes modeling-core-line {
+            0% { stroke-dashoffset: 360; }
+            100% { stroke-dashoffset: 0; }
+          }
+        `}</style>
+        <div
+          className="pointer-events-none absolute inset-0"
+          aria-hidden
+          style={{
+            backgroundImage: [
+              "linear-gradient(rgba(26,54,115,0.04) 1px, transparent 1px)",
+              "linear-gradient(90deg, rgba(26,54,115,0.04) 1px, transparent 1px)",
+            ].join(", "),
+            backgroundSize: "64px 64px",
+          }}
+        />
+        <div className="relative z-[1] mx-auto max-w-7xl">
+          <motion.div
+            className="mx-auto max-w-3xl text-center"
+            variants={transformStagger}
+            initial="hidden"
+            whileInView="show"
+            viewport={{ once: true, amount: 0.35 }}
+          >
+            <motion.h2
+              variants={transformItem}
+              className="text-3xl md:text-[2.15rem] font-semibold tracking-tight text-[#1a3673]"
+            >
+              Financial Modeling &amp; Insights
+            </motion.h2>
+            <motion.p
+              variants={transformItem}
+              className="mt-4 text-base md:text-lg leading-relaxed text-[rgba(26,54,115,0.7)]"
+            >
+              From data → models → decisions.
+            </motion.p>
+          </motion.div>
+
+          <motion.div
+            className="mt-12 grid grid-cols-1 gap-10 items-start md:mt-16 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]"
+            variants={transformStagger}
+            initial="hidden"
+            whileInView="show"
+            viewport={{ once: true, amount: 0.25 }}
+          >
+            <motion.div
+              variants={transformItem}
+              className="relative overflow-hidden rounded-3xl border border-[rgba(26,54,115,0.16)] bg-white px-4 py-4 shadow-[0_22px_60px_rgba(26,54,115,0.16)] md:px-6 md:py-5"
+            >
+              <div className="absolute inset-0 bg-gradient-to-b from-[rgba(250,252,255,0.9)] via-[rgba(245,247,252,0.9)] to-white opacity-95" />
+              <div className="pointer-events-none absolute -left-16 top-1/2 h-[320px] w-[320px] -translate-y-1/2 rounded-full bg-[radial-gradient(circle,rgba(26,54,115,0.2),transparent_70%)] opacity-[0.12]" />
+              <div className="relative z-[1]">
+                <div className="mb-3 flex items-center justify-between text-[11px] text-[rgba(26,54,115,0.7)]">
+                  <span className="font-semibold tracking-[0.16em] uppercase text-[rgba(26,54,115,0.75)]">
+                    Unified financial view
+                  </span>
+                  <span className="rounded-full bg-[rgba(252,125,37,0.08)] px-2 py-0.5 text-[10px] font-medium text-[#c55a12]">
+                    Live | Scenario | Forecast
+                  </span>
+                </div>
+                <div className="relative mt-1 h-[230px] w-full rounded-2xl border border-[rgba(26,54,115,0.12)] bg-[#f9fbff] px-2.5 py-2 md:h-[270px] md:px-3.5 md:py-3">
+                  <svg viewBox="0 0 320 190" className="h-full w-full" aria-hidden>
+                    <defs>
+                      <linearGradient id="modelingArea" x1="0%" y1="0%" x2="0%" y2="100%">
+                        <stop offset="0%" stopColor="rgba(252,125,37,0.18)" />
+                        <stop offset="100%" stopColor="rgba(252,125,37,0.02)" />
+                      </linearGradient>
+                    </defs>
+                    <g>
+                      {[30, 70, 110, 150].map((y) => (
+                        <line
+                          // eslint-disable-next-line react/no-array-index-key
+                          key={y}
+                          x1="26"
+                          y1={y}
+                          x2="306"
+                          y2={y}
+                          stroke="rgba(26,54,115,0.08)"
+                          strokeWidth="1"
+                          strokeDasharray="2 4"
+                        />
+                      ))}
+                      {[26, 86, 146, 206, 266].map((x) => (
+                        <line
+                          // eslint-disable-next-line react/no-array-index-key
+                          key={x}
+                          x1={x}
+                          y1="26"
+                          x2={x}
+                          y2="170"
+                          stroke="rgba(26,54,115,0.05)"
+                          strokeWidth="1"
+                        />
+                      ))}
+                    </g>
+                    <path
+                      d="M26 140 C 74 130 104 110 132 104 C 164 96 196 102 228 88 C 252 78 276 70 306 64"
+                      fill="none"
+                      stroke="rgba(26,54,115,0.4)"
+                      strokeWidth="1.6"
+                      className={
+                        activeModelingIndex === 0 || activeModelingIndex === 2 || activeModelingIndex === 4
+                          ? "opacity-100"
+                          : "opacity-50"
+                      }
+                      style={{
+                        strokeDasharray: 360,
+                        strokeDashoffset: 0,
+                        animation:
+                          activeModelingIndex === 0 || activeModelingIndex === 2 || activeModelingIndex === 4
+                            ? "modeling-core-line 3.2s ease-out forwards"
+                            : undefined,
+                      }}
+                    />
+                    <path
+                      d="M26 152 C 70 150 96 144 128 138 C 156 132 188 122 220 120 C 248 118 278 122 306 118"
+                      fill="none"
+                      stroke="rgba(26,54,115,0.22)"
+                      strokeWidth="1.4"
+                      className={
+                        activeModelingIndex === 0 || activeModelingIndex === 2 || activeModelingIndex === 3
+                          ? "opacity-100"
+                          : "opacity-40"
+                      }
+                      style={{
+                        strokeDasharray: 340,
+                        strokeDashoffset: 0,
+                        animation:
+                          activeModelingIndex === 0 || activeModelingIndex === 3
+                            ? "modeling-secondary-line 3.4s ease-out 0.15s forwards"
+                            : undefined,
+                      }}
+                    />
+                    <path
+                      d="M26 132 C 72 120 108 116 140 110 C 176 104 204 98 232 90 C 256 84 282 80 306 76"
+                      fill="url(#modelingArea)"
+                      stroke="none"
+                      className={activeModelingIndex === 0 || activeModelingIndex === 2 ? "opacity-90" : "opacity-40"}
+                    />
+                    <path
+                      d="M226 92 C 238 88 248 86 260 84 C 272 82 288 80 306 78"
+                      fill="none"
+                      stroke="rgba(252,125,37,0.7)"
+                      strokeWidth="1.4"
+                      strokeDasharray="4 4"
+                      className={
+                        activeModelingIndex === 0 || activeModelingIndex === 1
+                          ? "opacity-100 drop-shadow-sm"
+                          : "opacity-30"
+                      }
+                    />
+                    <path
+                      d="M26 132 C 72 120 108 116 140 110 C 176 104 204 98 232 90 C 256 84 282 80 306 76"
+                      fill="none"
+                      stroke="#fc7d25"
+                      strokeWidth="2.2"
+                      strokeLinecap="round"
+                      className={
+                        activeModelingIndex === 0 || activeModelingIndex === 2 || activeModelingIndex === 4
+                          ? "opacity-100"
+                          : "opacity-60"
+                      }
+                      style={{
+                        strokeDasharray: 360,
+                        strokeDashoffset: 0,
+                        filter:
+                          activeModelingIndex === 0 || activeModelingIndex === 2 || activeModelingIndex === 4
+                            ? "drop-shadow(0 0 6px rgba(252,125,37,0.55))"
+                            : "none",
+                        animation:
+                          activeModelingIndex === 0 || activeModelingIndex === 2 || activeModelingIndex === 4
+                            ? "modeling-primary-line 3s ease-out forwards"
+                            : undefined,
+                      }}
+                    />
+                    <circle
+                      cx="226"
+                      cy="92"
+                      r="3.3"
+                      fill="#fc7d25"
+                      className="origin-center"
+                      style={{ animation: "modeling-point-pulse 3.4s ease-in-out infinite" }}
+                    />
+                    <circle
+                      cx="262"
+                      cy="84"
+                      r="2.6"
+                      fill="#1a3673"
+                      className="origin-center"
+                      style={{ animation: "modeling-point-pulse 3.6s ease-in-out 0.4s infinite" }}
+                    />
+                    <circle
+                      cx="196"
+                      cy="104"
+                      r="2.4"
+                      fill="rgba(26,54,115,0.85)"
+                      className="origin-center"
+                      style={{ animation: "modeling-point-pulse 3.8s ease-in-out 0.8s infinite" }}
+                    />
+                    <circle
+                      cx="132"
+                      cy="114"
+                      r="2.4"
+                      fill="rgba(26,54,115,0.7)"
+                      className="origin-center"
+                      style={{ animation: "modeling-point-pulse 3.6s ease-in-out 1.2s infinite" }}
+                    />
+                    <rect
+                      x="26"
+                      y="22"
+                      width="210"
+                      height="58"
+                      rx="8"
+                      ry="8"
+                      fill="white"
+                      stroke="rgba(26,54,115,0.14)"
+                      strokeWidth="1"
+                    />
+                    <text x="38" y="40" fontSize="10" fill="#1a3673" fontFamily="system-ui, sans-serif" fontWeight="600">
+                      EBITDA ↓ 18% QoQ
+                    </text>
+                    <text x="38" y="54" fontSize="9" fill="rgba(26,54,115,0.7)" fontFamily="system-ui, sans-serif">
+                      Driven by marketing spend
+                    </text>
+                    <text x="38" y="68" fontSize="9" fill="#fc7d25" fontFamily="system-ui, sans-serif" fontWeight="600">
+                      ↑ 32%
+                    </text>
+                    <rect
+                      x="176"
+                      y="122"
+                      width="132"
+                      height="44"
+                      rx="6"
+                      ry="6"
+                      fill="white"
+                      stroke="rgba(26,54,115,0.14)"
+                      strokeWidth="1"
+                    />
+                    <text x="186" y="138" fontSize="10" fill="#1a3673" fontFamily="system-ui, sans-serif" fontWeight="600">
+                      Runway scenario
+                    </text>
+                    <text x="186" y="154" fontSize="9" fill="rgba(26,54,115,0.7)" fontFamily="system-ui, sans-serif">
+                      <tspan>↓ from </tspan>
+                      <tspan fill="#1a3673" fontWeight="600">
+                        18 mo
+                      </tspan>
+                      <tspan> · </tspan>
+                      <tspan fill="#fc7d25" fontWeight="600">
+                        14.2 mo
+                      </tspan>
+                    </text>
+                  </svg>
+                </div>
+                <div className="mt-3 rounded-2xl border border-[rgba(26,54,115,0.12)] bg-white px-4 py-3.5 shadow-[0_12px_30px_rgba(26,54,115,0.12)] md:px-5 md:py-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#fc7d25]">
+                    ⚡ AI Insight
+                  </p>
+                  <p className="mt-2 text-[13px] leading-relaxed text-[rgba(26,54,115,0.9)] md:text-sm">
+                    EBITDA dropped{" "}
+                    <span className="font-semibold text-[#fc7d25]">36%</span> in Q3–Q4 despite revenue growth. Root cause: employee
+                    costs rose{" "}
+                    <span className="font-semibold text-[#fc7d25]">₹1.8 Cr</span> after Q3 hiring (
+                    <span className="font-semibold text-[#fc7d25]">14</span> new hires). Recommend reviewing headcount-to-revenue ROI
+                    before next hiring cycle.
+                  </p>
+                </div>
+              </div>
+            </motion.div>
+
+            <motion.div variants={transformItem} className="relative min-w-0">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#fc7d25]">
+                Modeling &amp; insight modules
+              </p>
+              <ul className="mt-6 flex flex-col">
+                {modelingItems.map((item, idx) => {
+                  const Icon = modelingModuleIcons[idx];
+                  const isActive = activeModelingIndex === idx;
+                  const isLast = idx === modelingItems.length - 1;
+                  return (
+                    <li
+                      key={item.title}
+                      className={isLast ? undefined : "border-b border-[rgba(26,54,115,0.06)]"}
+                    >
+                      <button
+                        type="button"
+                        onMouseEnter={() => setActiveModelingIndex(idx)}
+                        onFocus={() => setActiveModelingIndex(idx)}
+                        onMouseLeave={() => setActiveModelingIndex(0)}
+                        className={`group flex w-full items-start gap-3 border-l border-transparent py-6 pl-3 pr-2 text-left transition-[background-color,border-color] duration-200 ease-out md:py-7 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(252,125,37,0.25)] focus-visible:ring-offset-2 focus-visible:ring-offset-[#f5f7fb] ${
+                          isActive
+                            ? "border-l-[#fc7d25] bg-[rgba(26,54,115,0.028)]"
+                            : "hover:bg-[rgba(26,54,115,0.034)]"
+                        }`}
+                      >
+                        <Icon
+                          size={14}
+                          strokeWidth={1.75}
+                          className={`mt-0.5 shrink-0 transition-colors duration-200 ${
+                            isActive
+                              ? "text-[rgba(26,54,115,0.85)]"
+                              : "text-[rgba(26,54,115,0.5)] group-hover:text-[rgba(26,54,115,0.68)]"
+                          }`}
+                          aria-hidden
+                        />
+                        <div className="min-w-0 flex-1 space-y-1">
+                          <h3
+                            className={`text-[13px] font-bold tracking-tight leading-snug md:text-sm ${
+                              isActive ? "text-[#1a3673]" : "text-[rgba(26,54,115,0.88)]"
+                            }`}
+                          >
+                            {item.title}
+                          </h3>
+                          <p className="text-[12px] leading-snug text-[rgba(26,54,115,0.52)] md:text-[13px] truncate">
+                            {item.description}
+                          </p>
+                        </div>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </motion.div>
+          </motion.div>
+        </div>
+      </section>
 
       <section className="relative py-28 px-4 z-10 scroll-mt-28">
         <DecorativeGlow color="bg-[#1a3875]" className="bottom-0 left-0 w-[600px] h-[600px] opacity-35" />
