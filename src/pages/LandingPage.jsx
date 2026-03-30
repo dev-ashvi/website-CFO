@@ -6,11 +6,16 @@ import { motion } from "framer-motion";
 import { DecorativeGlow, SectionHeading } from "../components/reference-ui.jsx";
 import {
   Bot,
+  Braces,
   CheckCircle2,
   ChevronRight,
+  Clock,
   Database,
+  FileClock,
   FileText,
+  Inbox,
   Layers,
+  LayoutGrid,
   LineChart,
   Mail,
   MessageSquare,
@@ -23,20 +28,33 @@ import {
   Zap,
 } from "lucide-react";
 
-const todayFlowBullets = [
-  "MIS comes late",
-  "Cash flow unclear",
-  "No real-time insights",
-  "Decisions based on guesswork",
-  "Dependent on external CA/CFO timelines",
-];
-
-const aiFlowBullets = [
-  "Real-time MIS",
-  "Predictive cash flow",
-  "AI-powered answers",
-  "Instant investor-ready reports",
-  "Continuous financial clarity",
+const financeFrictionCards = [
+  {
+    title: "Data Silos",
+    description:
+      "Financial data is spread across accounting tools, CRM systems, banking feeds, and spreadsheets — rarely unified in one place.",
+    Icon: LayoutGrid,
+    hint: "silos",
+  },
+  {
+    title: "Stale Reports",
+    description: "By the time reports are manually prepared, the numbers are already out of date.",
+    Icon: FileClock,
+    hint: "stale",
+  },
+  {
+    title: "Black-Box Models",
+    description:
+      "Critical assumptions live inside analyst-built spreadsheets, making outputs hard to verify and trust.",
+    Icon: Braces,
+    hint: "blackbox",
+  },
+  {
+    title: "Analyst Bottleneck",
+    description: "Every strategic financial question depends on manual analysis, slowing down leadership decisions.",
+    Icon: Inbox,
+    hint: "queue",
+  },
 ];
 
 const featureBlocks = [
@@ -160,183 +178,212 @@ export default function LandingPage() {
       <Navbar />
       <HeroSection />
 
-      <section id="benefits" className="relative py-24 md:py-28 px-4 bg-gradient-to-b from-[#050b1a] to-[#060f25] border-y border-white/5 scroll-mt-28 z-10 overflow-hidden">
+      <section
+        id="benefits"
+        className="relative scroll-mt-28 z-10 overflow-hidden border-y border-[#1a3673]/10 bg-white py-24 md:py-28 px-4"
+      >
         <style>{`
-          @keyframes benefits-flow {
-            0% { transform: translateX(-18%); opacity: 0; }
-            22% { opacity: 0.72; }
-            78% { opacity: 0.58; }
-            100% { transform: translateX(18%); opacity: 0; }
+          @keyframes benefits-chip-float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-4px); }
           }
-          @keyframes benefits-pulse {
-            0% { transform: scale(0.8); opacity: 0; }
-            20% { opacity: 0.6; }
-            100% { transform: scale(2.6); opacity: 0; }
+          @keyframes benefits-stale-blink {
+            0%, 100% { opacity: 0.6; }
+            50% { opacity: 1; }
           }
-          @keyframes benefits-micro-float {
-            0%, 100% { transform: translateY(0px); opacity: 0.35; }
-            50% { transform: translateY(-4px); opacity: 0.55; }
+          @keyframes benefits-formula-fade {
+            0%, 45% { opacity: 0.42; }
+            55%, 90% { opacity: 1; }
+            100% { opacity: 0.42; }
           }
-          @keyframes benefits-chaos-flicker {
-            0%, 100% { opacity: 0.2; }
-            50% { opacity: 0.42; }
-          }
-          @keyframes benefits-grid-breathe {
-            0%, 100% { opacity: 0.2; }
-            50% { opacity: 0.34; }
-          }
-          @keyframes benefits-left-grid-flicker {
-            0%, 100% { opacity: 0.15; }
-            50% { opacity: 0.26; }
-          }
-          @keyframes benefits-sparkline {
-            0% { stroke-dashoffset: 120; opacity: 0.35; }
-            50% { opacity: 0.58; }
-            100% { stroke-dashoffset: 0; opacity: 0.4; }
-          }
-          @keyframes benefits-check-ping {
-            0% { transform: scale(0.8); opacity: 0; }
-            30% { opacity: 0.5; }
-            100% { transform: scale(2.2); opacity: 0; }
-          }
-          @keyframes benefits-left-glitch {
-            0%, 100% { transform: translateX(0px); opacity: 0.28; }
-            50% { transform: translateX(1px); opacity: 0.45; }
-          }
-          @keyframes benefits-right-glow {
-            0%, 100% { opacity: 0.22; }
-            50% { opacity: 0.38; }
-          }
-          @keyframes benefits-icon-breathe {
-            0%, 100% { transform: scale(1); opacity: 0.45; }
-            50% { transform: scale(1.16); opacity: 0.75; }
-          }
-          @keyframes benefits-right-shift {
-            0%, 100% { background-position: 0% 50%; }
-            50% { background-position: 100% 50%; }
+          @keyframes benefits-queue-pulse {
+            0%, 100% { opacity: 0.88; border-color: rgba(26,54,115,0.1); }
+            50% { opacity: 1; border-color: rgba(26,54,115,0.2); }
           }
         `}</style>
-        <DecorativeGlow color="bg-[#fc7c23]" className="top-[-8%] left-[8%] w-[360px] h-[360px] opacity-[0.08]" />
-        <DecorativeGlow color="bg-[#1a3875]" className="bottom-[-10%] right-[4%] w-[520px] h-[520px] opacity-[0.28]" />
-        <div className="max-w-7xl mx-auto relative z-10">
+        <div
+          className="pointer-events-none absolute inset-0"
+          aria-hidden
+          style={{
+            backgroundColor: "#ffffff",
+            backgroundImage: [
+              "linear-gradient(rgba(26,54,115,0.04) 1px, transparent 1px)",
+              "linear-gradient(90deg, rgba(26,54,115,0.04) 1px, transparent 1px)",
+            ].join(", "),
+            backgroundSize: "60px 60px",
+          }}
+        />
+        <div className="max-w-7xl mx-auto relative z-[1]">
           <motion.div
             className="mx-auto max-w-3xl text-center"
             variants={transformStagger}
             initial="hidden"
             whileInView="show"
-            viewport={{ once: true, amount: 0.3 }}
+            viewport={{ once: true, amount: 0.35 }}
           >
-            <motion.h2 variants={transformItem} className="text-3xl md:text-5xl font-bold tracking-tight text-white">
-              Your finance stack wasn&apos;t built for speed.
+            <motion.h2
+              variants={transformItem}
+              className="text-3xl md:text-[2.35rem] font-semibold tracking-tight leading-[1.2] text-[#1a3673]"
+            >
+              The problem isn&apos;t the finance team. It&apos;s the system around them.
             </motion.h2>
-            <motion.p variants={transformItem} className="mt-5 text-base md:text-lg text-[#a3b8d7] leading-relaxed">
-              Most startup teams still rely on disconnected spreadsheets and delayed MIS cycles. Without real-time visibility,
-              finance becomes reactive, decisions slow down, and founders are forced to operate with uncertainty.
+            <motion.p
+              variants={transformItem}
+              className="mt-5 text-base md:text-lg leading-relaxed text-[rgba(26,54,115,0.7)]"
+            >
+              Finance leaders are expected to deliver clarity, speed, and confidence — but the underlying tools are
+              fragmented, manual, and hard to trust.
             </motion.p>
           </motion.div>
 
-          <div className="mt-12 md:mt-14 h-px w-full bg-gradient-to-r from-transparent via-white/15 to-transparent" />
-
-          <motion.div
-            className="relative mt-10 grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-10"
-            variants={transformStagger}
-            initial="hidden"
-            whileInView="show"
-            viewport={{ once: true, amount: 0.25 }}
-          >
-            <div className="pointer-events-none absolute inset-x-[5%] bottom-[-0.7rem] hidden lg:block h-[2px] bg-gradient-to-r from-transparent via-[#6f8ebf]/24 to-transparent" />
-            <div className="pointer-events-none absolute left-1/2 top-1/2 hidden lg:block h-[64px] w-[42%] -translate-x-1/2 -translate-y-1/2">
-              <svg className="h-full w-full overflow-visible" viewBox="0 0 460 70" aria-hidden>
-                <defs>
-                  <linearGradient id="benefitsPathStroke" x1="0%" y1="0%" x2="100%" y2="0%">
-                    <stop offset="0%" stopColor="rgba(252,124,35,0)" />
-                    <stop offset="45%" stopColor="rgba(252,124,35,0.82)" />
-                    <stop offset="100%" stopColor="rgba(252,124,35,0)" />
-                  </linearGradient>
-                </defs>
-                <path d="M10,38 C120,14 330,58 450,36" fill="none" stroke="url(#benefitsPathStroke)" strokeWidth="1.6" />
-                <path d="M10,38 C120,14 330,58 450,36" fill="none" stroke="rgba(252,124,35,0.3)" strokeWidth="3.6" filter="blur(2px)" />
-                <circle r="3.2" fill="rgba(252,124,35,0.9)">
-                  <animateMotion dur="5.4s" repeatCount="indefinite" path="M10,38 C120,14 330,58 450,36" />
-                </circle>
-              </svg>
-            </div>
-            <p className="pointer-events-none absolute left-1/2 top-[46.5%] hidden lg:block -translate-x-1/2 text-[10px] uppercase tracking-[0.12em] text-[#d8b9a1]/68">
-              From reactive to proactive
-            </p>
-
-            <motion.article variants={transformItem} className="relative overflow-hidden rounded-3xl border border-rose-300/14 bg-gradient-to-br from-[#1b0c12]/55 via-[#0f0b19]/78 to-[#090f21]/86 p-7 md:p-9 shadow-[0_14px_40px_rgba(0,0,0,0.38)] transition-colors duration-400 hover:border-rose-300/18">
-              <div className="pointer-events-none absolute inset-0 opacity-[0.16]" style={{ backgroundImage: "linear-gradient(to right, rgba(252,124,35,0.09) 1px, transparent 1px), linear-gradient(to bottom, rgba(252,124,35,0.04) 1px, transparent 1px)", backgroundSize: "26px 26px", animation: "benefits-left-grid-flicker 6.8s ease-in-out infinite" }} />
-              <div className="pointer-events-none absolute inset-y-0 left-[28%] w-px bg-gradient-to-b from-transparent via-rose-300/38 to-transparent" style={{ animation: "benefits-left-glitch 4.2s ease-in-out infinite" }} />
-              <div className="pointer-events-none absolute -left-8 top-[40%] h-28 w-36 rounded-full bg-[radial-gradient(circle,rgba(84,124,180,0.2),transparent_70%)] blur-[40px]" />
-              <div className="pointer-events-none absolute right-4 top-4 h-16 w-28 rounded-lg border border-rose-300/20 bg-[#2b0f17]/25" />
-              <div className="pointer-events-none absolute right-8 top-8 flex gap-1">
-                <span className="h-5 w-1 rounded bg-rose-300/20" />
-                <span className="h-8 w-1 rounded bg-rose-300/25" />
-                <span className="h-3 w-1 rounded bg-rose-300/18" />
-                <span className="h-7 w-1 rounded bg-rose-300/22" />
-              </div>
-              <div className="pointer-events-none absolute -bottom-10 -left-8 h-28 w-28 rounded-full bg-[#fc7c23]/12 blur-[42px]" />
-              <div className="pointer-events-none absolute left-6 top-6 h-[2px] w-20 bg-gradient-to-r from-transparent via-rose-300/45 to-transparent" style={{ animation: "benefits-chaos-flicker 2.7s ease-in-out infinite" }} />
-              <div className="pointer-events-none absolute left-14 top-12 h-[2px] w-12 bg-gradient-to-r from-transparent via-rose-300/35 to-transparent" style={{ animation: "benefits-chaos-flicker 3.2s ease-in-out 0.9s infinite" }} />
-              <div className="pointer-events-none absolute left-5 bottom-7 flex gap-1.5 opacity-60">
-                <span className="h-6 w-1 rounded bg-rose-300/16" style={{ animation: "benefits-left-glitch 3.3s ease-in-out infinite" }} />
-                <span className="h-10 w-1 rounded bg-rose-300/20" style={{ animation: "benefits-left-glitch 3.6s ease-in-out 0.4s infinite" }} />
-                <span className="h-4 w-1 rounded bg-rose-300/14" style={{ animation: "benefits-left-glitch 3.1s ease-in-out 0.9s infinite" }} />
-              </div>
-              <p className="relative text-xs uppercase tracking-[0.2em] text-rose-200/65">How it works today</p>
-              <h3 className="relative mt-3 text-2xl font-semibold text-rose-100">Messy, slow, and reactive</h3>
-              <p className="relative mt-3 text-sm leading-relaxed text-rose-100/62">
-                Teams spend more time chasing numbers than making strategic decisions.
-              </p>
-              <motion.ul className="relative mt-6 space-y-3.5" variants={transformStagger}>
-                {todayFlowBullets.map((item, idx) => (
-                  <motion.li key={item} variants={transformItem} transition={{ delay: 0.04 * idx }} className="flex items-start gap-3 text-sm md:text-[15px] text-[#f2d2cc]/78">
-                    <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-[#fc7c23]/80 shadow-[0_0_10px_rgba(252,124,35,0.45)]" />
-                    <span>{item}</span>
-                  </motion.li>
-                ))}
-              </motion.ul>
-              <div className="relative mt-5 inline-flex items-center gap-2 rounded-md border border-rose-300/15 bg-[#220f19]/40 px-2.5 py-1 text-[10px] uppercase tracking-[0.12em] text-rose-100/55">
-                MIS delay: +11 days
-              </div>
-              <div className="relative ml-2 mt-2 inline-flex items-center gap-2 rounded-md border border-rose-300/15 bg-[#220f19]/38 px-2.5 py-1 text-[10px] uppercase tracking-[0.12em] text-rose-100/50">
-                Excel dependency
-              </div>
-            </motion.article>
-
-            <motion.article variants={transformItem} className="group relative overflow-hidden rounded-3xl border border-[#fc7c23]/42 bg-gradient-to-br from-[#122a55]/94 via-[#0f234b]/95 to-[#0b1b40]/98 p-7 md:p-9 shadow-[0_28px_96px_rgba(8,15,36,0.7)] ring-1 ring-[#fc7c23]/28 transition-all duration-500 hover:-translate-y-1 hover:border-[#fc7c23]/62 hover:shadow-[0_34px_108px_rgba(8,15,36,0.76)]">
-              <div className="pointer-events-none absolute inset-0 opacity-[0.18]" style={{ backgroundImage: "linear-gradient(to right, rgba(145,180,235,0.1) 1px, transparent 1px), linear-gradient(to bottom, rgba(145,180,235,0.08) 1px, transparent 1px)", backgroundSize: "30px 30px", animation: "benefits-grid-breathe 6.4s ease-in-out infinite" }} />
-              <div className="pointer-events-none absolute inset-0 opacity-[0.24]" style={{ background: "linear-gradient(115deg, rgba(90,132,208,0.14), rgba(252,124,35,0.07), rgba(90,132,208,0.14))", backgroundSize: "180% 180%", animation: "benefits-right-shift 10s ease-in-out infinite" }} />
-              <svg className="pointer-events-none absolute right-4 top-4 h-16 w-32 opacity-50" viewBox="0 0 160 64" aria-hidden>
-                <path d="M0,50 C22,40 40,45 62,26 C82,8 104,20 126,14 C138,11 150,9 160,7" fill="none" stroke="rgba(163,190,235,0.62)" strokeWidth="1.4" strokeDasharray="6 8" style={{ animation: "benefits-sparkline 7s linear infinite" }} />
-              </svg>
-              <div className="pointer-events-none absolute -top-8 right-16 h-24 w-24 rounded-full bg-[#fc7c23]/16 blur-[40px]" style={{ animation: "benefits-right-glow 5.2s ease-in-out infinite" }} />
-              <p className="relative text-xs uppercase tracking-[0.2em] text-[#c9d7ee]/75">How it should work</p>
-              <h3 className="relative mt-3 text-2xl font-semibold text-white">Intelligent, real-time, and proactive</h3>
-              <p className="relative mt-3 text-sm leading-relaxed text-[#b8cae7]">
-                A finance command layer that gives founders instant clarity and confident next steps.
-              </p>
-              <motion.ul className="relative mt-6 space-y-3.5" variants={transformStagger}>
-                {aiFlowBullets.map((item, idx) => (
-                  <motion.li key={item} variants={transformItem} transition={{ delay: 0.05 * idx }} className="flex items-start gap-3 text-sm md:text-[15px] text-[#e8f1ff]">
-                    <span className="relative mt-0.5 shrink-0">
-                      <CheckCircle2 size={18} className="text-[#fc7c23]" />
-                      <span className="pointer-events-none absolute left-1/2 top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#fc7c23]/45" style={{ animation: `benefits-check-ping 3.4s ease-out ${idx * 0.45}s infinite` }} />
-                      <span className="pointer-events-none absolute left-1/2 top-1/2 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#ffd4b4]/55" style={{ animation: `benefits-icon-breathe 2.8s ease-in-out ${idx * 0.25}s infinite` }} />
+          <div className="relative mt-14 md:mt-16">
+            <motion.div
+              className="relative grid grid-cols-1 gap-5 md:grid-cols-2 md:gap-x-8 md:gap-y-6"
+              variants={transformStagger}
+              initial="hidden"
+              whileInView="show"
+              viewport={{ once: true, amount: 0.18 }}
+            >
+              {financeFrictionCards.map(({ title, description, Icon, hint }, idx) => (
+                <motion.article
+                  key={title}
+                  variants={transformItem}
+                  transition={{ delay: 0.03 * idx }}
+                  className={`group relative flex h-full flex-col rounded-2xl border border-[rgba(26,54,115,0.12)] bg-white p-6 shadow-[0_4px_24px_rgba(26,54,115,0.08),0_1px_3px_rgba(26,54,115,0.04)] transition-[transform,box-shadow] duration-300 ease-out hover:-translate-y-1 hover:shadow-[0_12px_40px_rgba(26,54,115,0.12)] md:p-7 ${idx >= 2 ? "md:mt-6" : ""}`}
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <h3 className="text-lg md:text-xl font-semibold tracking-tight text-[#1a3673]">{title}</h3>
+                    </div>
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[rgba(26,54,115,0.1)] bg-[#f8fafc] text-[#1a3673]">
+                      <Icon size={20} strokeWidth={1.5} className="text-[#1a3673]" aria-hidden />
                     </span>
-                    <span>{item}</span>
-                  </motion.li>
-                ))}
-              </motion.ul>
-              <div className="relative mt-5 inline-flex items-center gap-2 rounded-md border border-white/15 bg-[#0e213f]/58 px-2.5 py-1 text-[10px] uppercase tracking-[0.12em] text-[#d7e6ff]/72">
-                Live MIS + AI answer ready
-              </div>
-              <div className="relative ml-2 mt-2 inline-flex items-center gap-2 rounded-md border border-white/15 bg-[#0e213f]/58 px-2.5 py-1 text-[10px] uppercase tracking-[0.12em] text-[#d7e6ff]/72">
-                Runway auto-calculated
-              </div>
-            </motion.article>
-          </motion.div>
+                  </div>
+                  <p className="mt-3 flex-1 text-sm md:text-[15px] leading-relaxed text-[rgba(26,54,115,0.7)]">
+                    {description}
+                  </p>
+
+                  {hint === "silos" && (
+                    <div
+                      className="mt-5 rounded-xl border border-[rgba(26,54,115,0.1)] bg-[#f8fafc] px-3 py-3"
+                      aria-hidden
+                    >
+                      <div className="flex flex-wrap items-center gap-2">
+                        {["GL", "CRM", "Banks", "Sheets"].map((label, i) => (
+                          <span key={label} className="inline-flex items-center">
+                            <span
+                              className="inline-flex rounded-md border border-[rgba(26,54,115,0.12)] bg-white px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-[#1a3673]/75"
+                              style={{
+                                animation: "benefits-chip-float 6s ease-in-out infinite",
+                                animationDelay: `${i * 0.55}s`,
+                              }}
+                            >
+                              {label}
+                            </span>
+                            {i < 3 && (
+                              <span className="mx-0.5 inline-block text-[10px] font-medium text-[#fc7d25]/50">· ·</span>
+                            )}
+                          </span>
+                        ))}
+                      </div>
+                      <p className="mt-2 text-[10px] text-[#1a3673]/55">Sources rarely share one timely view</p>
+                    </div>
+                  )}
+
+                  {hint === "stale" && (
+                    <div
+                      className="mt-5 flex items-center gap-3 rounded-xl border border-[rgba(26,54,115,0.1)] bg-[#f8fafc] px-3 py-3"
+                      aria-hidden
+                    >
+                      <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-[rgba(26,54,115,0.1)] bg-white text-[#1a3673]/65">
+                        <Clock size={16} strokeWidth={1.5} />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[11px] font-medium text-[#1a3673]">Management pack</p>
+                        <p
+                          className="mt-0.5 text-[10px] font-medium text-[#c55a12]"
+                          style={{ animation: "benefits-stale-blink 2.8s ease-in-out infinite" }}
+                        >
+                          Last refreshed · data through Mar 12 · circulated Mar 18
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {hint === "blackbox" && (
+                    <div
+                      className="mt-5 rounded-xl border border-[rgba(26,54,115,0.1)] bg-[#f8fafc] px-3 py-3"
+                      aria-hidden
+                    >
+                      <div className="flex flex-wrap gap-1.5">
+                        {[
+                          {
+                            className:
+                              "rounded border border-dashed border-[#fc7d25]/40 bg-white px-2 py-0.5 font-mono text-[9px] text-[#1a3673]/75",
+                            text: "Assumption_Set_A",
+                          },
+                          {
+                            className:
+                              "rounded border border-[rgba(26,54,115,0.12)] bg-white px-2 py-0.5 font-mono text-[9px] text-[#1a3673]/75",
+                            text: "=SUMIFS(…)",
+                          },
+                          {
+                            className:
+                              "rounded border border-[rgba(26,54,115,0.12)] bg-white px-2 py-0.5 font-mono text-[9px] text-[#1a3673]/75",
+                            text: "hidden_refs",
+                          },
+                        ].map((tag, ti) => (
+                          <span
+                            key={tag.text}
+                            className={tag.className}
+                            style={{
+                              animation: "benefits-formula-fade 5.5s ease-in-out infinite",
+                              animationDelay: `${ti * 0.75}s`,
+                            }}
+                          >
+                            {tag.text}
+                          </span>
+                        ))}
+                      </div>
+                      <p className="mt-2 text-[10px] text-[#1a3673]/55">Hard to audit without opening every link</p>
+                    </div>
+                  )}
+
+                  {hint === "queue" && (
+                    <div
+                      className="mt-5 rounded-xl border border-[rgba(26,54,115,0.1)] bg-[#f8fafc] px-3 py-2.5"
+                      aria-hidden
+                    >
+                      <p className="mb-2 text-[10px] font-medium uppercase tracking-wide text-[#1a3673]/65">
+                        Analyst queue
+                      </p>
+                      <ul className="space-y-1.5">
+                        {[
+                          { label: "Board metrics pack", state: "Queued" },
+                          { label: "Scenario: hire plan", state: "In model" },
+                          { label: "Investor follow-up", state: "Pending" },
+                        ].map((row, qi) => (
+                          <li
+                            key={row.label}
+                            className="flex items-center justify-between gap-2 rounded-lg border border-[rgba(26,54,115,0.1)] bg-white px-2 py-1.5"
+                            style={{
+                              animation: "benefits-queue-pulse 4.5s ease-in-out infinite",
+                              animationDelay: `${qi * 0.6}s`,
+                            }}
+                          >
+                            <span className="truncate text-[11px] text-[#1a3673]/75">{row.label}</span>
+                            <span className="shrink-0 rounded-md bg-[#fc7d25]/12 px-1.5 py-0.5 text-[9px] font-medium text-[#c55a12]">
+                              {row.state}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </motion.article>
+              ))}
+            </motion.div>
+          </div>
         </div>
       </section>
 
