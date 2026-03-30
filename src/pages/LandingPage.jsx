@@ -14,10 +14,13 @@ import {
   FileClock,
   FileText,
   Inbox,
+  Landmark,
   Layers,
   LayoutGrid,
   LineChart,
+  Link2,
   Mail,
+  FileSpreadsheet,
   MessageSquare,
   Search,
   Shield,
@@ -54,6 +57,38 @@ const financeFrictionCards = [
     description: "Every strategic financial question depends on manual analysis, slowing down leadership decisions.",
     Icon: Inbox,
     hint: "queue",
+  },
+];
+
+const wyeSourceItems = [
+  { label: "Accounting (Tally, QuickBooks, Xero)", Icon: Layers },
+  { label: "CRM & Sales (Salesforce, HubSpot)", Icon: Users },
+  { label: "Excel & Spreadsheets", Icon: FileSpreadsheet },
+  { label: "Banking & Payment Feeds", Icon: Landmark },
+];
+
+const wyeCoreCapabilities = [
+  { title: "Smart Integration", Icon: Link2 },
+  { title: "Insight Engine", Icon: Sparkles },
+  { title: "CFO-Grade Outputs", Icon: ShieldCheck },
+];
+
+const wyeOutputGroups = [
+  {
+    title: "Core Financial Analysis",
+    bullets: ["Trend & variance analysis", "FP&A & management reporting", "3-statement financial model"],
+  },
+  {
+    title: "Forecasting",
+    bullets: ["Cash flow & runway visibility", "Revenue & expense projections", "Scenario planning"],
+  },
+  {
+    title: "Predictive Insights",
+    bullets: ["Driver-based root cause analysis", "Risk signals & alerts", "What-if simulations with explainability"],
+  },
+  {
+    title: "Data-Driven Decisions",
+    bullets: ["Growth vs spend trade-offs", "Capital allocation & hiring decisions", "Investor / board reporting"],
   },
 ];
 
@@ -384,6 +419,212 @@ export default function LandingPage() {
               ))}
             </motion.div>
           </div>
+        </div>
+      </section>
+
+      <section
+        id="wye-platform"
+        className="relative scroll-mt-28 z-10 overflow-hidden border-y border-[rgba(26,54,115,0.08)] bg-[#fafbfc] py-24 md:py-28"
+      >
+        <style>{`
+          @keyframes wye-connector-flow {
+            to { stroke-dashoffset: -20; }
+          }
+          @keyframes wye-core-glow {
+            0%, 100% { opacity: 0.55; transform: scale(1); }
+            50% { opacity: 0.85; transform: scale(1.03); }
+          }
+        `}</style>
+        <div
+          className="pointer-events-none absolute inset-0"
+          aria-hidden
+          style={{
+            backgroundColor: "#fafbfc",
+            backgroundImage: [
+              "linear-gradient(rgba(26,54,115,0.035) 1px, transparent 1px)",
+              "linear-gradient(90deg, rgba(26,54,115,0.035) 1px, transparent 1px)",
+            ].join(", "),
+            backgroundSize: "56px 56px",
+          }}
+        />
+        <div className="relative z-[1] mx-auto max-w-7xl px-4">
+          <motion.div
+            className="mx-auto max-w-3xl text-center"
+            variants={transformStagger}
+            initial="hidden"
+            whileInView="show"
+            viewport={{ once: true, amount: 0.35 }}
+          >
+            <motion.h2
+              variants={transformItem}
+              className="text-3xl font-semibold tracking-tight text-[#1a3673] md:text-[2.15rem] md:leading-snug"
+            >
+              One Platform. Total Financial Intelligence.
+            </motion.h2>
+            <motion.p
+              variants={transformItem}
+              className="mt-4 text-base leading-relaxed text-[rgba(26,54,115,0.7)] md:text-lg"
+            >
+              Connect your financial data, unify it through Wye, and turn it into board-ready reports, forecasts, and
+              instant answers.
+            </motion.p>
+          </motion.div>
+
+          <div className="relative mx-auto mt-14 max-w-6xl lg:mt-16">
+            <svg
+              className="pointer-events-none absolute left-0 top-[22%] z-0 hidden h-[56%] min-h-[200px] w-full lg:block"
+              viewBox="0 0 1000 280"
+              fill="none"
+              preserveAspectRatio="none"
+              aria-hidden
+            >
+              <defs>
+                <linearGradient id="wyeLineL" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stopColor="rgba(26,54,115,0.2)" />
+                  <stop offset="50%" stopColor="rgba(252,125,37,0.45)" />
+                  <stop offset="100%" stopColor="rgba(26,54,115,0.35)" />
+                </linearGradient>
+                <linearGradient id="wyeLineR" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stopColor="rgba(26,54,115,0.35)" />
+                  <stop offset="50%" stopColor="rgba(252,125,37,0.45)" />
+                  <stop offset="100%" stopColor="rgba(26,54,115,0.2)" />
+                </linearGradient>
+              </defs>
+              <path
+                d="M 120 140 C 240 60, 360 220, 500 140"
+                stroke="rgba(26,54,115,0.12)"
+                strokeWidth="10"
+                strokeLinecap="round"
+              />
+              <path
+                d="M 120 140 C 240 60, 360 220, 500 140"
+                stroke="url(#wyeLineL)"
+                strokeWidth="1.35"
+                strokeLinecap="round"
+                strokeDasharray="5 7"
+                style={{ animation: "wye-connector-flow 2.8s linear infinite" }}
+              />
+              <path
+                d="M 500 140 C 640 60, 760 220, 880 140"
+                stroke="rgba(26,54,115,0.12)"
+                strokeWidth="10"
+                strokeLinecap="round"
+              />
+              <path
+                d="M 500 140 C 640 60, 760 220, 880 140"
+                stroke="url(#wyeLineR)"
+                strokeWidth="1.35"
+                strokeLinecap="round"
+                strokeDasharray="5 7"
+                style={{ animation: "wye-connector-flow 2.8s linear infinite reverse" }}
+              />
+            </svg>
+
+            <div className="relative z-[1] grid grid-cols-1 items-start gap-10 lg:grid-cols-12 lg:gap-6">
+              <motion.div
+                className="lg:col-span-3"
+                variants={transformItem}
+                initial="hidden"
+                whileInView="show"
+                viewport={{ once: true, amount: 0.25 }}
+              >
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#fc7d25]">Your Financial Stack</p>
+                <ul className="mt-5 space-y-3">
+                  {wyeSourceItems.map(({ label, Icon }) => (
+                    <li
+                      key={label}
+                      className="flex items-start gap-3 rounded-xl border border-[rgba(26,54,115,0.1)] bg-white px-4 py-3 shadow-[0_2px_12px_rgba(26,54,115,0.05)]"
+                    >
+                      <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[rgba(26,54,115,0.08)] bg-[#f8fafc] text-[#1a3673]">
+                        <Icon size={16} strokeWidth={1.5} aria-hidden />
+                      </span>
+                      <span className="text-sm font-medium leading-snug text-[#1a3673]">{label}</span>
+                    </li>
+                  ))}
+                </ul>
+              </motion.div>
+
+              <div className="flex justify-center lg:col-span-6">
+                <motion.div
+                  className="relative w-full max-w-md"
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true, amount: 0.3 }}
+                  transition={{ duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
+                >
+                  <div
+                    className="pointer-events-none absolute -inset-4 z-0 rounded-[28px] bg-gradient-to-br from-[#1a3673]/18 via-[#fafbfc]/0 to-[#fc7d25]/22 opacity-90 blur-2xl"
+                    style={{ animation: "wye-core-glow 5s ease-in-out infinite" }}
+                    aria-hidden
+                  />
+                  <motion.div
+                    className="relative z-10 rounded-2xl border border-[rgba(26,54,115,0.14)] bg-white px-6 py-8 shadow-[0_28px_56px_rgba(26,54,115,0.1),0_0_0_1px_rgba(255,255,255,0.8)_inset,0_0_64px_rgba(252,125,37,0.12)] md:px-8 md:py-9"
+                    animate={{ y: [0, -5, 0] }}
+                    transition={{ duration: 5.5, repeat: Infinity, ease: "easeInOut" }}
+                  >
+                    <div className="text-center">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[#fc7d25]">Wye Core</p>
+                      <h3 className="mt-2 font-semibold tracking-tight text-[#1a3673] text-3xl md:text-4xl">Wye</h3>
+                      <p className="mt-2 text-sm text-[rgba(26,54,115,0.65)]">Your financial intelligence layer</p>
+                    </div>
+                    <ul className="mt-8 space-y-3 border-t border-[rgba(26,54,115,0.08)] pt-6">
+                      {wyeCoreCapabilities.map(({ title, Icon }) => (
+                        <li key={title} className="flex items-center gap-3 text-[15px] font-medium text-[#1a3673]">
+                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[rgba(252,125,37,0.12)] text-[#c55a12]">
+                            <Icon size={18} strokeWidth={1.75} className="text-[#1a3673]" aria-hidden />
+                          </span>
+                          {title}
+                        </li>
+                      ))}
+                    </ul>
+                  </motion.div>
+                </motion.div>
+              </div>
+
+              <motion.div
+                className="lg:col-span-3"
+                variants={transformItem}
+                initial="hidden"
+                whileInView="show"
+                viewport={{ once: true, amount: 0.25 }}
+              >
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#fc7d25]">What You Get</p>
+                <div className="mt-5 flex flex-col gap-3.5">
+                  {wyeOutputGroups.map((group) => (
+                    <div
+                      key={group.title}
+                      className="rounded-xl border border-[rgba(26,54,115,0.1)] bg-white px-4 py-3.5 shadow-[0_2px_10px_rgba(26,54,115,0.04)] transition-all duration-200 hover:-translate-y-0.5 hover:border-[rgba(252,125,37,0.28)] hover:shadow-[0_8px_24px_rgba(26,54,115,0.08)]"
+                    >
+                      <h4 className="text-[13px] font-semibold leading-snug tracking-tight text-[#1a3673]">
+                        {group.title}
+                      </h4>
+                      <ul className="mt-2.5 space-y-2 border-t border-[rgba(26,54,115,0.06)] pt-2.5">
+                        {group.bullets.map((line) => (
+                          <li key={line} className="flex gap-2.5 text-[13px] leading-snug text-[rgba(26,54,115,0.78)]">
+                            <span
+                              className="mt-2 h-1 w-1 shrink-0 rounded-full bg-[#fc7d25]"
+                              aria-hidden
+                            />
+                            <span>{line}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
+              </motion.div>
+            </div>
+          </div>
+
+          <motion.p
+            className="mx-auto mt-14 max-w-2xl text-center text-sm font-medium text-[rgba(26,54,115,0.55)] md:mt-16 md:text-base"
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true, amount: 0.5 }}
+            transition={{ duration: 0.45 }}
+          >
+            From fragmented tools to a unified financial command system.
+          </motion.p>
         </div>
       </section>
 
