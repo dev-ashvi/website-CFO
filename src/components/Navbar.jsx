@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import topLogo from "../../ChatGPT_Image_Mar_30__2026__07_33_52_PM-removebg-preview.png";
+import topLogo from "../../dist/assets/Adobe Express - file (1).png";
 
 const nav = [
   { label: "Benefits", href: "#benefits" },
@@ -64,12 +64,12 @@ export default function Navbar() {
           >
             Login
           </Link>
-          <a
-            href="#final-cta"
+          <Link
+            to="/early-access"
             className="rounded-full bg-[#1a3673] px-3 py-1.5 text-[10px] font-medium text-white transition-colors hover:bg-[#122652] sm:px-5 sm:py-2.5 sm:text-xs"
           >
-            Book Demo
-          </a>
+            Early Access
+          </Link>
         </div>
       </div>
 

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { motion, useInView, AnimatePresence } from "framer-motion";
 import { Bot, GitBranch, LineChart, Link2, Send, Sparkles, Users } from "lucide-react";
+import wyzChatLogo from "../../dist/assets/Adobe Express - file (2) - Copy.png";
 
 /** Segment: plain text or highlighted metric (orange) */
 const h = (t) => ({ t, h: true });
@@ -271,9 +272,11 @@ export default function WyzAiChatSection() {
           <div className="relative overflow-hidden rounded-2xl border border-[rgba(26,54,115,0.11)] bg-white/85 shadow-[0_24px_56px_rgba(26,54,115,0.1),0_0_0_1px_rgba(255,255,255,0.65)_inset] backdrop-blur-md">
             <div className="flex items-center justify-between gap-3 border-b border-[rgba(26,54,115,0.08)] bg-[rgba(248,250,252,0.75)] px-4 py-3 md:px-5">
               <div className="flex min-w-0 items-center gap-2.5">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[rgba(252,125,37,0.12)] text-[#1a3673]">
-                  <Sparkles size={18} strokeWidth={1.75} aria-hidden />
-                </span>
+                <img
+                  src={wyzChatLogo}
+                  alt="Wyz logo"
+                  className="h-9 w-auto shrink-0 object-contain"
+                />
                 <div className="min-w-0">
                   <p className="text-[13px] font-semibold text-[#1a3673]">Wyz</p>
                   <p className="truncate text-[11px] text-[rgba(26,54,115,0.55)]">Financial intelligence · live</p>

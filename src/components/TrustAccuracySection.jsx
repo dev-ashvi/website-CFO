@@ -145,17 +145,21 @@ export default function TrustAccuracySection() {
         >
           <h3 className="text-xl font-semibold tracking-tight text-[#1a3673] md:text-2xl">Security &amp; Data Integrity</h3>
           <div className="mt-7 grid grid-cols-1 gap-6 md:mt-8 md:grid-cols-2 md:gap-x-12 md:gap-y-7">
-            {securityItems.map(({ title, description, Icon }) => (
+            {securityItems.map(({ title, description, Icon }, idx) => (
               <motion.div
                 key={title}
                 variants={item}
-                className="group min-w-0 border-l-2 border-transparent py-1 pl-4 pr-1 opacity-95 transition-[border-color,background-color,transform,opacity] duration-200 hover:-translate-y-0.5 hover:border-l-[#fc7d25] hover:bg-[rgba(26,54,115,0.03)] hover:opacity-100 md:pl-5"
+                className={`group min-w-0 border-l-2 border-transparent py-1 pl-4 pr-1 opacity-95 transition-[border-color,background-color,transform,opacity] duration-200 hover:-translate-y-0.5 hover:border-l-[#fc7d25] hover:bg-[rgba(26,54,115,0.03)] hover:opacity-100 md:pl-5 ${
+                  idx === securityItems.length - 1
+                    ? "md:col-span-2 md:max-w-xl md:justify-self-center"
+                    : ""
+                }`}
               >
-                <div className="flex items-start gap-3">
+                <div className="flex items-center gap-3">
                   <Icon
                     size={16}
                     strokeWidth={1.8}
-                    className="mt-1 shrink-0 text-[rgba(252,125,37,0.82)] transition-colors duration-200 group-hover:text-[#fc7d25]"
+                    className="shrink-0 text-[rgba(252,125,37,0.82)] transition-colors duration-200 group-hover:text-[#fc7d25]"
                     aria-hidden
                   />
                   <div className="min-w-0">

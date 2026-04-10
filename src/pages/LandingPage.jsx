@@ -1,6 +1,7 @@
 import Background from "../components/Background.jsx";
 import Navbar from "../components/Navbar.jsx";
-import footerLogo from "../../ChatGPT_Image_Mar_30__2026__07_33_52_PM-removebg-preview.png";
+import footerLogo from "../../dist/assets/Adobe Express - file (1).png";
+import wyzCoreLogo from "../../dist/assets/Adobe Express - file (2).png";
 import HeroSection from "../components/HeroSection.jsx";
 import WyzAiChatSection from "../components/WyzAiChatSection.jsx";
 import TrustAccuracySection from "../components/TrustAccuracySection.jsx";
@@ -618,7 +619,11 @@ export default function LandingPage() {
                   >
                     <div className="text-center">
                       <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[#fc7d25]">Wyz Core</p>
-                      <h3 className="mt-2 font-semibold tracking-tight text-[#1a3673] text-3xl md:text-4xl">Wyz</h3>
+                      <img
+                        src={wyzCoreLogo}
+                        alt="Wyz"
+                        className="mx-auto mt-2 h-auto w-full max-w-[170px] object-contain md:max-w-[200px]"
+                      />
                       <p className="mt-2 text-sm text-[rgba(26,54,115,0.65)]">Your financial intelligence layer</p>
                     </div>
                     <ul className="mt-8 space-y-3 border-t border-[rgba(26,54,115,0.08)] pt-6">
@@ -1093,44 +1098,28 @@ export default function LandingPage() {
 
       <section
         id="final-cta"
-        className="relative scroll-mt-28 z-10 overflow-hidden border-y border-[rgba(26,54,115,0.08)] bg-white px-4 py-24 md:py-28"
+        className="relative scroll-mt-28 z-10 overflow-hidden border-y border-[rgba(26,54,115,0.08)] px-4 py-24 md:py-28"
       >
         <div
-          className="pointer-events-none absolute inset-0"
+          className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white via-[#fafcfe] to-[#f4f7fc]"
+          aria-hidden
+        />
+        <div
+          className="pointer-events-none absolute inset-0 opacity-80"
           aria-hidden
           style={{
-            backgroundColor: "#ffffff",
             backgroundImage: [
-              "linear-gradient(rgba(26,54,115,0.035) 1px, transparent 1px)",
-              "linear-gradient(90deg, rgba(26,54,115,0.035) 1px, transparent 1px)",
+              "radial-gradient(ellipse 85% 55% at 50% -12%, rgba(252,125,37,0.11), transparent 55%)",
+              "radial-gradient(ellipse 70% 45% at 100% 80%, rgba(26,54,115,0.06), transparent 50%)",
+              "linear-gradient(rgba(26,54,115,0.032) 1px, transparent 1px)",
+              "linear-gradient(90deg, rgba(26,54,115,0.032) 1px, transparent 1px)",
             ].join(", "),
-            backgroundSize: "60px 60px",
+            backgroundSize: "100% 100%, 100% 100%, 60px 60px, 60px 60px",
           }}
         />
-        <div className="mx-auto max-w-5xl text-center relative z-[1]">
+        <div className="relative z-[1] mx-auto max-w-5xl text-center">
           <motion.div
-            variants={transformStagger}
-            initial="hidden"
-            whileInView="show"
-            viewport={{ once: true, amount: 0.35 }}
-          >
-            <motion.h2
-              variants={transformItem}
-              className="text-3xl md:text-[2.5rem] font-semibold tracking-tight leading-tight text-[#1a3673]"
-            >
-              Turn Financial Chaos into Clarity — Instantly
-            </motion.h2>
-            <motion.p
-              variants={transformItem}
-              className="mx-auto mt-6 max-w-3xl text-base md:text-lg leading-relaxed text-[rgba(26,54,115,0.72)]"
-            >
-              Replace weeks of manual financial work with instant, explainable insights. Spend less time in spreadsheets — and more
-              time making decisions that matter.
-            </motion.p>
-          </motion.div>
-
-          <motion.div
-            className="mt-12 grid grid-cols-1 gap-5 md:grid-cols-3 md:gap-6"
+            className="grid grid-cols-1 gap-5 md:grid-cols-3 md:gap-6"
             variants={transformStagger}
             initial="hidden"
             whileInView="show"
@@ -1138,74 +1127,98 @@ export default function LandingPage() {
           >
             {[
               {
-                title: "10× Faster Reporting",
-                sub: "From days → minutes",
+                title: "10× faster reporting",
+                sub: "Turn days of prep into minutes of answers.",
               },
               {
-                title: "100% Traceable Answers",
-                sub: "Every number backed by source data",
+                title: "Answers you can trace",
+                sub: "Every figure linked to its source — no guesswork.",
               },
               {
-                title: "Zero Black-Box Decisions",
-                sub: "Full transparency in every model",
+                title: "Models you can trust",
+                sub: "Clear logic and assumptions — nothing hidden.",
               },
             ].map((metric) => (
               <motion.div
                 key={metric.title}
                 variants={transformItem}
-                className="rounded-2xl border border-[rgba(26,54,115,0.1)] bg-white px-5 py-5 shadow-[0_2px_16px_rgba(26,54,115,0.06)]"
+                className="rounded-2xl border border-[rgba(26,54,115,0.1)] bg-white/90 px-5 py-5 shadow-[0_2px_16px_rgba(26,54,115,0.06)] backdrop-blur-[2px] transition-[transform,box-shadow,border-color] duration-300 ease-out hover:-translate-y-1 hover:border-[rgba(252,125,37,0.28)] hover:shadow-[0_12px_36px_rgba(26,54,115,0.12)]"
               >
                 <p className="text-lg font-semibold text-[#1a3673]">{metric.title}</p>
-                <p className="mt-1.5 text-sm text-[rgba(26,54,115,0.62)]">{metric.sub}</p>
+                <p className="mt-1.5 text-sm leading-snug text-[rgba(26,54,115,0.62)]">{metric.sub}</p>
               </motion.div>
             ))}
           </motion.div>
 
-          <motion.div
-            variants={transformStagger}
-            initial="hidden"
-            whileInView="show"
-            viewport={{ once: true, amount: 0.25 }}
-            className="mx-auto mt-12 max-w-2xl rounded-2xl border border-[rgba(26,54,115,0.12)] bg-[rgba(248,250,253,0.92)] px-6 py-8 shadow-[0_8px_32px_rgba(26,54,115,0.07)]"
-          >
-            <motion.h3
-              variants={transformItem}
-              className="text-2xl font-semibold tracking-tight text-[#1a3673] md:text-[1.65rem]"
-            >
-              Let&apos;s Build Your Financial System
-            </motion.h3>
-            <motion.p variants={transformItem} className="mt-4 text-sm leading-relaxed text-[rgba(26,54,115,0.68)] md:text-base">
-              See your own financial data transformed into insights — live. Ask real questions. Get real answers.
-            </motion.p>
-
+          <div className="relative mx-auto mt-14 max-w-2xl md:mt-16 md:max-w-[40rem] md:scale-[1.03]">
+            <div
+              className="pointer-events-none absolute -inset-6 rounded-[1.75rem] bg-gradient-to-br from-[#fc7d25]/22 via-[#fc7d25]/5 to-[#1a3673]/12 blur-2xl md:-inset-10 md:rounded-[2rem]"
+              aria-hidden
+            />
+            <div
+              className="pointer-events-none absolute -inset-px rounded-2xl bg-gradient-to-br from-white/60 to-transparent opacity-80 md:rounded-[1.35rem]"
+              aria-hidden
+            />
             <motion.div
-              variants={transformItem}
-              className="mt-7 flex flex-col items-center justify-center gap-3.5 sm:flex-row"
+              variants={transformStagger}
+              initial="hidden"
+              whileInView="show"
+              viewport={{ once: true, amount: 0.25 }}
+              className="relative rounded-2xl border border-[rgba(26,54,115,0.14)] bg-[rgba(255,255,255,0.97)] px-7 py-9 shadow-[0_4px_6px_rgba(26,54,115,0.04),0_24px_48px_rgba(26,54,115,0.12),0_0_0_1px_rgba(255,255,255,0.8)_inset] md:rounded-[1.35rem] md:px-10 md:py-10 md:shadow-[0_8px_12px_rgba(26,54,115,0.05),0_32px_64px_rgba(26,54,115,0.14),0_0_0_1px_rgba(255,255,255,0.85)_inset]"
             >
-              <a
-                href="mailto:hello@example.com?subject=Book%20Your%20Live%20Demo"
-                className="w-full rounded-xl bg-[#fc7d25] px-7 py-3.5 text-center text-base font-semibold text-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#e86f16] sm:w-auto"
+              <motion.div variants={transformItem} className="mb-4 flex justify-center md:mb-5">
+                <img
+                  src={wyzCoreLogo}
+                  alt="Wyz logo"
+                  className="h-auto w-full max-w-[150px] object-contain md:max-w-[170px]"
+                />
+              </motion.div>
+              <motion.h2
+                variants={transformItem}
+                className="text-2xl font-semibold tracking-tight text-[#1a3673] md:text-[1.85rem] md:leading-snug"
               >
-                → Book Your Live Demo
-              </a>
-              <a
-                href="#hero-chat"
-                className="w-full rounded-xl border border-[rgba(26,54,115,0.14)] bg-white px-7 py-3.5 text-center text-base font-semibold text-[#1a3673] transition-all duration-200 hover:-translate-y-0.5 hover:border-[rgba(252,125,37,0.4)] hover:bg-[rgba(252,125,37,0.06)] sm:w-auto"
-              >
-                Try a Sample Demo →
-              </a>
-            </motion.div>
+                See Your Financial System — Live
+              </motion.h2>
+              <motion.div variants={transformItem} className="mx-auto mt-4 max-w-lg text-sm leading-relaxed text-[rgba(26,54,115,0.72)] md:text-base md:leading-relaxed">
+                <p>Bring your data. Ask real questions.</p>
+                <p className="mt-1">Watch your financial system come to life in minutes.</p>
+              </motion.div>
 
-            <motion.p variants={transformItem} className="mt-6 text-xs text-[rgba(26,54,115,0.5)] md:text-sm">
-              No setup required • 15-min demo • Works with your existing data
-            </motion.p>
-          </motion.div>
+              <motion.div
+                variants={transformItem}
+                className="mt-8 flex flex-col items-center justify-center gap-3.5 sm:flex-row"
+              >
+                <Link
+                  to="/early-access"
+                  className="w-full rounded-xl bg-[#fc7d25] px-7 py-3.5 text-center text-base font-semibold text-white shadow-[0_4px_14px_rgba(252,125,37,0.35)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#e86f16] hover:shadow-[0_8px_24px_rgba(252,125,37,0.4)] sm:w-auto"
+                >
+                  Get Early Access →
+                </Link>
+                <a
+                  href="#hero-chat"
+                  className="w-full rounded-xl border border-[rgba(26,54,115,0.14)] bg-white px-7 py-3.5 text-center text-base font-semibold text-[#1a3673] shadow-[0_2px_8px_rgba(26,54,115,0.06)] transition-all duration-200 hover:-translate-y-0.5 hover:border-[rgba(252,125,37,0.45)] hover:bg-[rgba(252,125,37,0.06)] sm:w-auto"
+                >
+                  Explore a Sample →
+                </a>
+              </motion.div>
+
+              <motion.p variants={transformItem} className="mt-5 text-xs text-[rgba(26,54,115,0.48)] md:text-sm">
+                No setup required • 15-min demo • Works with your existing data
+              </motion.p>
+              <motion.p
+                variants={transformItem}
+                className="mt-3 text-[13px] font-medium text-[#1a3673] md:text-sm"
+              >
+                Most teams see value in the first session
+              </motion.p>
+            </motion.div>
+          </div>
         </div>
       </section>
 
       <section
         id="security"
-        className="relative scroll-mt-28 z-10 overflow-hidden border-y border-[rgba(26,54,115,0.08)] bg-[#f7f9fd] px-4 py-24 md:py-28"
+        className="hidden relative scroll-mt-28 z-10 overflow-hidden border-y border-[rgba(26,54,115,0.08)] bg-[#f7f9fd] px-4 py-24 md:py-28"
       >
         <div className="mx-auto max-w-3xl text-center relative z-[1]">
           <motion.div
