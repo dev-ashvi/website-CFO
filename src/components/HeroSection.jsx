@@ -326,7 +326,20 @@ const chipItemVariants = {
   show: { opacity: 1, y: 0, scale: 1, transition: T.chip },
 };
 
-export default function HeroSection() {
+const DEFAULT_PILL_TAGLINE = "AI + Human CFO Intelligence";
+const DEFAULT_HERO_LINE_1 = "Clarity, Control, and Runway —";
+const DEFAULT_HERO_LINE_2_ACCENT = "AI-powered finance intelligence";
+const DEFAULT_HERO_SUBHEADING =
+  "Real-time financial clarity, investor-grade reporting, and strategic cash insight — AI-powered CFO. Built for founders and CFOs who'd rather build than wrestle spreadsheets.";
+const DEFAULT_CTA_BUTTON_LABEL = "Ask CFO AI";
+
+export default function HeroSection({
+  pillTagline = DEFAULT_PILL_TAGLINE,
+  heroLine1 = DEFAULT_HERO_LINE_1,
+  heroLine2Accent = DEFAULT_HERO_LINE_2_ACCENT,
+  heroSubheading = DEFAULT_HERO_SUBHEADING,
+  ctaButtonLabel = DEFAULT_CTA_BUTTON_LABEL,
+} = {}) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [isChatActive, setIsChatActive] = useState(false);
@@ -461,7 +474,7 @@ export default function HeroSection() {
         type="submit"
         className="flex shrink-0 items-center justify-center gap-2 rounded-xl bg-[#fc7c23] px-5 py-3 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(252,124,35,0.35)] transition-all duration-300 hover:bg-[#e66c1b] hover:shadow-[0_14px_32px_rgba(252,124,35,0.42)] active:scale-[0.98] sm:py-0"
       >
-        Ask CFO AI
+        {ctaButtonLabel}
         <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
       </button>
     </>
@@ -548,7 +561,7 @@ export default function HeroSection() {
                   className="h-1.5 w-1.5 rounded-full bg-[#fc7c23] shadow-[0_0_10px_rgba(252,124,35,0.75)] motion-safe:animate-pulse-soft motion-reduce:animate-none"
                   aria-hidden
                 />
-                AI + Human CFO Intelligence
+                {pillTagline}
               </motion.div>
               <motion.h1
                 className="mx-auto max-w-4xl text-balance text-3xl font-extrabold leading-[1.12] tracking-tight text-slate-800 sm:text-4xl md:text-5xl lg:text-6xl"
@@ -561,9 +574,9 @@ export default function HeroSection() {
                 }
                 transition={headingEnter(0.1)}
               >
-                Clarity, Control, and Runway —{" "}
+                {heroLine1}{" "}
                 <br className="hidden md:block" />
-                <span className="text-[#fc7d25]">AI-powered finance intelligence</span>
+                <span className="text-[#fc7d25]">{heroLine2Accent}</span>
               </motion.h1>
               <motion.p
                 className="mx-auto mt-6 max-w-2xl text-base font-light leading-relaxed text-slate-500 sm:mt-7 md:mt-6 md:text-lg"
@@ -576,8 +589,7 @@ export default function HeroSection() {
                 }
                 transition={headingEnter(0.22)}
               >
-                Real-time financial clarity, investor-grade reporting, and strategic cash insight — AI-powered CFO. Built
-                for founders and CFOs who&apos;d rather build than wrestle spreadsheets.
+                {heroSubheading}
               </motion.p>
             </div>
           </div>

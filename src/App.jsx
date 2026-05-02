@@ -1,5 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from "react-router-dom";
 import LandingPage from "./pages/LandingPage.jsx";
+import FinanceTeamLandingPage from "./pages/FinanceTeamLandingPage.jsx";
+import FounderLandingPage from "./pages/FounderLandingPage.jsx";
 import LoginPage from "./pages/LoginPage.jsx";
 import AppLayout from "./layouts/AppLayout.jsx";
 import AppChatPage from "./pages/AppChatPage.jsx";
@@ -47,6 +49,8 @@ export default function App() {
         <PlanningViewProvider>
         <Routes>
           <Route path="/" element={<LandingPage />} />
+          <Route path="/finance-team" element={<FinanceTeamLandingPage />} />
+          <Route path="/founder" element={<FounderLandingPage />} />
           <Route path="/early-access" element={<EarlyAccessPage />} />
           <Route path="/login" element={<LoginPage />} />
 
