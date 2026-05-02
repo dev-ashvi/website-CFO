@@ -270,7 +270,7 @@ export default function FounderLandingPage() {
         pillTagline="AI Decision Intelligence for Founders"
         heroLine1="Data to Insights to Decisions —"
         heroLine2Accent="Financial business partner for Founders"
-        heroSubheading="Real time financial clarity, strategic insights, true profitability, board ready numbers — AI-powered CFO. Built for founders and CFOs who'd rather build than wrestle spreadsheets."
+        heroSubheading="Real time financial clarity, true profitability, board ready numbers — get financial insights customised for your business"
         ctaButtonLabel="Ask WYZ"
       />
 
