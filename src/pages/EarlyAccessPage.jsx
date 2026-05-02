@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowLeft, Shield } from "lucide-react";
 import Background from "../components/Background.jsx";
-import topLogo from "../../dist/assets/Adobe Express - file (1).png";
+import topLogo from "../assets/brand/adobe-express-file-1.png";
 
 const initialForm = {
   email: "",

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { motion, useInView, AnimatePresence } from "framer-motion";
 import { Bot, GitBranch, LineChart, Link2, Send, Sparkles, Users } from "lucide-react";
-import wyzChatLogo from "../../dist/assets/Adobe Express - file (2) - Copy.png";
+import wyzChatLogo from "../assets/brand/adobe-express-file-2-copy.png";
 
 /** Segment: plain text or highlighted metric (orange) */
 const h = (t) => ({ t, h: true });

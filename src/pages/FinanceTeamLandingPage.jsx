@@ -1,7 +1,7 @@
 import Background from "../components/Background.jsx";
 import Navbar from "../components/Navbar.jsx";
-import footerLogo from "../../dist/assets/Adobe Express - file (1).png";
-import wyzCoreLogo from "../../dist/assets/Adobe Express - file (2).png";
+import footerLogo from "../assets/brand/adobe-express-file-1.png";
+import wyzCoreLogo from "../assets/brand/adobe-express-file-2.png";
 import HeroSection from "../components/HeroSection.jsx";
 import WyzAiChatSection from "../components/WyzAiChatSection.jsx";
 import TrustAccuracySection from "../components/TrustAccuracySection.jsx";

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import topLogo from "../../dist/assets/Adobe Express - file (1).png";
+import topLogo from "../assets/brand/adobe-express-file-1.png";
 
 const nav = [
   { label: "Benefits", href: "#benefits" },

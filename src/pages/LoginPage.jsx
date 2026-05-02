@@ -3,7 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import Background from "../components/Background.jsx";
 import { ArrowLeft, Shield } from "lucide-react";
 import { useAuth } from "../auth/AuthContext.jsx";
-import topLogo from "../../dist/assets/Adobe Express - file (2).png";
+import topLogo from "../assets/brand/adobe-express-file-2.png";
 
 export default function LoginPage() {
   const auth = useAuth();
