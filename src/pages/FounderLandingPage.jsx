@@ -888,12 +888,6 @@ export default function FounderLandingPage() {
               <motion.p variants={transformItem} className="mt-5 text-xs text-[rgba(26,54,115,0.48)] md:text-sm">
                 No additional tooling, No process disruption, Works with your existing data
               </motion.p>
-              <motion.p
-                variants={transformItem}
-                className="mt-3 text-[13px] font-medium text-[#1a3673] md:text-sm"
-              >
-                Most teams see value in the first session
-              </motion.p>
             </motion.div>
           </div>
         </div>
