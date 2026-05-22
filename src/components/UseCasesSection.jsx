@@ -68,7 +68,7 @@ const personas = [
     ],
   },
   {
-    title: "Investors & Banks",
+    title: "Manage Your Stakeholders",
     tag: "Reporting & Compliance",
     accent: "border-[#fc7d25]",
     conversations: [

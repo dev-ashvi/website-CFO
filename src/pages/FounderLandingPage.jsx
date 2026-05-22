@@ -279,6 +279,7 @@ export default function FounderLandingPage() {
         heroLine2Accent="Wise Finance For Your Buisness"
         heroSubheading="Financial clarity, business planning and decision making - enabling founders with financial insights customized for business"
         ctaButtonLabel="Ask WYZ"
+        ctaLinkTo="/early-access"
       />
 
       <section

@@ -339,6 +339,7 @@ export default function HeroSection({
   heroLine2Accent = DEFAULT_HERO_LINE_2_ACCENT,
   heroSubheading = DEFAULT_HERO_SUBHEADING,
   ctaButtonLabel = DEFAULT_CTA_BUTTON_LABEL,
+  ctaLinkTo,
 } = {}) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
@@ -414,6 +415,9 @@ export default function HeroSection({
   const inputRowClass =
     "group/input-row flex flex-col gap-2 rounded-2xl border border-[#1a3673]/18 bg-white/95 p-1.5 shadow-[0_8px_28px_rgba(26,54,115,0.08)] backdrop-blur-sm transition-[box-shadow,border-color,transform] duration-300 ease-out sm:flex-row sm:items-stretch hover:border-[#1a3673]/28 hover:shadow-[0_12px_34px_rgba(26,54,115,0.12)] focus-within:border-[#1a3673]/35 focus-within:shadow-[0_0_0_1px_rgba(252,125,37,0.2),0_14px_40px_rgba(26,54,115,0.14)] focus-within:ring-1 focus-within:ring-[#fc7d25]/25";
 
+  const ctaButtonClass =
+    "flex shrink-0 items-center justify-center gap-2 rounded-xl bg-[#fc7c23] px-5 py-3 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(252,124,35,0.35)] transition-all duration-300 hover:bg-[#e66c1b] hover:shadow-[0_14px_32px_rgba(252,124,35,0.42)] active:scale-[0.98] sm:py-0";
+
   const headingEnter = (delay) => ({
     duration: 0.55,
     ease: easePremium,
@@ -470,13 +474,17 @@ export default function HeroSection({
           )}
         </div>
       </div>
-      <button
-        type="submit"
-        className="flex shrink-0 items-center justify-center gap-2 rounded-xl bg-[#fc7c23] px-5 py-3 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(252,124,35,0.35)] transition-all duration-300 hover:bg-[#e66c1b] hover:shadow-[0_14px_32px_rgba(252,124,35,0.42)] active:scale-[0.98] sm:py-0"
-      >
-        {ctaButtonLabel}
-        <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
-      </button>
+      {ctaLinkTo ? (
+        <Link to={ctaLinkTo} className={ctaButtonClass}>
+          {ctaButtonLabel}
+          <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
+        </Link>
+      ) : (
+        <button type="submit" className={ctaButtonClass}>
+          {ctaButtonLabel}
+          <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
+        </button>
+      )}
     </>
   );
 
