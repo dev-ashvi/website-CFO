@@ -252,7 +252,7 @@ export default function FounderLandingPage() {
         pillTagline="AI Decision Intelligence for Founders"
         heroLine1="Data To Insights To Decisions —"
         heroLine2Accent="Wise Finance For Your Buisness"
-        heroSubheading="Financial clarity, business planning and decision making - enabling founders with financial insights customized for business"
+        heroSubheading="Financial clarity, business planning and decision making - enabling founders with insights customized for your business"
         ctaButtonLabel="Ask WYZ"
         ctaLinkTo="/early-access"
       />
