@@ -1,6 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from "react-router-dom";
 import LandingPage from "./pages/LandingPage.jsx";
-import FinanceTeamLandingPage from "./pages/FinanceTeamLandingPage.jsx";
 import FounderLandingPage from "./pages/FounderLandingPage.jsx";
 import LoginPage from "./pages/LoginPage.jsx";
 import AppLayout from "./layouts/AppLayout.jsx";
@@ -48,9 +47,9 @@ export default function App() {
         <ScenarioDraftProvider>
         <PlanningViewProvider>
         <Routes>
-          <Route path="/" element={<LandingPage />} />
-          <Route path="/finance-team" element={<FinanceTeamLandingPage />} />
-          <Route path="/founder" element={<FounderLandingPage />} />
+          <Route path="/" element={<FounderLandingPage />} />
+          <Route path="/finance-team" element={<LandingPage />} />
+          <Route path="/founder" element={<Navigate to="/" replace />} />
           <Route path="/early-access" element={<EarlyAccessPage />} />
           <Route path="/login" element={<LoginPage />} />
 

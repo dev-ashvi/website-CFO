@@ -4,9 +4,9 @@ import topLogo from "../assets/brand/adobe-express-file-1.png";
 
 const nav = [
   { label: "Benefits", href: "#benefits" },
-  { label: "Services", href: "#services" },
-  { label: "Research", href: "#vision" },
-  { label: "Security", href: "#security" },
+  { label: "Services", href: "#wyz-platform" },
+  { label: "Research", href: "#wyz-ai-chat" },
+  { label: "Security", href: "#trust-accuracy" },
 ];
 
 export default function Navbar() {

@@ -6,7 +6,7 @@ import HeroSection from "../components/HeroSection.jsx";
 import WyzAiChatSection from "../components/WyzAiChatSection.jsx";
 import TrustAccuracySection from "../components/TrustAccuracySection.jsx";
 import UseCasesSection from "../components/UseCasesSection.jsx";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
@@ -33,6 +33,7 @@ import {
   ShieldCheck,
   Sparkles,
   TrendingUp,
+  Upload,
   Users,
 } from "lucide-react";
 
@@ -58,7 +59,7 @@ const financeFrictionCards = [
     hint: "blackbox",
   },
   {
-    title: "Analyst Bottleneck",
+    title: "Manual Bottleneck",
     description: "Every strategic financial question depends on manual analysis, slowing down leadership decisions.",
     Icon: Inbox,
     hint: "queue",
@@ -76,6 +77,12 @@ const wyzCoreCapabilities = [
   { title: "Smart Integration", Icon: Link2 },
   { title: "Insight Engine", Icon: Sparkles },
   { title: "CFO-Grade Outputs", Icon: ShieldCheck },
+];
+
+const wyzLiteCapabilities = [
+  { title: "Upload", Icon: Upload },
+  { title: "Insight Engine", Icon: Sparkles },
+  { title: "Ask WYZ", Icon: MessageSquare },
 ];
 
 const wyzOutputGroups = [
@@ -268,9 +275,9 @@ export default function FounderLandingPage() {
       <Navbar />
       <HeroSection
         pillTagline="AI Decision Intelligence for Founders"
-        heroLine1="Data to Insights to Decisions —"
-        heroLine2Accent="Financial business partner for Founders"
-        heroSubheading="Real time financial clarity, true profitability, board ready numbers — get financial insights customised for your business"
+        heroLine1="Data To Insights To Decisions —"
+        heroLine2Accent="Wise Finance For Your Buisness"
+        heroSubheading="Financial clarity, business planning and decision making - enabling founders with financial insights customized for business"
         ctaButtonLabel="Ask WYZ"
       />
 
@@ -321,7 +328,7 @@ export default function FounderLandingPage() {
               variants={transformItem}
               className="text-3xl md:text-[2.35rem] font-semibold tracking-tight leading-[1.2] text-[#1a3673]"
             >
-              The problem isn&apos;t the finance team. It&apos;s the system around them.
+              The problem isn&apos;t the team. It&apos;s the system around them.
             </motion.h2>
             <motion.p
               variants={transformItem}
@@ -642,6 +649,37 @@ export default function FounderLandingPage() {
                         </li>
                       ))}
                     </ul>
+
+                    <div className="mt-5 border-t border-[rgba(26,54,115,0.08)] pt-4">
+                      <div className="rounded-xl border border-[rgba(26,54,115,0.08)] bg-white px-3 py-2.5 sm:px-4 sm:py-3">
+                        <p className="text-center text-[10px] font-semibold uppercase tracking-[0.28em] text-[#fc7d25]">
+                          Wyz Lite
+                        </p>
+                        <div className="mt-2 flex flex-col items-center gap-1 sm:mt-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-center sm:gap-x-1 sm:gap-y-1.5">
+                          {wyzLiteCapabilities.map(({ title, Icon }, i) => (
+                            <Fragment key={title}>
+                              {i > 0 ? (
+                                <ChevronRight
+                                  size={14}
+                                  strokeWidth={2}
+                                  className="shrink-0 rotate-90 text-[#1a3673]/45 sm:rotate-0"
+                                  aria-hidden
+                                />
+                              ) : null}
+                              <span className="inline-flex items-center gap-1.5 rounded-md px-1.5 py-0.5 text-[13px] font-medium leading-tight text-[#1a3673]">
+                                <Icon
+                                  size={14}
+                                  strokeWidth={1.75}
+                                  className="shrink-0 text-[#1a3673]"
+                                  aria-hidden
+                                />
+                                {title}
+                              </span>
+                            </Fragment>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
                   </motion.div>
                 </motion.div>
               </div>
@@ -1202,7 +1240,7 @@ export default function FounderLandingPage() {
                 </Link>
                 <a
                   href="#hero-chat"
-                  className="w-full rounded-xl border border-[rgba(26,54,115,0.14)] bg-white px-7 py-3.5 text-center text-base font-semibold text-[#1a3673] shadow-[0_2px_8px_rgba(26,54,115,0.06)] transition-all duration-200 hover:-translate-y-0.5 hover:border-[rgba(252,125,37,0.45)] hover:bg-[rgba(252,125,37,0.06)] sm:w-auto"
+                  className="hidden w-full rounded-xl border border-[rgba(26,54,115,0.14)] bg-white px-7 py-3.5 text-center text-base font-semibold text-[#1a3673] shadow-[0_2px_8px_rgba(26,54,115,0.06)] transition-all duration-200 hover:-translate-y-0.5 hover:border-[rgba(252,125,37,0.45)] hover:bg-[rgba(252,125,37,0.06)] sm:w-auto"
                 >
                   Explore a Sample →
                 </a>

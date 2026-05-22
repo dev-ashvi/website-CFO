@@ -26,7 +26,7 @@ const blocks = [
     ],
   },
   {
-    title: "Full Audit Trail",
+    title: "Data Trail",
     Icon: History,
     lines: [
       "Every number traces back to its source.",
