@@ -886,7 +886,7 @@ export default function FounderLandingPage() {
               </motion.div>
 
               <motion.p variants={transformItem} className="mt-5 text-xs text-[rgba(26,54,115,0.48)] md:text-sm">
-                No setup required • 15-min demo • Works with your existing data
+                No additional tooling, No process disruption, Works with your existing data
               </motion.p>
               <motion.p
                 variants={transformItem}
