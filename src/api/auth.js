@@ -1,5 +1,9 @@
 import { httpClient } from "./httpClient.js";
-import { isDevDemoMode } from "./devMode.js";
+import {
+  DEMO_TOKEN_PREFIX,
+  isDevDemoMode,
+  matchesDemoLogin,
+} from "./devMode.js";
 
 function useAuthMock() {
   if (isDevDemoMode()) return true;
@@ -9,7 +13,25 @@ function useAuthMock() {
   return false;
 }
 
+function demoLoginResponse({ tenantSlug, email }) {
+  return {
+    token: `${DEMO_TOKEN_PREFIX}${Date.now()}`,
+    user: {
+      email,
+      tenant_slug: tenantSlug,
+      name: "Demo user",
+      is_demo: true,
+    },
+  };
+}
+
 export async function login({ tenantSlug, email, password }) {
+  // Live + local: one fixed credential set always unlocks demo UI without a backend.
+  if (matchesDemoLogin({ tenantSlug, email, password })) {
+    return demoLoginResponse({ tenantSlug: tenantSlug.trim(), email: email.trim() });
+  }
+
+  // Local-only: any non-empty credentials when mock flags are on.
   if (useAuthMock()) {
     return {
       token: `dev-mock-${Date.now()}`,

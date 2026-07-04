@@ -1,12 +1,16 @@
 import { httpClient } from "./httpClient.js";
 import * as chatMock from "./chatMock.js";
-import { isDevDemoMode, normalizeApiBaseUrl } from "./devMode.js";
+import { isDemoSession, isDevDemoMode, normalizeApiBaseUrl } from "./devMode.js";
 
 /**
- * Local mock when no API URL is configured in dev, VITE_DEV_DEMO_MODE, or VITE_USE_CHAT_MOCK=true.
+ * Local / live demo mock when:
+ * - logged in with fixed DEMO_LOGIN credentials (live site),
+ * - VITE_DEV_DEMO_MODE / VITE_USE_CHAT_MOCK,
+ * - or no API URL in development.
  * Set VITE_USE_CHAT_MOCK=false if you use a Vite proxy to /api without VITE_API_BASE_URL.
  */
 export function useChatMock() {
+  if (isDemoSession()) return true;
   if (isDevDemoMode()) return true;
   const flag = import.meta.env.VITE_USE_CHAT_MOCK;
   if (flag === "true" || flag === "1") return true;
