@@ -19,6 +19,7 @@ import PlanningPlansPage from "./pages/data/PlanningPlansPage.jsx";
 import PlanningInsightsPage from "./pages/data/PlanningInsightsPage.jsx";
 import PlanningWorkspacePage from "./pages/PlanningWorkspacePage.jsx";
 import EarlyAccessPage from "./pages/EarlyAccessPage.jsx";
+import RunwaySimulatorPage from "./pages/RunwaySimulatorPage.jsx";
 import { PlanningWorkspaceProvider } from "./planning/workspaceGuide/PlanningWorkspaceContext.jsx";
 import { AuthProvider } from "./auth/AuthContext.jsx";
 import RequireAuth from "./auth/RequireAuth.jsx";
@@ -51,6 +52,7 @@ export default function App() {
           <Route path="/finance-team" element={<LandingPage />} />
           <Route path="/founder" element={<Navigate to="/" replace />} />
           <Route path="/early-access" element={<EarlyAccessPage />} />
+          <Route path="/runway-simulator" element={<RunwaySimulatorPage />} />
           <Route path="/login" element={<LoginPage />} />
 
           <Route

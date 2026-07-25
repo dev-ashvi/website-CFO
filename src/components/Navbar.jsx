@@ -6,6 +6,7 @@ const nav = [
   { label: "Benefits", href: "#benefits" },
   { label: "Services", href: "#wyz-platform" },
   { label: "Research", href: "#wyz-ai-chat" },
+  { label: "Free CFO Assessment", href: "/runway-simulator" },
   { label: "Security", href: "#trust-accuracy" },
 ];
 
@@ -32,6 +33,8 @@ export default function Navbar() {
 
   return (
     <nav
+      data-site-navbar
+      data-wyz-navbar
       className={`fixed top-0 z-50 w-full overflow-x-clip bg-white/95 px-3 pt-4 shadow-[0_1px_0_rgba(26,54,115,0.06)] backdrop-blur-md transition-transform duration-300 ease-out will-change-transform md:px-8 md:pt-5 ${
         hidden ? "-translate-y-full pointer-events-none" : "translate-y-0"
       }`}
@@ -50,11 +53,17 @@ export default function Navbar() {
         </Link>
 
         <div className="hidden items-center gap-8 text-[13px] font-medium text-slate-600 md:flex">
-          {nav.map((item) => (
-            <a key={item.href} href={item.href} className="transition-colors hover:text-[#1a3673]">
-              {item.label}
-            </a>
-          ))}
+          {nav.map((item) =>
+            item.href.startsWith("/") ? (
+              <Link key={item.href} to={item.href} className="transition-colors hover:text-[#1a3673]">
+                {item.label}
+              </Link>
+            ) : (
+              <a key={item.href} href={item.href} className="transition-colors hover:text-[#1a3673]">
+                {item.label}
+              </a>
+            ),
+          )}
         </div>
 
         <div className="shrink-0 flex items-center gap-2 sm:gap-3">
@@ -74,11 +83,17 @@ export default function Navbar() {
       </div>
 
       <div className="mt-3 flex flex-wrap justify-center gap-x-5 gap-y-2 px-2 text-[11px] font-medium text-slate-500 md:hidden">
-        {nav.map((item) => (
-          <a key={item.href} href={item.href} className="transition-colors hover:text-[#1a3673]">
-            {item.label}
-          </a>
-        ))}
+        {nav.map((item) =>
+          item.href.startsWith("/") ? (
+            <Link key={item.href} to={item.href} className="transition-colors hover:text-[#1a3673]">
+              {item.label}
+            </Link>
+          ) : (
+            <a key={item.href} href={item.href} className="transition-colors hover:text-[#1a3673]">
+              {item.label}
+            </a>
+          ),
+        )}
         <Link to="/login" className="transition-colors hover:text-[#1a3673] sm:hidden">
           Login
         </Link>
