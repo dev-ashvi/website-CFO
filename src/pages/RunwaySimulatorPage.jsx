@@ -8,7 +8,7 @@ import { WhatIfPanel } from "../components/runway-simulator/WhatIfPanel.jsx";
 import {
   FORECAST_MONTHS,
   INDUSTRY_OPTIONS,
-  PRIORITY_OPTIONS,
+  BUSINESS_MODEL_OPTIONS,
   STAGE_OPTIONS,
   buildFallbackInsight,
   forecastMonthOptions,
@@ -44,8 +44,6 @@ const NET_BURN_HELP =
   "Monthly operating cash outflow after revenue, excluding CapEx and funding.";
 
 const emptyEvent = () => ({ monthIndex: 6, amount: "" });
-
-const SERIF = { fontFamily: '"DM Serif Display", serif' };
 
 const cardShellCls =
   "relative z-[1] mx-auto mt-8 max-w-[980px] rounded-2xl border border-[rgba(26,54,115,0.14)] bg-white px-5 py-7 shadow-[0_4px_6px_rgba(26,54,115,0.04),0_24px_48px_rgba(26,54,115,0.1),0_0_0_1px_rgba(255,255,255,0.8)_inset] sm:mt-10 sm:px-8 sm:py-9 md:rounded-[1.35rem] md:px-10 md:py-10 md:shadow-[0_8px_12px_rgba(26,54,115,0.05),0_32px_64px_rgba(26,54,115,0.12)]";
@@ -90,6 +88,20 @@ export default function RunwaySimulatorPage() {
   const requestFormScroll = () => setScrollTick((t) => t + 1);
 
   const goToStep = (next) => {
+    if (next > step && step === 0) {
+      const contactErrors = [];
+      const email = String(inputs.email || "").trim();
+      if (!email) contactErrors.push("Email ID is required.");
+      else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) contactErrors.push("Enter a valid Email ID.");
+      const phoneDigits = String(inputs.phone || "").replace(/\D/g, "");
+      if (!String(inputs.phone || "").trim()) contactErrors.push("Phone is required.");
+      else if (phoneDigits.length < 10) contactErrors.push("Enter a valid phone number.");
+      if (contactErrors.length) {
+        setErrors(contactErrors);
+        return;
+      }
+    }
+    setErrors([]);
     setStep(next);
     requestFormScroll();
   };
@@ -287,12 +299,9 @@ export default function RunwaySimulatorPage() {
                   className="h-1.5 w-1.5 rounded-full bg-[#fc7c23] shadow-[0_0_10px_rgba(252,124,35,0.75)]"
                   aria-hidden
                 />
-                WYZ FREE FINANCIAL TOOL
+                WYZ Cashflow Assessment Tool
               </div>
-              <h1
-                className="text-balance text-3xl font-extrabold leading-[1.12] tracking-tight text-slate-800 sm:text-4xl md:text-5xl"
-                style={SERIF}
-              >
+              <h1 className="text-balance text-3xl font-extrabold leading-[1.12] tracking-tight text-slate-800 sm:text-4xl md:text-5xl">
                 Understand Your Runway —
                 <br className="hidden sm:block" />{" "}
                 <span className="text-[#fc7d25]">Plan With More Clarity</span>
@@ -326,7 +335,7 @@ export default function RunwaySimulatorPage() {
                 ))}
               </ul>
               <button type="button" onClick={startAssessment} className={`${primaryBtnCls} mt-8 w-full sm:w-auto`}>
-                Start Free Assessment <ArrowRight size={16} />
+                Start Assessment <ArrowRight size={16} />
               </button>
               <p className="mt-4 text-[13px] text-slate-400">No signup required to calculate your results.</p>
             </section>
@@ -365,7 +374,7 @@ export default function RunwaySimulatorPage() {
 
               {step === 0 && (
                 <StepFrame subtitle="Used to personalize the AI assessment — not the math.">
-                  <Field label="Company name (optional)">
+                  <Field label="Company name">
                     <input
                       className={inputCls}
                       value={inputs.companyName}
@@ -383,12 +392,17 @@ export default function RunwaySimulatorPage() {
                     </select>
                   </Field>
                   <Field label="Business model">
-                    <input
+                    <select
                       className={inputCls}
                       value={inputs.businessModel}
                       onChange={(e) => setField("businessModel", e.target.value)}
-                      placeholder="Subscription, marketplace, services…"
-                    />
+                    >
+                      {BUSINESS_MODEL_OPTIONS.map((o) => (
+                        <option key={o} value={o}>
+                          {o}
+                        </option>
+                      ))}
+                    </select>
                   </Field>
                   <Field label="Startup stage">
                     <select
@@ -403,18 +417,28 @@ export default function RunwaySimulatorPage() {
                       ))}
                     </select>
                   </Field>
-                  <Field label="Main financial priority" className="md:col-span-2">
-                    <select
+                  <div className="md:col-span-2 border-t border-[rgba(26,54,115,0.08)] pt-4">
+                    <p className="text-[13px] font-semibold text-[#1a3673]">Contact info</p>
+                  </div>
+                  <Field label="Email ID">
+                    <input
+                      type="email"
                       className={inputCls}
-                      value={inputs.mainPriority}
-                      onChange={(e) => setField("mainPriority", e.target.value)}
-                    >
-                      {PRIORITY_OPTIONS.map((o) => (
-                        <option key={o} value={o}>
-                          {o}
-                        </option>
-                      ))}
-                    </select>
+                      value={inputs.email}
+                      onChange={(e) => setField("email", e.target.value)}
+                      placeholder="name@company.com"
+                      autoComplete="email"
+                    />
+                  </Field>
+                  <Field label="Phone">
+                    <input
+                      type="tel"
+                      className={inputCls}
+                      value={inputs.phone}
+                      onChange={(e) => setField("phone", e.target.value)}
+                      placeholder="+91 98765 43210"
+                      autoComplete="tel"
+                    />
                   </Field>
                 </StepFrame>
               )}
@@ -569,10 +593,9 @@ export default function RunwaySimulatorPage() {
                         label="Profile"
                         value={`${inputs.industry} · ${inputs.businessModel || "—"}`}
                       />
-                      <ReviewLine
-                        label="Stage & priority"
-                        value={`${inputs.startupStage} · ${inputs.mainPriority}`}
-                      />
+                      <ReviewLine label="Stage" value={inputs.startupStage} />
+                      <ReviewLine label="Email" value={inputs.email || "—"} />
+                      <ReviewLine label="Phone" value={inputs.phone || "—"} />
                     </ReviewBlock>
                     <ReviewBlock title="Starting cash & forecast" onEdit={() => goToStep(1)}>
                       <ReviewLine label="Starting cash" value={formatInr(Number(inputs.currentCashBalance) || 0)} />
@@ -701,10 +724,7 @@ export default function RunwaySimulatorPage() {
                 <p className="text-[12px] font-semibold uppercase tracking-[0.16em] text-[#fc7d25]">
                   Your estimated runway
                 </p>
-                <p
-                  className="mt-2 text-5xl font-semibold tracking-tight text-[#1a3673] md:text-6xl"
-                  style={SERIF}
-                >
+                <p className="mt-2 text-5xl font-semibold tracking-tight text-[#1a3673] md:text-6xl">
                   {result.kpis.runwayMonths == null
                     ? "—"
                     : Number(result.kpis.runwayMonths).toFixed(1)}
@@ -779,10 +799,7 @@ export default function RunwaySimulatorPage() {
                 {insightLoading && <p className="mt-4 text-sm text-slate-500">Generating assessment…</p>}
                 {!insightLoading && insight && (
                   <div className="mt-5 space-y-5">
-                    <p
-                      className="text-[16px] leading-[1.7] text-slate-700 md:text-[17px]"
-                      style={SERIF}
-                    >
+                    <p className="text-[16px] leading-[1.7] text-slate-700 md:text-[17px]">
                       {insight.summary}
                     </p>
                     <div className="grid grid-cols-1 gap-5 border-t border-[rgba(26,54,115,0.08)] pt-5 md:grid-cols-2">

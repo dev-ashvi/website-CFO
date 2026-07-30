@@ -1,4 +1,4 @@
-export { getDefaultInputs, HEALTH_THRESHOLDS, FORECAST_MONTHS, INDUSTRY_OPTIONS, STAGE_OPTIONS, PRIORITY_OPTIONS } from "./defaults.js";
+export { getDefaultInputs, HEALTH_THRESHOLDS, FORECAST_MONTHS, INDUSTRY_OPTIONS, STAGE_OPTIONS, BUSINESS_MODEL_OPTIONS } from "./defaults.js";
 export { validateSimulatorInputs } from "./validation.js";
 export { calculateProjection, monthLabelFromStart, monthFullLabelFromStart, forecastMonthOptions } from "./calculateProjection.js";
 export { calculateKpis, getHealthStatus } from "./calculateKpis.js";

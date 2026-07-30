@@ -29,8 +29,21 @@ export function validateSimulatorInputs(inputs) {
   if (!inputs.industry) errors.push("Industry is required.");
   if (!inputs.businessModel?.trim()) errors.push("Business model is required.");
   if (!inputs.startupStage) errors.push("Startup stage is required.");
-  if (!inputs.mainPriority) errors.push("Main financial priority is required.");
   if (!inputs.forecastStartMonth) errors.push("Forecast start month is required.");
+
+  const email = String(inputs.email || "").trim();
+  if (!email) {
+    errors.push("Email ID is required.");
+  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    errors.push("Enter a valid Email ID.");
+  }
+
+  const phoneDigits = String(inputs.phone || "").replace(/\D/g, "");
+  if (!String(inputs.phone || "").trim()) {
+    errors.push("Phone is required.");
+  } else if (phoneDigits.length < 10) {
+    errors.push("Enter a valid phone number.");
+  }
 
   requireNumber(inputs.currentCashBalance, "Current cash balance", { min: 0 });
 

@@ -88,7 +88,8 @@ export default function TrustAccuracySection() {
       />
       <div className="relative z-[1] mx-auto max-w-7xl">
         <motion.div
-          className="mx-auto max-w-3xl text-center"
+          id="accuracy"
+          className="mx-auto max-w-3xl scroll-mt-28 text-center"
           variants={stagger}
           initial="hidden"
           whileInView="show"
@@ -115,8 +116,11 @@ export default function TrustAccuracySection() {
           {blocks.map((block) => (
             <motion.div
               key={block.title}
+              id={block.title === "Human-in-the-Loop" ? "human-in-the-loop" : undefined}
               variants={item}
-              className="group min-w-0 border-l-2 border-transparent py-1 pl-4 pr-1 opacity-95 transition-[border-color,background-color,transform,opacity] duration-200 [-webkit-tap-highlight-color:transparent] hover:-translate-y-0.5 hover:border-l-[#fc7d25] hover:bg-[rgba(26,54,115,0.03)] hover:opacity-100 md:pl-5"
+              className={`group min-w-0 border-l-2 border-transparent py-1 pl-4 pr-1 opacity-95 transition-[border-color,background-color,transform,opacity] duration-200 [-webkit-tap-highlight-color:transparent] hover:-translate-y-0.5 hover:border-l-[#fc7d25] hover:bg-[rgba(26,54,115,0.03)] hover:opacity-100 md:pl-5${
+                block.title === "Human-in-the-Loop" ? " scroll-mt-28" : ""
+              }`}
             >
               <div className="flex items-center gap-2.5">
                 <block.Icon
@@ -137,11 +141,12 @@ export default function TrustAccuracySection() {
         </motion.div>
 
         <motion.div
+          id="security"
           variants={item}
           initial="hidden"
           whileInView="show"
           viewport={{ once: true, amount: 0.2 }}
-          className="mt-14 border-t border-[rgba(26,54,115,0.1)] pt-11 md:mt-16 md:pt-12"
+          className="mt-14 scroll-mt-28 border-t border-[rgba(26,54,115,0.1)] pt-11 md:mt-16 md:pt-12"
         >
           <h3 className="text-xl font-semibold tracking-tight text-[#1a3673] md:text-2xl">Security &amp; Data Integrity</h3>
           <div className="mt-7 grid grid-cols-1 gap-6 md:mt-8 md:grid-cols-2 md:gap-x-12 md:gap-y-7">

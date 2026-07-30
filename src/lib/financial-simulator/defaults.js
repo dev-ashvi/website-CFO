@@ -17,34 +17,20 @@ export const GROWTH_BOUNDS = {
 export const FORECAST_MONTHS = 24;
 
 export const INDUSTRY_OPTIONS = [
-  "SaaS",
   "D2C",
-  "E-commerce",
-  "Marketplace",
-  "Services",
-  "Fintech",
-  "Consumer",
-  "Healthcare",
+  "SaaS",
+  "FinTech",
   "Other",
 ];
 
 export const STAGE_OPTIONS = [
   "Pre-revenue",
-  "Bootstrapped",
-  "Pre-seed",
-  "Seed",
-  "Series A",
-  "Growth stage",
+  "Post-revenue",
+  "Growth",
+  "Scaling",
 ];
 
-export const PRIORITY_OPTIONS = [
-  "Extend runway",
-  "Reduce burn",
-  "Grow revenue",
-  "Reach profitability",
-  "Prepare for fundraising",
-  "Improve cash flow",
-];
+export const BUSINESS_MODEL_OPTIONS = ["B2B", "B2C", "Other"];
 
 /**
  * @returns {import('./types.js').SimulatorInputs}
@@ -52,10 +38,12 @@ export const PRIORITY_OPTIONS = [
 export function getDefaultInputs() {
   return {
     companyName: "",
+    email: "",
+    phone: "",
     industry: "SaaS",
-    businessModel: "Subscription",
-    startupStage: "Seed",
-    mainPriority: "Prepare for fundraising",
+    businessModel: "B2B",
+    startupStage: "Pre-revenue",
+    mainPriority: "",
     currency: CURRENCY,
     currentCashBalance: 1_000_000,
     forecastStartMonth: "2026-07",

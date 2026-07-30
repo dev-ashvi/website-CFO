@@ -9,6 +9,8 @@
 /**
  * @typedef {Object} SimulatorInputs
  * @property {string} [companyName]
+ * @property {string} [email]
+ * @property {string} [phone]
  * @property {string} industry
  * @property {string} businessModel
  * @property {string} startupStage
