@@ -21,11 +21,20 @@ import {
   buildCapexImpactNote,
   buildClosingCashCaption,
 } from "../../lib/financial-simulator/capexCashInsight.js";
+import { CashMovementBreakdown } from "./CashMovementBreakdown.jsx";
 
 const NAVY = "#1a3673";
 const ORANGE = "#fc7d25";
 
-export function SimulatorCharts({ months, expenseMix, capexComparison }) {
+export function SimulatorCharts({
+  months,
+  expenseMix,
+  capexComparison,
+  kpis,
+  inputs,
+  viewMode,
+  onApplyOverlay,
+}) {
   const cashData = useMemo(
     () =>
       months.map((m) => ({
@@ -60,6 +69,25 @@ export function SimulatorCharts({ months, expenseMix, capexComparison }) {
       })),
     [months],
   );
+
+  const revExpData = useMemo(
+    () =>
+      months.map((m) => ({
+        label: m.monthLabel,
+        revenue: m.revenue,
+        expenses: m.totalOperatingExpenses ?? m.grossBurn,
+        monthIndex: m.monthIndex,
+      })),
+    [months],
+  );
+
+  const revExpCaption = useMemo(() => {
+    const firstRevLead = revExpData.find((d) => d.revenue > d.expenses);
+    const alwaysExp = revExpData.every((d) => d.expenses >= d.revenue);
+    if (alwaysExp) return "Expenses remain above revenue throughout the forecast.";
+    if (firstRevLead) return `Revenue exceeds expenses from Month ${firstRevLead.monthIndex}.`;
+    return "Revenue and expenses cross during the forecast period.";
+  }, [revExpData]);
 
   const mixPie = useMemo(() => {
     const variable = expenseMix?.averageMonthlyVariableExpenses ?? 0;
@@ -242,6 +270,21 @@ export function SimulatorCharts({ months, expenseMix, capexComparison }) {
           ) : null}
         </ChartCard>
 
+        <ChartCard title="Revenue vs total expenses">
+          <ResponsiveContainer width="100%" height={240}>
+            <LineChart data={revExpData}>
+              <CartesianGrid stroke="rgba(26,54,115,0.08)" strokeDasharray="3 3" />
+              <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#64748B" }} interval={3} />
+              <YAxis tick={{ fontSize: 10, fill: "#64748B" }} tickFormatter={tickFmt} width={64} />
+              <Tooltip formatter={(v) => formatInr(v)} contentStyle={tooltipStyle} />
+              <Legend wrapperStyle={{ fontSize: 11 }} />
+              <Line type="monotone" dataKey="revenue" name="Revenue" stroke="#1a3673" strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="expenses" name="Total expenses" stroke="#fc7d25" strokeWidth={2} dot={false} />
+            </LineChart>
+          </ResponsiveContainer>
+          <p className="mt-2 text-[12px] leading-relaxed text-slate-500">{revExpCaption}</p>
+        </ChartCard>
+
         <ChartCard title="Fixed vs variable expenses over time">
           <ResponsiveContainer width="100%" height={240}>
             <AreaChart data={expenseOverTime}>
@@ -313,6 +356,16 @@ export function SimulatorCharts({ months, expenseMix, capexComparison }) {
           </div>
         </ChartCard>
       </div>
+
+      <CashMovementBreakdown
+        months={months}
+        expenseMix={expenseMix}
+        capexComparison={capexComparison}
+        kpis={kpis}
+        inputs={inputs}
+        viewMode={viewMode}
+        onApplyOverlay={onApplyOverlay}
+      />
     </div>
   );
 }

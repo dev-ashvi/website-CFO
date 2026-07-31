@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowLeft, ArrowRight, Check, Info, Loader2, Pencil, RefreshCw, Sparkles } from "lucide-react";
 import Navbar from "../components/Navbar.jsx";
@@ -23,6 +23,7 @@ import {
   percentDisplayValue,
   runSimulation,
 } from "../lib/financial-simulator/index.js";
+import { runDashboardOverlay, SCENARIO_MODES } from "../lib/financial-simulator/dashboardOverlays.js";
 
 const STEPS = [
   { id: "context", label: "Business context" },
@@ -76,6 +77,8 @@ export default function RunwaySimulatorPage() {
   }));
   const [errors, setErrors] = useState([]);
   const [result, setResult] = useState(null);
+  const [viewResult, setViewResult] = useState(null);
+  const [viewMode, setViewMode] = useState({ kind: "scenario", id: "current", label: "Current" });
   const [insight, setInsight] = useState(null);
   const [insightLoading, setInsightLoading] = useState(false);
   const formRef = useRef(null);
@@ -188,6 +191,8 @@ export default function RunwaySimulatorPage() {
     }
     setErrors([]);
     setResult(sim);
+    setViewResult(null);
+    setViewMode({ kind: "scenario", id: "current", label: "Current" });
     setInsight(null);
     setInsightLoading(true);
     setPhase("calculating");
@@ -262,27 +267,56 @@ export default function RunwaySimulatorPage() {
     setPhase("form");
     setStep(0);
     setResult(null);
+    setViewResult(null);
+    setViewMode({ kind: "scenario", id: "current", label: "Current" });
     setInsight(null);
     setErrors([]);
     requestFormScroll();
   };
 
+  const display = viewResult || result;
+
+  const applyOverlay = useCallback(
+    (overlay) => {
+      if (!result?.inputs || !overlay) return;
+      if (overlay.kind === "scenario" && overlay.id === "current") {
+        setViewResult(null);
+        setViewMode({ kind: "scenario", id: "current", label: "Current" });
+        return;
+      }
+      const sourceInputs =
+        overlay.kind === "scenario" ? result.inputs : viewResult?.inputs || result.inputs;
+      const out = runDashboardOverlay(sourceInputs, overlay);
+      if (!out.ok) return;
+      const modeDef =
+        overlay.kind === "scenario" ? SCENARIO_MODES.find((s) => s.id === overlay.id) : null;
+      setViewResult(out.sim);
+      setViewMode({
+        kind: overlay.kind,
+        id: overlay.id,
+        label: out.label || modeDef?.label || overlay.id,
+      });
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    },
+    [result, viewResult],
+  );
+
   const statusTone = useMemo(() => {
-    const s = result?.kpis?.healthStatus;
+    const s = display?.kpis?.healthStatus;
     if (s === "Critical") return "border-red-200 bg-red-50 text-[#b91c1c]";
     if (s === "Attention required") return "border-[rgba(252,125,37,0.25)] bg-[rgba(252,125,37,0.08)] text-[#c55a12]";
     if (s === "Stable") return "border-[rgba(26,54,115,0.14)] bg-[#f4f8ff] text-[#1a3673]";
     return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }, [result]);
+  }, [display]);
 
   const runwayExplain = useMemo(() => {
-    if (!result) return "";
-    const { runwayMonths, cashOutMonthLabel, cashOutMonthIndex } = result.kpis;
+    if (!display) return "";
+    const { runwayMonths, cashOutMonthLabel, cashOutMonthIndex } = display.kpis;
     if (cashOutMonthIndex == null) {
       return `At your current burn rate, cash lasts beyond the 24-month forecast (${formatMonths(runwayMonths)} estimated).`;
     }
     return `Based on your assumptions, cash is projected to run out around ${cashOutMonthLabel} (${formatMonths(runwayMonths)} of runway).`;
-  }, [result]);
+  }, [display]);
 
   const eventLine = (ev) => {
     const amount = ev?.amount;
@@ -764,7 +798,7 @@ export default function RunwaySimulatorPage() {
             </section>
           )}
 
-          {phase === "results" && result && (
+          {phase === "results" && result && display && (
             <div className="mt-10 space-y-6 md:mt-12 md:space-y-7">
               <div className="flex flex-wrap items-end justify-between gap-4">
                 <div>
@@ -772,15 +806,30 @@ export default function RunwaySimulatorPage() {
                   <h2 className="mt-1 text-2xl font-semibold tracking-tight text-[#1a3673] md:text-[1.85rem]">
                     Your free projection
                   </h2>
-                  <p className="mt-1 text-sm text-slate-500">Based on the assumptions you provided</p>
+                  <p className="mt-1 text-sm text-slate-500">
+                    {viewMode?.id !== "current"
+                      ? `Simulating: ${viewMode.label}`
+                      : "Based on the assumptions you provided"}
+                  </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={restart}
-                  className="inline-flex items-center gap-2 rounded-xl border border-[rgba(26,54,115,0.14)] bg-white px-4 py-2.5 text-sm font-semibold text-[#1a3673] shadow-[0_2px_8px_rgba(26,54,115,0.06)] transition hover:border-[rgba(252,125,37,0.4)] hover:bg-[rgba(252,125,37,0.05)]"
-                >
-                  <RefreshCw size={14} /> Edit inputs
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  {viewMode?.id !== "current" ? (
+                    <button
+                      type="button"
+                      onClick={() => applyOverlay({ kind: "scenario", id: "current" })}
+                      className="inline-flex items-center gap-2 rounded-xl border border-[rgba(252,125,37,0.35)] bg-[rgba(252,125,37,0.08)] px-4 py-2.5 text-sm font-semibold text-[#c55a12] transition hover:bg-[rgba(252,125,37,0.14)]"
+                    >
+                      Reset to current
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={restart}
+                    className="inline-flex items-center gap-2 rounded-xl border border-[rgba(26,54,115,0.14)] bg-white px-4 py-2.5 text-sm font-semibold text-[#1a3673] shadow-[0_2px_8px_rgba(26,54,115,0.06)] transition hover:border-[rgba(252,125,37,0.4)] hover:bg-[rgba(252,125,37,0.05)]"
+                  >
+                    <RefreshCw size={14} /> Edit inputs
+                  </button>
+                </div>
               </div>
 
               <section className="rounded-2xl border border-[rgba(252,125,37,0.35)] bg-white px-6 py-6 shadow-[0_8px_32px_rgba(26,54,115,0.08)] ring-1 ring-[rgba(252,125,37,0.12)] md:rounded-[1.35rem] md:px-8 md:py-7">
@@ -788,18 +837,18 @@ export default function RunwaySimulatorPage() {
                   Your estimated runway
                 </p>
                 <p className="mt-2 text-5xl font-semibold tracking-tight text-[#1a3673] md:text-6xl">
-                  {result.kpis.runwayMonths == null
+                  {display.kpis.runwayMonths == null
                     ? "—"
-                    : Number(result.kpis.runwayMonths).toFixed(1)}
+                    : Number(display.kpis.runwayMonths).toFixed(1)}
                 </p>
                 <p className="mt-1 text-base font-medium text-slate-500">months of runway</p>
                 <div className="mt-4 flex flex-wrap items-center gap-3">
                   <span className={"inline-flex items-center rounded-full border px-3.5 py-1.5 text-xs font-semibold " + statusTone}>
-                    {result.kpis.healthStatus}
+                    {display.kpis.healthStatus}
                   </span>
                   <span className="text-sm text-slate-600">
                     Expected cash-out:{" "}
-                    <span className="font-semibold text-[#1a3673]">{result.kpis.cashOutMonthLabel}</span>
+                    <span className="font-semibold text-[#1a3673]">{display.kpis.cashOutMonthLabel}</span>
                   </span>
                 </div>
                 <p className="mt-4 max-w-2xl text-sm leading-relaxed text-slate-500">{runwayExplain}</p>
@@ -809,17 +858,17 @@ export default function RunwaySimulatorPage() {
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                   <Metric
                     label="Avg monthly net burn"
-                    value={formatInr(result.kpis.avgMonthlyNetBurn)}
+                    value={formatInr(display.kpis.avgMonthlyNetBurn)}
                     help={NET_BURN_HELP}
                     primary
                   />
-                  <Metric label="Expected cash-out" value={result.kpis.cashOutMonthLabel} primary />
+                  <Metric label="Expected cash-out" value={display.kpis.cashOutMonthLabel} primary />
                   <Metric
                     label="Cash after 6 months"
                     value={formatHorizonCash(
-                      result.kpis.sixMonthClosingCash,
+                      display.kpis.sixMonthClosingCash,
                       6,
-                      result.kpis.cashOutMonthIndex,
+                      display.kpis.cashOutMonthIndex,
                     )}
                     primary
                   />
@@ -827,33 +876,37 @@ export default function RunwaySimulatorPage() {
                 <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
                   <Metric
                     label="Avg monthly gross burn"
-                    value={formatInr(result.kpis.avgMonthlyGrossBurn)}
+                    value={formatInr(display.kpis.avgMonthlyGrossBurn)}
                     help={GROSS_BURN_HELP}
                   />
-                  <Metric label="Gross margin (avg)" value={formatPercent(result.kpis.avgGrossMargin)} />
-                  <Metric label="EBITDA (month 1)" value={formatInr(result.kpis.month1Ebitda)} />
+                  <Metric label="Gross margin (avg)" value={formatPercent(display.kpis.avgGrossMargin)} />
+                  <Metric label="EBITDA (month 1)" value={formatInr(display.kpis.month1Ebitda)} />
                   <Metric
                     label="Cash after 12 months"
                     value={formatHorizonCash(
-                      result.kpis.twelveMonthClosingCash,
+                      display.kpis.twelveMonthClosingCash,
                       12,
-                      result.kpis.cashOutMonthIndex,
+                      display.kpis.cashOutMonthIndex,
                     )}
                   />
                 </div>
               </div>
 
               <SimulatorCharts
-                months={result.months}
-                expenseMix={result.kpis.expenseMix}
-                capexComparison={result.kpis.capexComparison}
+                months={display.months}
+                expenseMix={display.kpis.expenseMix}
+                capexComparison={display.kpis.capexComparison}
+                kpis={display.kpis}
+                inputs={display.inputs}
+                viewMode={viewMode}
+                onApplyOverlay={applyOverlay}
               />
 
-              {buildExpenseInsights(result).length > 0 && (
+              {buildExpenseInsights(display).length > 0 && (
                 <section className="rounded-2xl border border-[rgba(26,54,115,0.12)] bg-white px-5 py-5 shadow-[0_8px_32px_rgba(26,54,115,0.07)] md:rounded-[1.35rem] md:px-7 md:py-6">
                   <h3 className="text-sm font-semibold text-[#1a3673]">Expense insights</h3>
                   <ul className="mt-3 list-disc space-y-1.5 pl-4 text-[13px] leading-relaxed text-slate-600">
-                    {buildExpenseInsights(result).map((line) => (
+                    {buildExpenseInsights(display).map((line) => (
                       <li key={line}>{line}</li>
                     ))}
                   </ul>
@@ -910,8 +963,8 @@ export default function RunwaySimulatorPage() {
 
               <CustomizedReportCta
                 priority={result.inputs.mainPriority}
-                runwayMonths={result.kpis.runwayMonths}
-                healthStatus={result.kpis.healthStatus}
+                runwayMonths={display.kpis.runwayMonths}
+                healthStatus={display.kpis.healthStatus}
               />
             </div>
           )}

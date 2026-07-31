@@ -13,7 +13,14 @@ export {
 export { buildFallbackInsight } from "./fallbackInsight.js";
 export { buildExpenseInsights } from "./expenseInsights.js";
 export { buildClosingCashCaption, buildCapexImpactNote } from "./capexCashInsight.js";
+export { buildCashMovementInsight, buildOperatingLeverageStats } from "./cashMovementInsight.js";
 export { runWhatIfScenario, cloneInputs } from "./scenarios/index.js";
+export {
+  runDashboardOverlay,
+  SCENARIO_MODES,
+  WHATIF_OVERLAYS,
+} from "./dashboardOverlays.js";
+export { ASK_AI_PROMPTS, answerAskAiCfo } from "./askAiCfo.js";
 
 import { validateSimulatorInputs } from "./validation.js";
 import { calculateProjection } from "./calculateProjection.js";
