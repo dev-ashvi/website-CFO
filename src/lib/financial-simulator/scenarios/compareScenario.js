@@ -51,6 +51,7 @@ export function buildScenarioInsight({ type, label, params, base, scenario, delt
 
   if (type === "cost-reduction") {
     const pct = Math.round((params.reductionRate || 0) * 100);
+    const scope = params.target === "fixed" ? "fixed" : "variable";
     const burnDelta = delta.avgNetBurn;
     const burnText =
       burnDelta != null && burnDelta < 0
@@ -62,7 +63,7 @@ export function buildScenarioInsight({ type, label, params, base, scenario, delt
         : runwayDelta != null && Math.abs(runwayDelta) < 0.05
           ? " with no material runway change"
           : "";
-    return `Reducing selected operating costs by ${pct}%${burnText}${runwayText}.`;
+    return `Reducing ${scope} expenses by ${pct}%${burnText}${runwayText}.`;
   }
 
   if (type === "revenue-growth") {

@@ -7,6 +7,22 @@
  */
 
 /**
+ * @typedef {Object} VariableExpensesInput
+ * @property {number} cogsPercent
+ * @property {number} otherDirectCostsPercent
+ * @property {number} salesAndMarketingPercent
+ * @property {number} productAndTechnologyPercent
+ */
+
+/**
+ * @typedef {Object} FixedExpensesInput
+ * @property {number} monthlyPayroll
+ * @property {number} payrollGrowthPercent
+ * @property {number} otherFixedCosts
+ * @property {number} otherFixedCostGrowthPercent
+ */
+
+/**
  * @typedef {Object} SimulatorInputs
  * @property {string} [companyName]
  * @property {string} [email]
@@ -29,6 +45,8 @@
  * @property {number} otherDirectCostsPercent
  * @property {number} salesMarketingPercent
  * @property {number} productTechPercent
+ * @property {number} [productTechPercentChangeFromMonth] - 1-based month when product/tech % changes
+ * @property {number} [productTechPercentAfterChange] - new product/tech % from that month
  * @property {number} monthlyPayroll
  * @property {number} payrollGrowth
  * @property {number} otherFixedCosts
@@ -36,6 +54,12 @@
  * @property {CashEvent[]} capexEvents
  * @property {CashEvent[]} equityEvents
  * @property {CashEvent[]} debtEvents
+ * @property {VariableExpensesInput} [variableExpenses] - compatibility grouping (optional)
+ * @property {FixedExpensesInput} [fixedExpenses] - compatibility grouping (optional)
+ * @property {number} [opexReductionRate]
+ * @property {number} [opexReductionFromMonth]
+ * @property {'variable'|'fixed'} [opexReductionTarget]
+ * @property {number} [payrollGrowthDelayMonths]
  */
 
 /**
@@ -53,19 +77,50 @@
  * @property {number} productAndTechnology
  * @property {number} payroll
  * @property {number} otherFixedCosts
+ * @property {number} totalVariableExpenses
+ * @property {number} totalFixedExpenses
  * @property {number} totalOperatingExpenses
  * @property {number} ebitda
  * @property {number} ebitdaMargin
  * @property {number} capex
+ * @property {number} cumulativeCapex
  * @property {number} equityFunding
  * @property {number} debtOrOtherFunding
  * @property {number} totalCashBurn
  * @property {number} netCashFlow
+ * @property {number} netCashFlowExcludingCapex
  * @property {number} grossBurn
  * @property {number} netBurn
  * @property {number} openingCash
  * @property {number|null} closingCash
+ * @property {number|null} closingCashIncludingCapex
+ * @property {number} openingCashExcludingCapex
+ * @property {number|null} closingCashExcludingCapex
  * @property {boolean} cashOut
+ * @property {boolean} cashOutExcludingCapex
+ */
+
+/**
+ * @typedef {Object} CapexComparison
+ * @property {number|null} cashOutMonthIncludingCapex
+ * @property {number|null} cashOutMonthExcludingCapex
+ * @property {string} cashOutMonthLabelIncludingCapex
+ * @property {string} cashOutMonthLabelExcludingCapex
+ * @property {number|null} runwayMonthsIncludingCapex
+ * @property {number|null} runwayMonthsExcludingCapex
+ * @property {number|null} month24CashIncludingCapex
+ * @property {number|null} month24CashExcludingCapex
+ * @property {number|null} capexRunwayImpactMonths
+ * @property {number} cumulativeCapex
+ */
+
+/**
+ * @typedef {Object} ExpenseMix
+ * @property {number} averageMonthlyVariableExpenses
+ * @property {number} averageMonthlyFixedExpenses
+ * @property {number} variableExpensePercent
+ * @property {number} fixedExpensePercent
+ * @property {string} largestExpenseCategory
  */
 
 /**
@@ -83,6 +138,8 @@
  * @property {number|null} twelveMonthClosingCash
  * @property {string} healthStatus
  * @property {Object} costMix
+ * @property {ExpenseMix} expenseMix
+ * @property {CapexComparison} capexComparison
  */
 
 export {};

@@ -13,6 +13,37 @@ export function getHealthStatus(runwayMonths) {
 }
 
 /**
+ * Fractional runway from a cash series (same definition as primary runway).
+ * @param {import('./types.js').MonthlyProjection[]} months
+ * @param {{ cashKey: string, cashOutKey: string, burnKey: string }} opts
+ */
+function computeRunwayMonths(months, { cashKey, cashOutKey, burnKey }) {
+  const cashOutMonth = months.find((m) => m[cashOutKey]) || null;
+  const cashOutMonthIndex = cashOutMonth ? cashOutMonth.monthIndex : null;
+
+  if (cashOutMonthIndex != null) {
+    const prior = months[cashOutMonthIndex - 2];
+    const burnMonth = months[cashOutMonthIndex - 1];
+    const priorCash = prior?.[cashKey];
+    const burn = burnMonth?.[burnKey];
+    if (priorCash != null && burnMonth && burn > 0) {
+      return cashOutMonthIndex - 1 + priorCash / burn;
+    }
+    return Math.max(0, cashOutMonthIndex - 1);
+  }
+
+  const last = months[months.length - 1];
+  const recent = months.slice(-3);
+  const avgBurn = average(
+    recent.map((m) => Math.max(m[burnKey], 0)).filter((v) => v > 0),
+  );
+  if (avgBurn > 0 && last?.[cashKey] != null) {
+    return months.length + last[cashKey] / avgBurn;
+  }
+  return months.length;
+}
+
+/**
  * @param {import('./types.js').MonthlyProjection[]} months
  * @returns {import('./types.js').SimulatorKpis}
  */
@@ -20,29 +51,21 @@ export function calculateKpis(months) {
   const cashOutMonth = months.find((m) => m.cashOut) || null;
   const cashOutMonthIndex = cashOutMonth ? cashOutMonth.monthIndex : null;
 
-  let runwayMonths = null;
-  if (cashOutMonthIndex != null) {
-    // Fractional runway using prior closing cash / that month's burn when available.
-    const prior = months[cashOutMonthIndex - 2];
-    const burnMonth = months[cashOutMonthIndex - 1];
-    if (prior?.closingCash != null && burnMonth && burnMonth.totalCashBurn > 0) {
-      runwayMonths = cashOutMonthIndex - 1 + prior.closingCash / burnMonth.totalCashBurn;
-    } else {
-      runwayMonths = Math.max(0, cashOutMonthIndex - 1);
-    }
-  } else {
-    // No cash-out in horizon: estimate from last positive closing / recent avg burn.
-    const last = months[months.length - 1];
-    const recent = months.slice(-3);
-    const avgBurn = average(
-      recent.map((m) => Math.max(m.totalCashBurn, 0)).filter((v) => v > 0),
-    );
-    if (avgBurn > 0 && last.closingCash != null) {
-      runwayMonths = months.length + last.closingCash / avgBurn;
-    } else {
-      runwayMonths = months.length; // at least full horizon, cash generative
-    }
-  }
+  const runwayMonths = computeRunwayMonths(months, {
+    cashKey: "closingCash",
+    cashOutKey: "cashOut",
+    burnKey: "totalCashBurn",
+  });
+
+  const cashOutExcluding = months.find((m) => m.cashOutExcludingCapex) || null;
+  const cashOutMonthExcludingCapex = cashOutExcluding ? cashOutExcluding.monthIndex : null;
+
+  // Excluding CapEx: burn for fractional runway is operating cash burn only (no CapEx).
+  const runwayMonthsExcludingCapex = computeRunwayMonths(months, {
+    cashKey: "closingCashExcludingCapex",
+    cashOutKey: "cashOutExcludingCapex",
+    burnKey: "netBurn",
+  });
 
   const avgMonthlyGrossBurn = average(months.map((m) => m.grossBurn));
   const avgMonthlyNetBurn = average(months.map((m) => Math.max(m.netBurn, 0)));
@@ -52,6 +75,7 @@ export function calculateKpis(months) {
 
   const six = months[5];
   const twelve = months[11];
+  const last = months[months.length - 1];
 
   const totalOpexSample = months.slice(0, 6);
   const payrollSum = sum(totalOpexSample.map((m) => m.payroll));
@@ -59,8 +83,46 @@ export function calculateKpis(months) {
   const techSum = sum(totalOpexSample.map((m) => m.productAndTechnology));
   const expenseBase = payrollSum + marketingSum + techSum + sum(totalOpexSample.map((m) => m.otherFixedCosts));
 
+  const avgMonthlyVariableExpenses = average(months.map((m) => m.totalVariableExpenses));
+  const avgMonthlyFixedExpenses = average(months.map((m) => m.totalFixedExpenses));
+  const avgTotal = avgMonthlyVariableExpenses + avgMonthlyFixedExpenses;
+  const variableExpensePercent = avgTotal > 0 ? avgMonthlyVariableExpenses / avgTotal : 0;
+  const fixedExpensePercent = avgTotal > 0 ? avgMonthlyFixedExpenses / avgTotal : 0;
+
+  const categoryTotals = {
+    "COGS / cost of services": average(months.map((m) => m.cogs)),
+    "Other direct costs": average(months.map((m) => m.otherDirectCosts)),
+    "Sales & marketing": average(months.map((m) => m.salesAndMarketing)),
+    "Product & technology": average(months.map((m) => m.productAndTechnology)),
+    Payroll: average(months.map((m) => m.payroll)),
+    "Other fixed costs": average(months.map((m) => m.otherFixedCosts)),
+  };
+  const largestExpenseCategory = Object.entries(categoryTotals).sort((a, b) => b[1] - a[1])[0]?.[0] || "Payroll";
+
+  const runwayIncluding = runwayMonths == null ? null : round1(runwayMonths);
+  const runwayExcluding =
+    runwayMonthsExcludingCapex == null ? null : round1(runwayMonthsExcludingCapex);
+
+  let capexRunwayImpactMonths = null;
+  if (
+    cashOutMonthIndex != null &&
+    cashOutMonthExcludingCapex != null &&
+    runwayIncluding != null &&
+    runwayExcluding != null
+  ) {
+    capexRunwayImpactMonths = round1(runwayExcluding - runwayIncluding);
+  } else if (cashOutMonthIndex != null && cashOutMonthExcludingCapex == null && runwayIncluding != null) {
+    // Including hits cash-out; excluding stays positive in horizon — impact is at least the remaining buffer.
+    capexRunwayImpactMonths =
+      runwayExcluding != null ? round1(runwayExcluding - runwayIncluding) : null;
+  } else if (cashOutMonthIndex == null && cashOutMonthExcludingCapex == null) {
+    capexRunwayImpactMonths = 0;
+  }
+
+  const cumulativeCapex = last?.cumulativeCapex ?? 0;
+
   return {
-    runwayMonths: runwayMonths == null ? null : round1(runwayMonths),
+    runwayMonths: runwayIncluding,
     cashOutMonthLabel: cashOutMonth
       ? cashOutMonth.monthLabel
       : "Beyond 24-month horizon",
@@ -78,6 +140,29 @@ export function calculateKpis(months) {
       payrollPercentOfExpenses: expenseBase ? payrollSum / expenseBase : 0,
       marketingPercentOfExpenses: expenseBase ? marketingSum / expenseBase : 0,
       technologyPercentOfExpenses: expenseBase ? techSum / expenseBase : 0,
+    },
+    expenseMix: {
+      averageMonthlyVariableExpenses: avgMonthlyVariableExpenses,
+      averageMonthlyFixedExpenses: avgMonthlyFixedExpenses,
+      variableExpensePercent,
+      fixedExpensePercent,
+      largestExpenseCategory,
+    },
+    capexComparison: {
+      cashOutMonthIncludingCapex: cashOutMonthIndex,
+      cashOutMonthExcludingCapex,
+      cashOutMonthLabelIncludingCapex: cashOutMonth
+        ? cashOutMonth.monthLabel
+        : "Beyond 24-month horizon",
+      cashOutMonthLabelExcludingCapex: cashOutExcluding
+        ? cashOutExcluding.monthLabel
+        : "Beyond 24-month horizon",
+      runwayMonthsIncludingCapex: runwayIncluding,
+      runwayMonthsExcludingCapex: runwayExcluding,
+      month24CashIncludingCapex: last?.closingCash ?? null,
+      month24CashExcludingCapex: last?.closingCashExcludingCapex ?? null,
+      capexRunwayImpactMonths,
+      cumulativeCapex,
     },
   };
 }

@@ -11,6 +11,7 @@ import {
   BUSINESS_MODEL_OPTIONS,
   STAGE_OPTIONS,
   buildFallbackInsight,
+  buildExpenseInsights,
   forecastMonthOptions,
   formatHorizonCash,
   formatInr,
@@ -26,8 +27,8 @@ import {
 const STEPS = [
   { id: "context", label: "Business context" },
   { id: "position", label: "Starting financial position" },
-  { id: "revenue", label: "Revenue & margins" },
-  { id: "opex", label: "Operating expenses" },
+  { id: "revenue", label: "Revenue" },
+  { id: "expenses", label: "Expenses" },
   { id: "capital", label: "Capital & cash events" },
   { id: "review", label: "Review & calculate" },
 ];
@@ -39,9 +40,13 @@ const INTRO_BENEFITS = [
 ];
 
 const GROSS_BURN_HELP =
-  "Total monthly operating cash outflow before revenue, excluding CapEx and funding.";
+  "Total monthly variable and fixed operating cash outflow before revenue, excluding CapEx and funding.";
 const NET_BURN_HELP =
-  "Monthly operating cash outflow after revenue, excluding CapEx and funding.";
+  "Total operating cash outflow after revenue, excluding CapEx and funding.";
+const VARIABLE_EXPENSE_HELP =
+  "Costs that change with revenue, such as COGS, direct costs, marketing, and product or technology expenses.";
+const FIXED_EXPENSE_HELP =
+  "Monthly costs that do not directly change with revenue, such as payroll and other recurring overheads.";
 
 const emptyEvent = () => ({ monthIndex: 6, amount: "" });
 
@@ -127,7 +132,7 @@ export default function RunwaySimulatorPage() {
         .map((e) => ({ monthIndex: Number(e.monthIndex), amount: toNum(e.amount) }))
         .filter((e) => e.amount > 0 && e.monthIndex >= 1 && e.monthIndex <= FORECAST_MONTHS);
 
-    return {
+    const flat = {
       ...raw,
       currentCashBalance: toNum(raw.currentCashBalance),
       currentMonthlyRevenue: toNum(raw.currentMonthlyRevenue),
@@ -147,6 +152,23 @@ export default function RunwaySimulatorPage() {
       capexEvents: cleanEvents(raw.capexEvents),
       equityEvents: cleanEvents(raw.equityEvents),
       debtEvents: cleanEvents(raw.debtEvents),
+    };
+
+    // Compatibility grouping — engine still uses flat fields.
+    return {
+      ...flat,
+      variableExpenses: {
+        cogsPercent: flat.cogsPercent,
+        otherDirectCostsPercent: flat.otherDirectCostsPercent,
+        salesAndMarketingPercent: flat.salesMarketingPercent,
+        productAndTechnologyPercent: flat.productTechPercent,
+      },
+      fixedExpenses: {
+        monthlyPayroll: flat.monthlyPayroll,
+        payrollGrowthPercent: flat.payrollGrowth,
+        otherFixedCosts: flat.otherFixedCosts,
+        otherFixedCostGrowthPercent: flat.otherFixedGrowth,
+      },
     };
   };
 
@@ -198,6 +220,13 @@ export default function RunwaySimulatorPage() {
         payrollPercentOfExpenses: Math.round(sim.kpis.costMix.payrollPercentOfExpenses * 100),
         marketingPercentOfExpenses: Math.round(sim.kpis.costMix.marketingPercentOfExpenses * 100),
         technologyPercentOfExpenses: Math.round(sim.kpis.costMix.technologyPercentOfExpenses * 100),
+      },
+      expenseMix: {
+        averageMonthlyVariableExpenses: Math.round(sim.kpis.expenseMix.averageMonthlyVariableExpenses),
+        averageMonthlyFixedExpenses: Math.round(sim.kpis.expenseMix.averageMonthlyFixedExpenses),
+        variableExpensePercent: Math.round(sim.kpis.expenseMix.variableExpensePercent * 1000) / 10,
+        fixedExpensePercent: Math.round(sim.kpis.expenseMix.fixedExpensePercent * 1000) / 10,
+        largestExpenseCategory: sim.kpis.expenseMix.largestExpenseCategory,
       },
     };
 
@@ -517,47 +546,63 @@ export default function RunwaySimulatorPage() {
                       </Field>
                     </>
                   )}
-                  <Field label="COGS / cost of services (% of revenue)" hint="Enter 35 for 35% of revenue.">
-                    <PctInput value={inputs.cogsPercent} onChange={(v) => setField("cogsPercent", v)} />
-                  </Field>
-                  <Field label="Other direct costs (% of revenue)" hint="Enter 5 for 5% of revenue.">
-                    <PctInput
-                      value={inputs.otherDirectCostsPercent}
-                      onChange={(v) => setField("otherDirectCostsPercent", v)}
-                    />
-                  </Field>
                 </StepFrame>
               )}
 
               {step === 3 && (
-                <StepFrame subtitle="% of revenue for variable costs; ₹ / month for fixed costs.">
-                  <Field label="Sales & marketing (% of revenue)" hint="Enter 40 for 40% of revenue.">
-                    <PctInput
-                      value={inputs.salesMarketingPercent}
-                      onChange={(v) => setField("salesMarketingPercent", v)}
-                    />
-                  </Field>
-                  <Field label="Product & technology (% of revenue)" hint="Enter 20 for 20% of revenue.">
-                    <PctInput value={inputs.productTechPercent} onChange={(v) => setField("productTechPercent", v)} />
-                  </Field>
-                  <Field label="Monthly payroll">
-                    <InrInput value={inputs.monthlyPayroll} onChange={(v) => setField("monthlyPayroll", v)} />
-                  </Field>
-                  <Field
-                    label="Payroll monthly growth"
-                    hint="Enter 0.2 for 0.2% month-over-month (not 20%)."
+                <StepFrame subtitle="Separate costs that scale with revenue from costs that remain relatively fixed each month.">
+                  <ExpenseGroup
+                    title="Variable expenses"
+                    helper="These costs change as revenue grows."
+                    accent="orange"
                   >
-                    <PctInput value={inputs.payrollGrowth} onChange={(v) => setField("payrollGrowth", v)} />
-                  </Field>
-                  <Field label="Other fixed costs monthly">
-                    <InrInput value={inputs.otherFixedCosts} onChange={(v) => setField("otherFixedCosts", v)} />
-                  </Field>
-                  <Field
-                    label="Other fixed costs monthly growth"
-                    hint="Enter 0.2 for 0.2% month-over-month (not 20%)."
+                    <Field
+                      label="COGS / cost of services (% of revenue)"
+                      hint="Enter 35 for 35% of revenue."
+                    >
+                      <PctInput value={inputs.cogsPercent} onChange={(v) => setField("cogsPercent", v)} />
+                    </Field>
+                    <Field label="Other direct costs (% of revenue)" hint="Enter 5 for 5% of revenue.">
+                      <PctInput
+                        value={inputs.otherDirectCostsPercent}
+                        onChange={(v) => setField("otherDirectCostsPercent", v)}
+                      />
+                    </Field>
+                    <Field label="Sales & marketing (% of revenue)" hint="Enter 40 for 40% of revenue.">
+                      <PctInput
+                        value={inputs.salesMarketingPercent}
+                        onChange={(v) => setField("salesMarketingPercent", v)}
+                      />
+                    </Field>
+                    <Field label="Product & technology (% of revenue)" hint="Enter 20 for 20% of revenue.">
+                      <PctInput value={inputs.productTechPercent} onChange={(v) => setField("productTechPercent", v)} />
+                    </Field>
+                  </ExpenseGroup>
+
+                  <ExpenseGroup
+                    title="Fixed expenses"
+                    helper="These costs are entered as monthly amounts and do not directly depend on revenue."
+                    accent="navy"
                   >
-                    <PctInput value={inputs.otherFixedGrowth} onChange={(v) => setField("otherFixedGrowth", v)} />
-                  </Field>
+                    <Field label="Monthly payroll">
+                      <InrInput value={inputs.monthlyPayroll} onChange={(v) => setField("monthlyPayroll", v)} />
+                    </Field>
+                    <Field
+                      label="Payroll monthly growth"
+                      hint="Enter 0.2 for 0.2% month-over-month (not 20%)."
+                    >
+                      <PctInput value={inputs.payrollGrowth} onChange={(v) => setField("payrollGrowth", v)} />
+                    </Field>
+                    <Field label="Other fixed costs monthly">
+                      <InrInput value={inputs.otherFixedCosts} onChange={(v) => setField("otherFixedCosts", v)} />
+                    </Field>
+                    <Field
+                      label="Other fixed costs monthly growth"
+                      hint="Enter 0.2 for 0.2% month-over-month (not 20%)."
+                    >
+                      <PctInput value={inputs.otherFixedGrowth} onChange={(v) => setField("otherFixedGrowth", v)} />
+                    </Field>
+                  </ExpenseGroup>
                 </StepFrame>
               )}
 
@@ -604,7 +649,7 @@ export default function RunwaySimulatorPage() {
                         value={monthFullLabelFromStart(inputs.forecastStartMonth, 1)}
                       />
                     </ReviewBlock>
-                    <ReviewBlock title="Revenue & direct costs" onEdit={() => goToStep(2)}>
+                    <ReviewBlock title="Revenue" onEdit={() => goToStep(2)}>
                       {inputs.revenueMode === "simple" ? (
                         <>
                           <ReviewLine
@@ -625,23 +670,41 @@ export default function RunwaySimulatorPage() {
                           />
                         </>
                       )}
+                    </ReviewBlock>
+                    <ReviewBlock title="Variable expenses" onEdit={() => goToStep(3)}>
                       <ReviewLine
-                        label="Direct costs"
-                        value={`COGS ${formatPercent(Number(inputs.cogsPercent) || 0)} · Other ${formatPercent(Number(inputs.otherDirectCostsPercent) || 0)}`}
+                        label="COGS"
+                        value={`${formatPercent(Number(inputs.cogsPercent) || 0)} of revenue`}
+                      />
+                      <ReviewLine
+                        label="Other direct costs"
+                        value={`${formatPercent(Number(inputs.otherDirectCostsPercent) || 0)} of revenue`}
+                      />
+                      <ReviewLine
+                        label="Sales & marketing"
+                        value={`${formatPercent(Number(inputs.salesMarketingPercent) || 0)} of revenue`}
+                      />
+                      <ReviewLine
+                        label="Product & technology"
+                        value={`${formatPercent(Number(inputs.productTechPercent) || 0)} of revenue`}
                       />
                     </ReviewBlock>
-                    <ReviewBlock title="Operating costs" onEdit={() => goToStep(3)}>
-                      <ReviewLine
-                        label="Variable opex"
-                        value={`S&M ${formatPercent(Number(inputs.salesMarketingPercent) || 0)} · Tech ${formatPercent(Number(inputs.productTechPercent) || 0)}`}
-                      />
+                    <ReviewBlock title="Fixed expenses" onEdit={() => goToStep(3)}>
                       <ReviewLine
                         label="Payroll"
-                        value={`${formatInr(Number(inputs.monthlyPayroll) || 0)} · ${formatPercent(Number(inputs.payrollGrowth) || 0)} MoM`}
+                        value={`${formatInr(Number(inputs.monthlyPayroll) || 0)} / month`}
                       />
                       <ReviewLine
-                        label="Other fixed"
-                        value={`${formatInr(Number(inputs.otherFixedCosts) || 0)} · ${formatPercent(Number(inputs.otherFixedGrowth) || 0)} MoM`}
+                        label="Payroll growth"
+                        value={`${formatPercent(Number(inputs.payrollGrowth) || 0)} monthly`}
+                      />
+                      <ReviewLine
+                        label="Other fixed costs"
+                        value={`${formatInr(Number(inputs.otherFixedCosts) || 0)} / month`}
+                      />
+                      <ReviewLine
+                        label="Fixed cost growth"
+                        value={`${formatPercent(Number(inputs.otherFixedGrowth) || 0)} monthly`}
                       />
                     </ReviewBlock>
                     <ReviewBlock title="Capital events" onEdit={() => goToStep(4)}>
@@ -780,7 +843,22 @@ export default function RunwaySimulatorPage() {
                 </div>
               </div>
 
-              <SimulatorCharts months={result.months} />
+              <SimulatorCharts
+                months={result.months}
+                expenseMix={result.kpis.expenseMix}
+                capexComparison={result.kpis.capexComparison}
+              />
+
+              {buildExpenseInsights(result).length > 0 && (
+                <section className="rounded-2xl border border-[rgba(26,54,115,0.12)] bg-white px-5 py-5 shadow-[0_8px_32px_rgba(26,54,115,0.07)] md:rounded-[1.35rem] md:px-7 md:py-6">
+                  <h3 className="text-sm font-semibold text-[#1a3673]">Expense insights</h3>
+                  <ul className="mt-3 list-disc space-y-1.5 pl-4 text-[13px] leading-relaxed text-slate-600">
+                    {buildExpenseInsights(result).map((line) => (
+                      <li key={line}>{line}</li>
+                    ))}
+                  </ul>
+                </section>
+              )}
 
               <WhatIfPanel baseInputs={result.inputs} baseResult={result} />
 
@@ -906,6 +984,22 @@ function StepFrame({ subtitle, children }) {
     <div>
       {subtitle ? <p className="text-sm leading-relaxed text-slate-500">{subtitle}</p> : null}
       <div className={`${subtitle ? "mt-6" : ""} grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-5`}>{children}</div>
+    </div>
+  );
+}
+
+function ExpenseGroup({ title, helper, accent = "orange", children }) {
+  const accentBar = accent === "navy" ? "bg-[#1a3673]" : "bg-[#fc7d25]";
+  return (
+    <div className="md:col-span-2 rounded-2xl border border-[rgba(26,54,115,0.12)] bg-[#f8fafc] p-4 sm:p-5">
+      <div className="flex items-start gap-3">
+        <span className={`mt-1 h-8 w-1 shrink-0 rounded-full ${accentBar}`} aria-hidden />
+        <div>
+          <h3 className="text-[15px] font-semibold text-[#1a3673]">{title}</h3>
+          {helper ? <p className="mt-0.5 text-[12px] leading-relaxed text-slate-500">{helper}</p> : null}
+        </div>
+      </div>
+      <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-5">{children}</div>
     </div>
   );
 }

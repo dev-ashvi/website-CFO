@@ -11,6 +11,8 @@ export {
   parseInrInput,
 } from "./format.js";
 export { buildFallbackInsight } from "./fallbackInsight.js";
+export { buildExpenseInsights } from "./expenseInsights.js";
+export { buildClosingCashCaption, buildCapexImpactNote } from "./capexCashInsight.js";
 export { runWhatIfScenario, cloneInputs } from "./scenarios/index.js";
 
 import { validateSimulatorInputs } from "./validation.js";

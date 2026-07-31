@@ -49,7 +49,11 @@ export function runWhatIfScenario(baseInputs, spec) {
       break;
     case "cost-reduction":
       scenarioInputs = applyCostReductionScenario(baseInputs, params);
-      label = label || `Reduce operating costs by ${Math.round((params.reductionRate || 0) * 100)}%`;
+      {
+        const pct = Math.round((params.reductionRate || 0) * 100);
+        const scope = params.target === "fixed" ? "fixed" : "variable";
+        label = label || `Reduce ${scope} expenses by ${pct}%`;
+      }
       break;
     case "revenue-growth": {
       const baseGrowth =

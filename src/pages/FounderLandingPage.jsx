@@ -250,8 +250,8 @@ export default function FounderLandingPage() {
       <Navbar />
       <HeroSection
         pillTagline="AI Decision Intelligence for Founders"
-        heroLine1="Data To Insights To Decisions —"
-        heroLine2Accent="Wise Finance For Your Buisness"
+        heroLine1="Data to insights to decisions —"
+        heroLine2Accent="Wise finance for your business"
         heroSubheading="Financial clarity, business planning and decision making - enabling founders with insights customized for your business"
         ctaButtonLabel="Ask WYZ"
         ctaLinkTo="/early-access"

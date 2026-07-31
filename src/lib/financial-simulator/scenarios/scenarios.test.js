@@ -30,16 +30,38 @@ describe("what-if scenarios", () => {
     assert.ok(months[2].closingCash > calculateProjection(base)[2].closingCash);
   });
 
+  it("variable cost reduction affects only variable expenses from month 2", () => {
+    const base = baseNormalized();
+    const cut = applyCostReductionScenario(base, { reductionRate: 0.1, target: "variable" });
+    const baseM = calculateProjection(base);
+    const cutM = calculateProjection(cut);
+    assert.ok(Math.abs(cutM[0].totalVariableExpenses - baseM[0].totalVariableExpenses) < 1);
+    assert.ok(cutM[1].cogs < baseM[1].cogs * 0.95);
+    assert.ok(cutM[1].salesAndMarketing < baseM[1].salesAndMarketing * 0.95);
+    assert.ok(Math.abs(cutM[1].payroll - baseM[1].payroll) < 1);
+    assert.ok(Math.abs(cutM[1].otherFixedCosts - baseM[1].otherFixedCosts) < 1);
+  });
+
+  it("fixed cost reduction affects only fixed expenses from month 2", () => {
+    const base = baseNormalized();
+    const cut = applyCostReductionScenario(base, { reductionRate: 0.1, target: "fixed" });
+    const baseM = calculateProjection(base);
+    const cutM = calculateProjection(cut);
+    assert.ok(Math.abs(cutM[0].payroll - baseM[0].payroll) < 1);
+    assert.ok(cutM[1].payroll < baseM[1].payroll * 0.95);
+    assert.ok(cutM[1].otherFixedCosts < baseM[1].otherFixedCosts * 0.95);
+    assert.ok(Math.abs(cutM[1].cogs - baseM[1].cogs) < 1);
+    assert.ok(Math.abs(cutM[1].salesAndMarketing - baseM[1].salesAndMarketing) < 1);
+  });
+
   it("cost reduction lowers selected costs only from month 2", () => {
     const base = baseNormalized();
-    const cut = applyCostReductionScenario(base, { reductionRate: 0.1 });
+    const cut = applyCostReductionScenario(base, { reductionRate: 0.1, target: "variable" });
     const baseM = calculateProjection(base);
     const cutM = calculateProjection(cut);
     assert.ok(Math.abs(cutM[0].salesAndMarketing - baseM[0].salesAndMarketing) < 1);
     assert.ok(cutM[1].salesAndMarketing < baseM[1].salesAndMarketing * 0.95);
-    assert.ok(cutM[1].payroll < baseM[1].payroll * 0.95);
-    assert.ok(Math.abs(cutM[1].cogs - baseM[1].cogs) < 1);
-    assert.ok(Math.abs(cutM[1].otherDirectCosts - baseM[1].otherDirectCosts) < 1);
+    assert.ok(Math.abs(cutM[1].payroll - baseM[1].payroll) < 1);
   });
 
   it("revenue growth scenario adds percentage points correctly", () => {
@@ -69,7 +91,8 @@ describe("what-if scenarios", () => {
     const base = baseNormalized();
     const snapshot = JSON.stringify(base);
     applyFundingScenario(base, { amount: 1_000_000, monthIndex: 2 });
-    applyCostReductionScenario(base, { reductionRate: 0.1 });
+    applyCostReductionScenario(base, { reductionRate: 0.1, target: "variable" });
+    applyCostReductionScenario(base, { reductionRate: 0.1, target: "fixed" });
     applyRevenueGrowthScenario(base, { additionalPoints: 0.01 });
     applyPayrollDelayScenario(base, { delayMonths: 3 });
     assert.equal(JSON.stringify(base), snapshot);
@@ -103,7 +126,7 @@ describe("what-if scenarios", () => {
     const base = baseNormalized();
     const cmp = runWhatIfScenario(base, {
       type: "cost-reduction",
-      params: { reductionRate: 0 },
+      params: { reductionRate: 0, target: "variable" },
     });
     assert.ok(Math.abs(cmp.delta.runwayMonths || 0) < 0.05);
     assert.ok(Math.abs(cmp.delta.avgNetBurn || 0) < 1);
@@ -121,7 +144,7 @@ describe("what-if scenarios", () => {
     };
     const cmp = runWhatIfScenario(base, {
       type: "cost-reduction",
-      params: { reductionRate: 0.05 },
+      params: { reductionRate: 0.05, target: "variable" },
     });
     assert.ok(cmp.baseMonths.some((m) => m.closingCash < 0));
     assert.ok(cmp.scenarioMonths.some((m) => m.closingCash < 0));

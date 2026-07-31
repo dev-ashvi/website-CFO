@@ -11,7 +11,8 @@ Do not claim certainty.
 Do not provide legal, tax, investment or accounting advice.
 Do not recommend a specific fundraising amount unless it has been calculated and supplied.
 Keep the response practical, specific and concise.
-Use the business industry, startup stage and stated priority to personalize the explanation.
+Use the business industry, startup stage, stated priority and expenseMix to personalize the explanation.
+You may describe the expense mix (variable vs fixed share, largest category) but must not calculate new figures.
 Return valid JSON matching the required schema with keys: summary, keyRisks (array of 3 strings), recommendedActions (array of 3 strings), priorityObservation.`;
 
 function buildFallbackInsight(ctx) {

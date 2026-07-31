@@ -59,6 +59,7 @@ export function WhatIfPanel({ baseInputs, baseResult }) {
   const [fundingAmount, setFundingAmount] = useState(5_000_000);
   const [fundingMonth, setFundingMonth] = useState(6);
   const [costRate, setCostRate] = useState(0.1);
+  const [costTarget, setCostTarget] = useState("variable");
   const [growthPoints, setGrowthPoints] = useState(0.02);
   const [delayMonths, setDelayMonths] = useState(6);
   const [customFunding, setCustomFunding] = useState("");
@@ -82,10 +83,11 @@ export function WhatIfPanel({ baseInputs, baseResult }) {
         });
       }
       if (tab === "cost-reduction") {
+        const scope = costTarget === "fixed" ? "fixed" : "variable";
         return runWhatIfScenario(baseInputs, {
           type: "cost-reduction",
-          params: { reductionRate: costRate },
-          label: `Reduce operating costs by ${Math.round(costRate * 100)}%`,
+          params: { reductionRate: costRate, target: scope },
+          label: `Reduce ${scope} expenses by ${Math.round(costRate * 100)}%`,
         });
       }
       if (tab === "revenue-growth") {
@@ -108,6 +110,7 @@ export function WhatIfPanel({ baseInputs, baseResult }) {
     fundingMonth,
     customFunding,
     costRate,
+    costTarget,
     growthPoints,
     delayMonths,
   ]);
@@ -226,10 +229,39 @@ export function WhatIfPanel({ baseInputs, baseResult }) {
 
         {tab === "cost-reduction" && (
           <fieldset>
-            <legend className="text-[13px] font-medium text-[#1a3673]">Reduce operating costs</legend>
-            <p className="mt-1 text-[12px] text-slate-400">
-              Applies from the next forecast month. Cuts S&amp;M, product/tech, payroll and other fixed costs. Does
-              not change COGS, other direct costs or CapEx.
+            <legend className="text-[13px] font-medium text-[#1a3673]">Reduce costs</legend>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {[
+                {
+                  id: "variable",
+                  label: "Reduce variable expenses",
+                  detail: "COGS, other direct costs, sales & marketing, product & technology",
+                },
+                {
+                  id: "fixed",
+                  label: "Reduce fixed expenses",
+                  detail: "Payroll and other fixed costs",
+                },
+              ].map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  aria-pressed={costTarget === opt.id}
+                  onClick={() => setCostTarget(opt.id)}
+                  className={`rounded-xl border px-3 py-2 text-left text-[12px] transition ${
+                    costTarget === opt.id
+                      ? "border-[#fc7d25] bg-[rgba(252,125,37,0.08)] text-[#c55a12]"
+                      : "border-[rgba(26,54,115,0.14)] text-[#1a3673]"
+                  }`}
+                >
+                  <span className="block font-semibold">{opt.label}</span>
+                  <span className="mt-0.5 block text-[11px] opacity-80">{opt.detail}</span>
+                </button>
+              ))}
+            </div>
+            <p className="mt-3 text-[12px] text-slate-400">
+              Applies from the next forecast month. CapEx is never reduced. Payroll delay remains a separate
+              scenario.
             </p>
             <div className="mt-2 flex flex-wrap gap-2">
               {COST_QUICK.map((q) => (

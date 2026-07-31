@@ -62,10 +62,10 @@ describe("calculateProjection — Excel month 1 defaults", () => {
     const m1 = months[0];
     assert.equal(m1.revenue, 750_000);
     assert.ok(Math.abs(m1.cogs - 262_500) < TOL);
-    assert.ok(Math.abs(m1.payroll - 150_300) < TOL);
-    assert.ok(Math.abs(m1.otherFixedCosts - 75_150) < TOL);
-    assert.ok(Math.abs(m1.ebitda - -225_450) < TOL);
-    assert.ok(Math.abs(m1.closingCash - 774_550) < TOL);
+    assert.ok(Math.abs(m1.payroll - 150_000) < TOL);
+    assert.ok(Math.abs(m1.otherFixedCosts - 75_000) < TOL);
+    assert.ok(Math.abs(m1.ebitda - -225_000) < TOL);
+    assert.ok(Math.abs(m1.closingCash - 775_000) < TOL);
   });
 
   it("rolls opening→closing cash correctly", () => {
@@ -246,11 +246,16 @@ describe("KPIs / health", () => {
   });
 
   it("runSimulation returns months + kpis", () => {
-    const r = runSimulation(getDefaultInputs());
+    const r = runSimulation({
+      ...getDefaultInputs(),
+      email: "founder@example.com",
+      phone: "+91 98765 43210",
+    });
     assert.equal(r.ok, true);
     assert.equal(r.months.length, 24);
     assert.ok(r.kpis.runwayMonths != null);
     assert.ok(r.kpis.healthStatus);
+    assert.ok(r.kpis.expenseMix);
   });
 
   it("defines gross burn as total operating cash outflow", () => {
@@ -315,5 +320,284 @@ describe("KPIs / health", () => {
     assert.ok(months[0].netBurn < 0);
     const kpis = calculateKpis(months);
     assert.equal(kpis.avgMonthlyNetBurn, 0);
+  });
+});
+
+describe("variable / fixed expense classification", () => {
+  const base = () => ({
+    ...getDefaultInputs(),
+    revenueMode: "simple",
+    currentMonthlyRevenue: 100_000,
+    monthlyRevenueGrowth: 0.05,
+    cogsPercent: 0.2,
+    otherDirectCostsPercent: 0.05,
+    salesMarketingPercent: 0.1,
+    productTechPercent: 0.05,
+    monthlyPayroll: 30_000,
+    payrollGrowth: 0.01,
+    otherFixedCosts: 10_000,
+    otherFixedGrowth: 0.01,
+    equityEvents: [],
+    debtEvents: [],
+    capexEvents: [{ monthIndex: 3, amount: 50_000 }],
+  });
+
+  it("total variable expenses equal the sum of variable categories", () => {
+    const m = calculateProjection(base())[0];
+    assert.ok(
+      Math.abs(
+        m.totalVariableExpenses -
+          (m.cogs + m.otherDirectCosts + m.salesAndMarketing + m.productAndTechnology),
+      ) < TOL,
+    );
+  });
+
+  it("total fixed expenses equal payroll plus other fixed costs", () => {
+    const m = calculateProjection(base())[0];
+    assert.ok(Math.abs(m.totalFixedExpenses - (m.payroll + m.otherFixedCosts)) < TOL);
+  });
+
+  it("total operating expenses equal variable plus fixed", () => {
+    const m = calculateProjection(base())[0];
+    assert.ok(
+      Math.abs(m.totalOperatingExpenses - (m.totalVariableExpenses + m.totalFixedExpenses)) < TOL,
+    );
+  });
+
+  it("CapEx is excluded from variable and fixed operating expenses", () => {
+    const months = calculateProjection(base());
+    const m3 = months[2];
+    assert.equal(m3.capex, 50_000);
+    assert.ok(Math.abs(m3.grossBurn - m3.totalOperatingExpenses) < TOL);
+    assert.ok(Math.abs(m3.totalCashBurn - (m3.netBurn + m3.capex)) < TOL);
+    assert.ok(
+      Math.abs(
+        m3.totalOperatingExpenses - (m3.totalVariableExpenses + m3.totalFixedExpenses),
+      ) < TOL,
+    );
+  });
+
+  it("variable expense percentages scale correctly with revenue", () => {
+    const m = calculateProjection({ ...base(), monthlyRevenueGrowth: 0 })[0];
+    assert.ok(Math.abs(m.cogs - 20_000) < TOL);
+    assert.ok(Math.abs(m.otherDirectCosts - 5_000) < TOL);
+    assert.ok(Math.abs(m.salesAndMarketing - 10_000) < TOL);
+    assert.ok(Math.abs(m.productAndTechnology - 5_000) < TOL);
+  });
+
+  it("fixed expense growth compounds correctly", () => {
+    const months = calculateProjection({ ...base(), monthlyRevenueGrowth: 0 });
+    // Month 1 uses input base; MoM growth starts in Month 2 (golden Excel convention).
+    assert.ok(Math.abs(months[0].payroll - 30_000) < TOL);
+    assert.ok(Math.abs(months[1].payroll - 30_000 * 1.01) < TOL);
+  });
+
+  it("expense-mix percentages sum to ~100%", () => {
+    const months = calculateProjection(base());
+    const kpis = calculateKpis(months);
+    const sumPct = kpis.expenseMix.variableExpensePercent + kpis.expenseMix.fixedExpensePercent;
+    assert.ok(Math.abs(sumPct - 1) < 0.01);
+  });
+
+  it("gross burn equals total variable plus total fixed expenses", () => {
+    const m = calculateProjection(base())[0];
+    assert.ok(Math.abs(m.grossBurn - (m.totalVariableExpenses + m.totalFixedExpenses)) < TOL);
+  });
+
+  it("net burn equals gross burn minus revenue", () => {
+    const m = calculateProjection(base())[0];
+    assert.ok(Math.abs(m.netBurn - (m.grossBurn - m.revenue)) < TOL);
+  });
+});
+
+describe("closing cash including vs excluding CapEx", () => {
+  it("with zero CapEx, both closing-cash series are identical", () => {
+    const months = calculateProjection({
+      ...getDefaultInputs(),
+      revenueMode: "simple",
+      equityEvents: [],
+      debtEvents: [],
+      capexEvents: [],
+    });
+    for (const m of months) {
+      assert.ok(Math.abs(m.closingCash - m.closingCashExcludingCapex) < TOL);
+      assert.equal(m.cumulativeCapex, 0);
+    }
+  });
+
+  it("a CapEx event lowers including-CapEx cash in the correct month", () => {
+    const baseInputs = {
+      ...getDefaultInputs(),
+      revenueMode: "simple",
+      currentMonthlyRevenue: 100_000,
+      monthlyRevenueGrowth: 0,
+      equityEvents: [],
+      debtEvents: [],
+      capexEvents: [],
+    };
+    const withCapex = {
+      ...baseInputs,
+      capexEvents: [{ monthIndex: 3, amount: 200_000 }],
+    };
+    const baseM = calculateProjection(baseInputs);
+    const capM = calculateProjection(withCapex);
+    assert.ok(Math.abs(capM[0].closingCash - baseM[0].closingCash) < TOL);
+    assert.ok(Math.abs(capM[1].closingCash - baseM[1].closingCash) < TOL);
+    assert.ok(Math.abs(capM[2].closingCash - (baseM[2].closingCash - 200_000)) < TOL);
+    assert.equal(capM[2].capex, 200_000);
+  });
+
+  it("the excluding-CapEx series is unaffected by CapEx", () => {
+    const baseInputs = {
+      ...getDefaultInputs(),
+      revenueMode: "simple",
+      equityEvents: [],
+      debtEvents: [],
+      capexEvents: [],
+    };
+    const withCapex = {
+      ...baseInputs,
+      capexEvents: [{ monthIndex: 2, amount: 500_000 }],
+    };
+    const baseM = calculateProjection(baseInputs);
+    const capM = calculateProjection(withCapex);
+    for (let i = 0; i < 24; i++) {
+      assert.ok(Math.abs(capM[i].closingCashExcludingCapex - baseM[i].closingCashExcludingCapex) < TOL);
+    }
+  });
+
+  it("the difference between the two series equals cumulative CapEx", () => {
+    const months = calculateProjection({
+      ...getDefaultInputs(),
+      revenueMode: "simple",
+      equityEvents: [],
+      debtEvents: [],
+      capexEvents: [
+        { monthIndex: 2, amount: 100_000 },
+        { monthIndex: 5, amount: 250_000 },
+      ],
+    });
+    for (const m of months) {
+      assert.ok(
+        Math.abs(m.closingCashExcludingCapex - m.closingCash - m.cumulativeCapex) < TOL,
+      );
+      assert.equal(m.closingCashIncludingCapex, m.closingCash);
+    }
+  });
+
+  it("both series use independent opening-to-closing cash roll-forwards", () => {
+    const months = calculateProjection({
+      ...getDefaultInputs(),
+      revenueMode: "simple",
+      equityEvents: [],
+      debtEvents: [],
+      capexEvents: [{ monthIndex: 2, amount: 100_000 }],
+    });
+    for (let i = 1; i < months.length; i++) {
+      assert.equal(months[i].openingCash, months[i - 1].closingCash);
+      assert.equal(months[i].openingCashExcludingCapex, months[i - 1].closingCashExcludingCapex);
+      assert.ok(
+        Math.abs(months[i].closingCash - (months[i].openingCash + months[i].netCashFlow)) < TOL,
+      );
+      assert.ok(
+        Math.abs(
+          months[i].closingCashExcludingCapex -
+            (months[i].openingCashExcludingCapex + months[i].netCashFlowExcludingCapex),
+        ) < TOL,
+      );
+    }
+  });
+
+  it("funding events affect both series equally", () => {
+    const months = calculateProjection({
+      ...getDefaultInputs(),
+      revenueMode: "simple",
+      equityEvents: [{ monthIndex: 2, amount: 1_000_000 }],
+      debtEvents: [],
+      capexEvents: [],
+    });
+    assert.equal(months[1].equityFunding, 1_000_000);
+    assert.ok(Math.abs(months[1].closingCash - months[1].closingCashExcludingCapex) < TOL);
+    assert.ok(months[1].closingCash > months[0].closingCash);
+  });
+
+  it("operating expenses affect both series equally", () => {
+    const low = calculateProjection({
+      ...getDefaultInputs(),
+      revenueMode: "simple",
+      monthlyPayroll: 50_000,
+      equityEvents: [],
+      debtEvents: [],
+      capexEvents: [],
+    });
+    const high = calculateProjection({
+      ...getDefaultInputs(),
+      revenueMode: "simple",
+      monthlyPayroll: 200_000,
+      equityEvents: [],
+      debtEvents: [],
+      capexEvents: [],
+    });
+    assert.ok(high[0].closingCash < low[0].closingCash);
+    assert.ok(high[0].closingCashExcludingCapex < low[0].closingCashExcludingCapex);
+  });
+
+  it("cash-out including CapEx can occur before excluding CapEx", () => {
+    const months = calculateProjection({
+      ...getDefaultInputs(),
+      currentCashBalance: 300_000,
+      revenueMode: "simple",
+      currentMonthlyRevenue: 50_000,
+      monthlyRevenueGrowth: 0,
+      cogsPercent: 0.3,
+      otherDirectCostsPercent: 0.1,
+      salesMarketingPercent: 0.2,
+      productTechPercent: 0.1,
+      monthlyPayroll: 80_000,
+      payrollGrowth: 0,
+      otherFixedCosts: 40_000,
+      otherFixedGrowth: 0,
+      equityEvents: [],
+      debtEvents: [],
+      capexEvents: [{ monthIndex: 2, amount: 400_000 }],
+    });
+    const outInc = months.find((m) => m.cashOut);
+    const outEx = months.find((m) => m.cashOutExcludingCapex);
+    assert.ok(outInc);
+    assert.ok(outEx);
+    assert.ok(outInc.monthIndex <= outEx.monthIndex);
+  });
+
+  it("existing runway continues to use including-CapEx cash", () => {
+    const months = calculateProjection({
+      ...getDefaultInputs(),
+      currentCashBalance: 200_000,
+      revenueMode: "simple",
+      currentMonthlyRevenue: 20_000,
+      monthlyRevenueGrowth: 0,
+      equityEvents: [],
+      debtEvents: [],
+      capexEvents: [{ monthIndex: 1, amount: 50_000 }],
+    });
+    const kpis = calculateKpis(months);
+    assert.equal(kpis.cashOutMonthIndex, months.find((m) => m.cashOut)?.monthIndex);
+    assert.equal(kpis.capexComparison.cashOutMonthIncludingCapex, kpis.cashOutMonthIndex);
+    assert.equal(kpis.runwayMonths, kpis.capexComparison.runwayMonthsIncludingCapex);
+    assert.equal(kpis.sixMonthClosingCash, months[5].closingCash);
+  });
+
+  it("negative cash values remain visible in both series", () => {
+    const months = calculateProjection({
+      ...getDefaultInputs(),
+      currentCashBalance: 20_000,
+      revenueMode: "simple",
+      currentMonthlyRevenue: 5_000,
+      monthlyRevenueGrowth: 0,
+      equityEvents: [],
+      debtEvents: [],
+      capexEvents: [{ monthIndex: 1, amount: 100_000 }],
+    });
+    assert.ok(months.some((m) => m.closingCash < 0));
+    assert.ok(months.every((m) => m.closingCash != null && m.closingCashExcludingCapex != null));
   });
 });
