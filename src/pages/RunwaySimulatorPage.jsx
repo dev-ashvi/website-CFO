@@ -364,7 +364,7 @@ export default function RunwaySimulatorPage() {
                 />
                 WYZ Cashflow Assessment Tool
               </div>
-              <h1 className="text-balance text-3xl font-extrabold leading-[1.12] tracking-tight text-slate-800 sm:text-4xl md:text-5xl">
+              <h1 className="text-balance text-3xl font-normal leading-[1.12] tracking-tight text-slate-800 sm:text-4xl md:text-5xl">
                 Understand Your Runway —
                 <br className="hidden sm:block" />{" "}
                 <span className="text-[#fc7d25]">Plan With More Clarity</span>

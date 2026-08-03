@@ -556,7 +556,7 @@ export default function HeroSection({
           <div className="min-h-0">
             <div className="origin-top text-center">
               <motion.div
-                className="mb-6 inline-flex items-center gap-2 rounded-full border border-[#1a3673]/14 bg-[#1a3673]/[0.03] px-4 py-1.5 text-xs font-semibold tracking-wide text-[#1a3673] shadow-[0_6px_20px_rgba(26,54,115,0.07)] sm:mb-7"
+                className="mb-6 inline-flex items-center gap-2 rounded-full border border-[#1a3673]/14 bg-[#1a3673]/[0.03] px-4 py-1.5 text-xs font-normal tracking-wide text-[#1a3673] shadow-[0_6px_20px_rgba(26,54,115,0.07)] sm:mb-7"
                 initial={{ opacity: 0, y: 14 }}
                 animate={
                   isChatActive
@@ -572,7 +572,7 @@ export default function HeroSection({
                 {pillTagline}
               </motion.div>
               <motion.h1
-                className="mx-auto max-w-4xl text-balance text-3xl font-extrabold leading-[1.12] tracking-tight text-slate-800 sm:text-4xl md:text-5xl lg:text-6xl"
+                className="mx-auto max-w-4xl text-balance text-3xl font-normal leading-[1.12] tracking-tight text-slate-800 sm:text-4xl md:text-5xl lg:text-6xl"
                 initial={{ opacity: 0, y: 20 }}
                 animate={
                   isChatActive
