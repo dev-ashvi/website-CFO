@@ -5,6 +5,7 @@ import Navbar from "../components/Navbar.jsx";
 import { SimulatorCharts } from "../components/runway-simulator/SimulatorCharts.jsx";
 import { CustomizedReportCta } from "../components/runway-simulator/CustomizedReportCta.jsx";
 import { WhatIfPanel } from "../components/runway-simulator/WhatIfPanel.jsx";
+import { CurrencySelect } from "../components/runway-simulator/CurrencySelect.jsx";
 import {
   FORECAST_MONTHS,
   INDUSTRY_OPTIONS,
@@ -12,14 +13,16 @@ import {
   STAGE_OPTIONS,
   buildFallbackInsight,
   buildExpenseInsights,
+  currencySymbol,
   forecastMonthOptions,
   formatHorizonCash,
-  formatInr,
+  formatMoney,
+  formatMoneyInputDisplay,
   formatMonths,
   formatPercent,
   getDefaultInputs,
   monthFullLabelFromStart,
-  parseInrInput,
+  parseMoneyInput,
   percentDisplayValue,
   runSimulation,
 } from "../lib/financial-simulator/index.js";
@@ -233,6 +236,7 @@ export default function RunwaySimulatorPage() {
         fixedExpensePercent: Math.round(sim.kpis.expenseMix.fixedExpensePercent * 1000) / 10,
         largestExpenseCategory: sim.kpis.expenseMix.largestExpenseCategory,
       },
+      currency: normalized.currency,
     };
 
     const minDelay = new Promise((resolve) => setTimeout(resolve, 900));
@@ -325,7 +329,7 @@ export default function RunwaySimulatorPage() {
       ev?.monthIndex >= 1
         ? monthFullLabelFromStart(inputs.forecastStartMonth, Number(ev.monthIndex))
         : "—";
-    return `${formatInr(Number(amount))} · ${month}`;
+    return `${formatMoney(Number(amount), { currency: inputs.currency })} · ${month}`;
   };
 
   return (
@@ -509,7 +513,7 @@ export default function RunwaySimulatorPage() {
               {step === 1 && (
                 <StepFrame subtitle="Opening cash and forecast start.">
                   <Field label="Current cash balance">
-                    <InrInput value={inputs.currentCashBalance} onChange={(v) => setField("currentCashBalance", v)} />
+                    <InrInput value={inputs.currentCashBalance} onChange={(v) => setField("currentCashBalance", v)} currency={inputs.currency} />
                   </Field>
                   <Field label="Forecast start month">
                     <input
@@ -519,8 +523,14 @@ export default function RunwaySimulatorPage() {
                       onChange={(e) => setField("forecastStartMonth", e.target.value)}
                     />
                   </Field>
-                  <Field label="Currency">
-                    <input className={inputCls} value={inputs.currency} disabled />
+                  <Field
+                    label="Currency"
+                    hint="Currency affects display formatting only. Exchange-rate conversion is not applied."
+                  >
+                    <CurrencySelect
+                      value={inputs.currency}
+                      onChange={(code) => setField("currency", code)}
+                    />
                   </Field>
                 </StepFrame>
               )}
@@ -549,7 +559,7 @@ export default function RunwaySimulatorPage() {
                         <InrInput
                           value={inputs.currentMonthlyRevenue}
                           onChange={(v) => setField("currentMonthlyRevenue", v)}
-                        />
+                         currency={inputs.currency} />
                       </Field>
                       <Field label="Monthly revenue growth" hint="Enter 5 for 5%. Enter 0.2 for 0.2%.">
                         <PctInput
@@ -573,7 +583,7 @@ export default function RunwaySimulatorPage() {
                         <PctInput value={inputs.monthlyVolumeGrowth} onChange={(v) => setField("monthlyVolumeGrowth", v)} />
                       </Field>
                       <Field label="Average order / service value">
-                        <InrInput value={inputs.averageOrderValue} onChange={(v) => setField("averageOrderValue", v)} />
+                        <InrInput value={inputs.averageOrderValue} onChange={(v) => setField("averageOrderValue", v)}  currency={inputs.currency} />
                       </Field>
                       <Field label="Monthly AOV growth" hint="Enter 5 for 5%. Enter 0.2 for 0.2%.">
                         <PctInput value={inputs.monthlyAovGrowth} onChange={(v) => setField("monthlyAovGrowth", v)} />
@@ -619,7 +629,7 @@ export default function RunwaySimulatorPage() {
                     accent="navy"
                   >
                     <Field label="Monthly payroll">
-                      <InrInput value={inputs.monthlyPayroll} onChange={(v) => setField("monthlyPayroll", v)} />
+                      <InrInput value={inputs.monthlyPayroll} onChange={(v) => setField("monthlyPayroll", v)}  currency={inputs.currency} />
                     </Field>
                     <Field
                       label="Payroll monthly growth"
@@ -628,7 +638,7 @@ export default function RunwaySimulatorPage() {
                       <PctInput value={inputs.payrollGrowth} onChange={(v) => setField("payrollGrowth", v)} />
                     </Field>
                     <Field label="Other fixed costs monthly">
-                      <InrInput value={inputs.otherFixedCosts} onChange={(v) => setField("otherFixedCosts", v)} />
+                      <InrInput value={inputs.otherFixedCosts} onChange={(v) => setField("otherFixedCosts", v)}  currency={inputs.currency} />
                     </Field>
                     <Field
                       label="Other fixed costs monthly growth"
@@ -646,18 +656,21 @@ export default function RunwaySimulatorPage() {
                     label="Planned CapEx"
                     event={inputs.capexEvents[0]}
                     forecastStartMonth={inputs.forecastStartMonth}
+                    currency={inputs.currency}
                     onChange={(p) => setEvent("capexEvents", p)}
                   />
                   <EventRow
                     label="Expected equity funding"
                     event={inputs.equityEvents[0]}
                     forecastStartMonth={inputs.forecastStartMonth}
+                    currency={inputs.currency}
                     onChange={(p) => setEvent("equityEvents", p)}
                   />
                   <EventRow
                     label="Expected debt, grant or other funding"
                     event={inputs.debtEvents[0]}
                     forecastStartMonth={inputs.forecastStartMonth}
+                    currency={inputs.currency}
                     onChange={(p) => setEvent("debtEvents", p)}
                   />
                 </StepFrame>
@@ -677,7 +690,8 @@ export default function RunwaySimulatorPage() {
                       <ReviewLine label="Phone" value={inputs.phone || "—"} />
                     </ReviewBlock>
                     <ReviewBlock title="Starting cash & forecast" onEdit={() => goToStep(1)}>
-                      <ReviewLine label="Starting cash" value={formatInr(Number(inputs.currentCashBalance) || 0)} />
+                      <ReviewLine label="Currency" value={inputs.currency} />
+                      <ReviewLine label="Starting cash" value={formatMoney(Number(inputs.currentCashBalance) || 0, { currency: inputs.currency })} />
                       <ReviewLine
                         label="Forecast start"
                         value={monthFullLabelFromStart(inputs.forecastStartMonth, 1)}
@@ -688,7 +702,7 @@ export default function RunwaySimulatorPage() {
                         <>
                           <ReviewLine
                             label="Revenue"
-                            value={`${formatInr(Number(inputs.currentMonthlyRevenue) || 0)} / month`}
+                            value={`${formatMoney(Number(inputs.currentMonthlyRevenue) || 0, { currency: inputs.currency })} / month`}
                           />
                           <ReviewLine
                             label="Growth"
@@ -700,7 +714,7 @@ export default function RunwaySimulatorPage() {
                           <ReviewLine label="Volume" value={String(inputs.currentVolume || 0)} />
                           <ReviewLine
                             label="AOV"
-                            value={formatInr(Number(inputs.averageOrderValue) || 0)}
+                            value={formatMoney(Number(inputs.averageOrderValue) || 0, { currency: inputs.currency })}
                           />
                         </>
                       )}
@@ -726,7 +740,7 @@ export default function RunwaySimulatorPage() {
                     <ReviewBlock title="Fixed expenses" onEdit={() => goToStep(3)}>
                       <ReviewLine
                         label="Payroll"
-                        value={`${formatInr(Number(inputs.monthlyPayroll) || 0)} / month`}
+                        value={`${formatMoney(Number(inputs.monthlyPayroll) || 0, { currency: inputs.currency })} / month`}
                       />
                       <ReviewLine
                         label="Payroll growth"
@@ -734,7 +748,7 @@ export default function RunwaySimulatorPage() {
                       />
                       <ReviewLine
                         label="Other fixed costs"
-                        value={`${formatInr(Number(inputs.otherFixedCosts) || 0)} / month`}
+                        value={`${formatMoney(Number(inputs.otherFixedCosts) || 0, { currency: inputs.currency })} / month`}
                       />
                       <ReviewLine
                         label="Fixed cost growth"
@@ -858,7 +872,7 @@ export default function RunwaySimulatorPage() {
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                   <Metric
                     label="Avg monthly net burn"
-                    value={formatInr(display.kpis.avgMonthlyNetBurn)}
+                    value={formatMoney(display.kpis.avgMonthlyNetBurn, { currency: display.inputs.currency })}
                     help={NET_BURN_HELP}
                     primary
                   />
@@ -869,6 +883,7 @@ export default function RunwaySimulatorPage() {
                       display.kpis.sixMonthClosingCash,
                       6,
                       display.kpis.cashOutMonthIndex,
+                      { currency: display.inputs.currency },
                     )}
                     primary
                   />
@@ -876,17 +891,18 @@ export default function RunwaySimulatorPage() {
                 <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
                   <Metric
                     label="Avg monthly gross burn"
-                    value={formatInr(display.kpis.avgMonthlyGrossBurn)}
+                    value={formatMoney(display.kpis.avgMonthlyGrossBurn, { currency: display.inputs.currency })}
                     help={GROSS_BURN_HELP}
                   />
                   <Metric label="Gross margin (avg)" value={formatPercent(display.kpis.avgGrossMargin)} />
-                  <Metric label="EBITDA (month 1)" value={formatInr(display.kpis.month1Ebitda)} />
+                  <Metric label="EBITDA (month 1)" value={formatMoney(display.kpis.month1Ebitda, { currency: display.inputs.currency })} />
                   <Metric
                     label="Cash after 12 months"
                     value={formatHorizonCash(
                       display.kpis.twelveMonthClosingCash,
                       12,
                       display.kpis.cashOutMonthIndex,
+                      { currency: display.inputs.currency },
                     )}
                   />
                 </div>
@@ -898,6 +914,7 @@ export default function RunwaySimulatorPage() {
                 capexComparison={display.kpis.capexComparison}
                 kpis={display.kpis}
                 inputs={display.inputs}
+                currency={display.inputs.currency}
                 viewMode={viewMode}
                 onApplyOverlay={applyOverlay}
               />
@@ -913,7 +930,7 @@ export default function RunwaySimulatorPage() {
                 </section>
               )}
 
-              <WhatIfPanel baseInputs={result.inputs} baseResult={result} />
+              <WhatIfPanel baseInputs={result.inputs} baseResult={result} currency={display.inputs.currency} />
 
               <section className="rounded-2xl border border-[rgba(26,54,115,0.12)] bg-white p-5 shadow-[0_8px_32px_rgba(26,54,115,0.07)] md:rounded-[1.35rem] md:p-7">
                 <div className="flex items-start gap-3">
@@ -997,17 +1014,15 @@ function AffixInput({ prefix, suffix, children, disabled = false }) {
   );
 }
 
-function InrInput({ value, onChange, placeholder = "0", disabled = false }) {
+function InrInput({ value, onChange, placeholder = "0", disabled = false, currency = "INR" }) {
   const [focused, setFocused] = useState(false);
   const [draft, setDraft] = useState("");
+  const symbol = currencySymbol(currency);
 
-  const blurredDisplay =
-    value === "" || value == null || Number.isNaN(Number(value))
-      ? ""
-      : Number(value).toLocaleString("en-IN", { maximumFractionDigits: 0 });
+  const blurredDisplay = formatMoneyInputDisplay(value, currency);
 
   return (
-    <AffixInput prefix="₹" disabled={disabled}>
+    <AffixInput prefix={symbol.trim()} disabled={disabled}>
       <input
         inputMode="decimal"
         disabled={disabled}
@@ -1020,12 +1035,12 @@ function InrInput({ value, onChange, placeholder = "0", disabled = false }) {
         }}
         onBlur={() => {
           setFocused(false);
-          onChange(parseInrInput(draft));
+          onChange(parseMoneyInput(draft));
         }}
         onChange={(e) => {
           const next = e.target.value.replace(/[^\d.,]/g, "");
           setDraft(next);
-          onChange(parseInrInput(next));
+          onChange(parseMoneyInput(next));
         }}
       />
     </AffixInput>
@@ -1097,7 +1112,7 @@ function PctInput({ value, onChange }) {
   );
 }
 
-function EventRow({ label, event, onChange, forecastStartMonth }) {
+function EventRow({ label, event, onChange, forecastStartMonth, currency = "INR" }) {
   const hasAmount = event?.amount !== "" && event?.amount != null && Number(event.amount) > 0;
   const options = useMemo(() => forecastMonthOptions(forecastStartMonth), [forecastStartMonth]);
 
@@ -1107,6 +1122,7 @@ function EventRow({ label, event, onChange, forecastStartMonth }) {
       <Field label="Amount">
         <InrInput
           value={event?.amount ?? ""}
+          currency={currency}
           placeholder="Leave blank to skip"
           onChange={(amount) => {
             if (amount === "" || amount == null || Number(amount) <= 0) {

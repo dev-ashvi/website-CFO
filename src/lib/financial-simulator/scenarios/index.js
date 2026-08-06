@@ -99,6 +99,7 @@ export function runWhatIfScenario(baseInputs, spec) {
       scenario,
       delta,
       forecastStartMonth: baseInputs.forecastStartMonth,
+      currency: baseInputs.currency,
     }),
     impacts: {
       runway: impactLabel(delta.runwayMonths, "higher-better"),

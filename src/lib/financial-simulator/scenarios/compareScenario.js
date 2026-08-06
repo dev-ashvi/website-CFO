@@ -1,4 +1,4 @@
-import { formatInr, formatMonths } from "../format.js";
+import { formatMoney, formatMonths } from "../format.js";
 import { monthFullLabelFromStart } from "../calculateProjection.js";
 
 /**
@@ -35,14 +35,24 @@ export function computeDeltas(base, scenario) {
 /**
  * Deterministic insight sentence from scenario deltas.
  */
-export function buildScenarioInsight({ type, label, params, base, scenario, delta, forecastStartMonth }) {
+export function buildScenarioInsight({
+  type,
+  label,
+  params,
+  base,
+  scenario,
+  delta,
+  forecastStartMonth,
+  currency,
+}) {
   const baseRunway = formatMonths(base.runwayMonths);
   const scenRunway = formatMonths(scenario.runwayMonths);
   const runwayDelta = delta.runwayMonths;
+  const money = (v) => formatMoney(v, { currency });
 
   if (type === "funding") {
     const monthLabel = monthFullLabelFromStart(forecastStartMonth, params.monthIndex);
-    const amt = formatInr(params.amount);
+    const amt = money(params.amount);
     if (runwayDelta != null && Math.abs(runwayDelta) >= 0.05) {
       return `A ${amt} raise in ${monthLabel} extends projected runway from ${baseRunway} to ${scenRunway}.`;
     }
@@ -55,7 +65,7 @@ export function buildScenarioInsight({ type, label, params, base, scenario, delt
     const burnDelta = delta.avgNetBurn;
     const burnText =
       burnDelta != null && burnDelta < 0
-        ? ` lowers average net burn by ${formatInr(Math.abs(burnDelta))}`
+        ? ` lowers average net burn by ${money(Math.abs(burnDelta))}`
         : "";
     const runwayText =
       runwayDelta != null && runwayDelta > 0.05

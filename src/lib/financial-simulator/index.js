@@ -1,14 +1,18 @@
-export { getDefaultInputs, HEALTH_THRESHOLDS, FORECAST_MONTHS, INDUSTRY_OPTIONS, STAGE_OPTIONS, BUSINESS_MODEL_OPTIONS } from "./defaults.js";
+export { getDefaultInputs, HEALTH_THRESHOLDS, FORECAST_MONTHS, INDUSTRY_OPTIONS, STAGE_OPTIONS, BUSINESS_MODEL_OPTIONS, CURRENCY, DEFAULT_CURRENCY, CURRENCY_OPTIONS, getCurrencyOption, currencySymbol } from "./defaults.js";
 export { validateSimulatorInputs } from "./validation.js";
 export { calculateProjection, monthLabelFromStart, monthFullLabelFromStart, forecastMonthOptions } from "./calculateProjection.js";
 export { calculateKpis, getHealthStatus } from "./calculateKpis.js";
 export {
   formatInr,
+  formatMoney,
   formatHorizonCash,
   formatPercent,
   formatMonths,
   percentDisplayValue,
   parseInrInput,
+  parseMoneyInput,
+  formatMoneyInputDisplay,
+  stripMoneySymbol,
 } from "./format.js";
 export { buildFallbackInsight } from "./fallbackInsight.js";
 export { buildExpenseInsights } from "./expenseInsights.js";

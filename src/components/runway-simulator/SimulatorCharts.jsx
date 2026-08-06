@@ -16,7 +16,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { formatInr, formatPercent } from "../../lib/financial-simulator/format.js";
+import { formatMoney, formatPercent, stripMoneySymbol } from "../../lib/financial-simulator/format.js";
 import {
   buildCapexImpactNote,
   buildClosingCashCaption,
@@ -32,9 +32,11 @@ export function SimulatorCharts({
   capexComparison,
   kpis,
   inputs,
+  currency = "INR",
   viewMode,
   onApplyOverlay,
 }) {
+  const money = (v) => formatMoney(v, { currency });
   const cashData = useMemo(
     () =>
       months.map((m) => ({
@@ -123,7 +125,7 @@ export function SimulatorCharts({
     };
   }, [months]);
 
-  const tickFmt = (v) => formatInr(v, { compact: true }).replace("₹", "");
+  const tickFmt = (v) => stripMoneySymbol(formatMoney(v, { currency, compact: true }), currency);
 
   return (
     <div className="space-y-4">
@@ -133,13 +135,13 @@ export function SimulatorCharts({
             <div className="space-y-3">
               <MixStat
                 label="Avg monthly variable expenses"
-                value={formatInr(expenseMix.averageMonthlyVariableExpenses)}
+                value={money(expenseMix.averageMonthlyVariableExpenses)}
                 tone="orange"
                 help="Costs that change with revenue, such as COGS, direct costs, marketing, and product or technology expenses."
               />
               <MixStat
                 label="Avg monthly fixed expenses"
-                value={formatInr(expenseMix.averageMonthlyFixedExpenses)}
+                value={money(expenseMix.averageMonthlyFixedExpenses)}
                 tone="navy"
                 help="Monthly costs that do not directly change with revenue, such as payroll and other recurring overheads."
               />
@@ -181,7 +183,7 @@ export function SimulatorCharts({
                       <Cell key={entry.name} fill={entry.color} stroke="transparent" />
                     ))}
                   </Pie>
-                  <Tooltip formatter={(v) => formatInr(v)} contentStyle={tooltipStyle} />
+                  <Tooltip formatter={(v) => money(v)} contentStyle={tooltipStyle} />
                   <Legend wrapperStyle={{ fontSize: 11 }} />
                 </PieChart>
               </ResponsiveContainer>
@@ -202,7 +204,7 @@ export function SimulatorCharts({
               <CartesianGrid stroke="rgba(26,54,115,0.08)" strokeDasharray="3 3" />
               <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#64748B" }} interval={3} />
               <YAxis tick={{ fontSize: 10, fill: "#64748B" }} tickFormatter={tickFmt} width={64} />
-              <Tooltip content={<CashPositionTooltip />} />
+              <Tooltip content={<CashPositionTooltip currency={currency} />} />
               <Legend wrapperStyle={{ fontSize: 11 }} />
               <ReferenceLine y={0} stroke="rgba(26,54,115,0.25)" strokeDasharray="3 3" />
               {firstCashOutIncluding && (
@@ -276,7 +278,7 @@ export function SimulatorCharts({
               <CartesianGrid stroke="rgba(26,54,115,0.08)" strokeDasharray="3 3" />
               <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#64748B" }} interval={3} />
               <YAxis tick={{ fontSize: 10, fill: "#64748B" }} tickFormatter={tickFmt} width={64} />
-              <Tooltip formatter={(v) => formatInr(v)} contentStyle={tooltipStyle} />
+              <Tooltip formatter={(v) => money(v)} contentStyle={tooltipStyle} />
               <Legend wrapperStyle={{ fontSize: 11 }} />
               <Line type="monotone" dataKey="revenue" name="Revenue" stroke="#1a3673" strokeWidth={2} dot={false} />
               <Line type="monotone" dataKey="expenses" name="Total expenses" stroke="#fc7d25" strokeWidth={2} dot={false} />
@@ -301,7 +303,7 @@ export function SimulatorCharts({
               <CartesianGrid stroke="rgba(26,54,115,0.08)" strokeDasharray="3 3" />
               <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#64748B" }} interval={3} />
               <YAxis tick={{ fontSize: 10, fill: "#64748B" }} tickFormatter={tickFmt} width={64} />
-              <Tooltip formatter={(v) => formatInr(v)} contentStyle={tooltipStyle} />
+              <Tooltip formatter={(v) => money(v)} contentStyle={tooltipStyle} />
               <Legend wrapperStyle={{ fontSize: 11 }} />
               <Area
                 type="monotone"
@@ -331,9 +333,9 @@ export function SimulatorCharts({
         <ChartCard title="EBITDA trend" className="lg:col-span-2">
           <div className="grid grid-cols-1 gap-4 md:grid-cols-[1fr_1.2fr] md:items-center">
             <div className="grid grid-cols-3 gap-2 sm:gap-3">
-              <EbitdaCheckpoint label="Month 1" value={ebitdaPoints.m1?.ebitda} />
-              <EbitdaCheckpoint label="Month 12" value={ebitdaPoints.m12?.ebitda} />
-              <EbitdaCheckpoint label="Month 24" value={ebitdaPoints.m24?.ebitda} />
+              <EbitdaCheckpoint label="Month 1" value={ebitdaPoints.m1?.ebitda} currency={currency} />
+              <EbitdaCheckpoint label="Month 12" value={ebitdaPoints.m12?.ebitda} currency={currency} />
+              <EbitdaCheckpoint label="Month 24" value={ebitdaPoints.m24?.ebitda} currency={currency} />
             </div>
             <div>
               <ResponsiveContainer width="100%" height={120}>
@@ -346,7 +348,7 @@ export function SimulatorCharts({
                     width={56}
                     domain={ebitdaPoints.domain}
                   />
-                  <Tooltip formatter={(v) => formatInr(v)} contentStyle={tooltipStyle} />
+                  <Tooltip formatter={(v) => money(v)} contentStyle={tooltipStyle} />
                   <ReferenceLine y={0} stroke="rgba(26,54,115,0.35)" strokeDasharray="4 4" />
                   <Line type="monotone" dataKey="ebitda" name="EBITDA" stroke="#1a3673" strokeWidth={2} dot={false} />
                 </LineChart>
@@ -363,6 +365,7 @@ export function SimulatorCharts({
         capexComparison={capexComparison}
         kpis={kpis}
         inputs={inputs}
+        currency={currency}
         viewMode={viewMode}
         onApplyOverlay={onApplyOverlay}
       />
@@ -370,10 +373,11 @@ export function SimulatorCharts({
   );
 }
 
-function CashPositionTooltip({ active, payload, label }) {
+function CashPositionTooltip({ active, payload, label, currency = "INR" }) {
   if (!active || !payload?.length) return null;
   const row = payload[0]?.payload;
   if (!row) return null;
+  const money = (v) => formatMoney(v, { currency });
   const cashOutNote = row.cashOut ? " · Cash-out including CapEx" : "";
   return (
     <div style={tooltipStyle} className="bg-white px-3 py-2.5 text-[12px] text-[#1a3673]">
@@ -381,10 +385,10 @@ function CashPositionTooltip({ active, payload, label }) {
         {label}
         {cashOutNote}
       </p>
-      <p className="mt-1.5">Including CapEx: {formatInr(row.includingCapex)}</p>
-      <p>Excluding CapEx: {formatInr(row.excludingCapex)}</p>
-      <p className="mt-1 text-slate-500">Monthly CapEx: {formatInr(row.monthlyCapex)}</p>
-      <p className="text-slate-500">Cumulative CapEx: {formatInr(row.cumulativeCapex)}</p>
+      <p className="mt-1.5">Including CapEx: {money(row.includingCapex)}</p>
+      <p>Excluding CapEx: {money(row.excludingCapex)}</p>
+      <p className="mt-1 text-slate-500">Monthly CapEx: {money(row.monthlyCapex)}</p>
+      <p className="text-slate-500">Cumulative CapEx: {money(row.cumulativeCapex)}</p>
     </div>
   );
 }
@@ -402,13 +406,13 @@ function MixStat({ label, value, tone, help }) {
   );
 }
 
-function EbitdaCheckpoint({ label, value }) {
+function EbitdaCheckpoint({ label, value, currency = "INR" }) {
   const negative = Number(value) < 0;
   return (
     <div className="rounded-xl border border-[rgba(26,54,115,0.1)] bg-[#f8fafc] px-2.5 py-3 text-center sm:px-3">
       <p className="text-[12px] font-medium text-slate-500">{label}</p>
       <p className={`mt-1 text-[13px] font-semibold sm:text-sm ${negative ? "text-[#c55a12]" : "text-[#1a3673]"}`}>
-        {formatInr(value)}
+        {formatMoney(value, { currency })}
       </p>
     </div>
   );

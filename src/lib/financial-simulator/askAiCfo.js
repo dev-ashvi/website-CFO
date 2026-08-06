@@ -1,4 +1,4 @@
-import { formatInr, formatMonths, formatPercent } from "./format.js";
+import { formatMoney, formatMonths, formatPercent } from "./format.js";
 
 export const ASK_AI_PROMPTS = [
   { id: "why-runway", label: "Why is my runway only this long?" },
@@ -27,6 +27,8 @@ export function answerAskAiCfo(promptId, sim, customQuestion = "") {
   const fixPct = Math.round((mix.fixedExpensePercent || 0) * 100);
   const payroll = average(months.map((m) => m.payroll));
   const marketing = average(months.map((m) => m.salesAndMarketing));
+  const currency = sim?.inputs?.currency;
+  const money = (v) => formatMoney(v, { currency, compact: true });
   const q = String(customQuestion || "").toLowerCase();
 
   const id =
@@ -61,7 +63,7 @@ export function answerAskAiCfo(promptId, sim, customQuestion = "") {
     void monthsAffordable;
     return {
       question: "Can I afford 5 more engineers?",
-      answer: `On the current plan, average payroll is ${formatInr(payroll, { compact: true })}/month and net burn is ${formatInr(burn, { compact: true })}/month with runway of ${formatMonths(runway)}. Adding a material hiring cohort increases fixed burn and usually shortens runway unless matched by revenue or funding. Run the Investor Case scenario (faster growth + raise + hiring) or Raise funding in What-if to see the trade-off on this same model.`,
+      answer: `On the current plan, average payroll is ${money(payroll)}/month and net burn is ${money(burn)}/month with runway of ${formatMonths(runway)}. Adding a material hiring cohort increases fixed burn and usually shortens runway unless matched by revenue or funding. Run the Investor Case scenario (faster growth + raise + hiring) or Raise funding in What-if to see the trade-off on this same model.`,
     };
   }
 
@@ -75,14 +77,14 @@ export function answerAskAiCfo(promptId, sim, customQuestion = "") {
   if (id === "double-marketing") {
     return {
       question: "What if I double marketing?",
-      answer: `Sales & marketing currently averages ${formatInr(marketing, { compact: true })}/month (${varPct}% of operating mix is variable overall). Doubling marketing raises near-term cash outflows before revenue responds. Prefer the Aggressive scenario or Grow revenue What-if to see growth vs burn; treat a pure marketing double as a stress case unless CAC payback is already proven.`,
+      answer: `Sales & marketing currently averages ${money(marketing)}/month (${varPct}% of operating mix is variable overall). Doubling marketing raises near-term cash outflows before revenue responds. Prefer the Aggressive scenario or Grow revenue What-if to see growth vs burn; treat a pure marketing double as a stress case unless CAC payback is already proven.`,
     };
   }
 
   // why-runway default
   return {
     question: "Why is my runway only this long?",
-    answer: `Runway is ${formatMonths(runway)} because cash is drawn down by net burn of about ${formatInr(burn, { compact: true })}/month, with expected cash-out at ${cashOut}. Expense mix is roughly ${varPct}% variable / ${fixPct}% fixed, led by ${largest}. Gross margin averages ${formatPercent(gm, 0)}. Those are the same drivers behind the Cash Flow Intelligence cards — change an assumption there and runway updates consistently across the dashboard.`,
+    answer: `Runway is ${formatMonths(runway)} because cash is drawn down by net burn of about ${money(burn)}/month, with expected cash-out at ${cashOut}. Expense mix is roughly ${varPct}% variable / ${fixPct}% fixed, led by ${largest}. Gross margin averages ${formatPercent(gm, 0)}. Those are the same drivers behind the Cash Flow Intelligence cards — change an assumption there and runway updates consistently across the dashboard.`,
   };
 }
 

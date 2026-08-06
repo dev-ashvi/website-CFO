@@ -1,6 +1,9 @@
 /** Excel workbook defaults (Input sheet yellow cells). */
 
-export const CURRENCY = "INR";
+export { DEFAULT_CURRENCY as CURRENCY, CURRENCY_OPTIONS, getCurrencyOption, currencySymbol } from "./currency.js";
+export { DEFAULT_CURRENCY } from "./currency.js";
+
+import { DEFAULT_CURRENCY } from "./currency.js";
 
 export const HEALTH_THRESHOLDS = {
   criticalBelow: 6,
@@ -17,10 +20,28 @@ export const GROWTH_BOUNDS = {
 export const FORECAST_MONTHS = 24;
 
 export const INDUSTRY_OPTIONS = [
-  "D2C",
-  "SaaS",
-  "FinTech",
-  "Other",
+  "Technology",
+  "SaaS / Software",
+  "Fintech",
+  "Financial Services",
+  "Healthcare",
+  "Pharma & Life Sciences",
+  "Manufacturing",
+  "Automotive",
+  "Retail & E-commerce",
+  "Fashion & Apparel",
+  "Beauty & Personal Care",
+  "FMCG",
+  "Food & Beverage",
+  "Logistics & Supply Chain",
+  "Real Estate / PropTech",
+  "Education / EdTech",
+  "Agriculture / AgriTech",
+  "DeepTech",
+  "Media & Entertainment",
+  "Travel & Hospitality",
+  "Energy & ClimateTech",
+  "Others",
 ];
 
 export const STAGE_OPTIONS = [
@@ -30,7 +51,7 @@ export const STAGE_OPTIONS = [
   "Scaling",
 ];
 
-export const BUSINESS_MODEL_OPTIONS = ["B2B", "B2C", "Other"];
+export const BUSINESS_MODEL_OPTIONS = ["B2B", "B2C", "D2C", "SaaS", "Others"];
 
 /**
  * @returns {import('./types.js').SimulatorInputs}
@@ -40,11 +61,11 @@ export function getDefaultInputs() {
     companyName: "",
     email: "",
     phone: "",
-    industry: "SaaS",
+    industry: "SaaS / Software",
     businessModel: "B2B",
     startupStage: "Pre-revenue",
     mainPriority: "",
-    currency: CURRENCY,
+    currency: DEFAULT_CURRENCY,
     currentCashBalance: 1_000_000,
     forecastStartMonth: "2026-07",
     revenueMode: "simple",

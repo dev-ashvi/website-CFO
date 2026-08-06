@@ -1,9 +1,9 @@
-import { formatInr, formatMonths } from "./format.js";
+import { formatMoney, formatMonths } from "./format.js";
 
 /**
  * Deterministic insight when AI is unavailable.
  * Natural phrasing from calculated metrics + light business context.
- * @param {{ businessContext: object, metrics: object, costMix?: object, expenseMix?: object }} ctx
+ * @param {{ businessContext: object, metrics: object, costMix?: object, expenseMix?: object, currency?: string }} ctx
  */
 export function buildFallbackInsight(ctx) {
   const m = ctx.metrics || {};
@@ -13,9 +13,10 @@ export function buildFallbackInsight(ctx) {
   const priority = b.mainPriority || "";
   const cashOut = m.cashOutMonth;
   const expenseMix = ctx.expenseMix || {};
+  const currency = ctx.currency;
 
   const summary = buildSummary({ runway, status, cashOut, priority, expenseMix });
-  const risks = buildRisks(m, ctx.costMix, expenseMix);
+  const risks = buildRisks(m, ctx.costMix, expenseMix, currency);
   const actions = buildActions(priority, cashOut, expenseMix);
   const priorityObservation = buildPriorityNote(priority, m);
 
@@ -64,7 +65,7 @@ function buildSummary({ runway, status, cashOut, priority, expenseMix }) {
   return `Your projection shows about ${runwayLabel} of runway. Review burn, funding timing and cost structure against the plan you want to run over the next few quarters.${mixNote}`;
 }
 
-function buildRisks(m, costMix, expenseMix) {
+function buildRisks(m, costMix, expenseMix, currency) {
   const risks = [];
   const runway = m.runwayMonths;
 
@@ -72,7 +73,9 @@ function buildRisks(m, costMix, expenseMix) {
     risks.push("Limited runway shortens the window to correct costs or close funding.");
   }
   if ((m.monthlyNetBurn || 0) > 0) {
-    risks.push(`Net burn of about ${formatInr(m.monthlyNetBurn)} per month continues to draw down cash.`);
+    risks.push(
+      `Net burn of about ${formatMoney(m.monthlyNetBurn, { currency })} per month continues to draw down cash.`,
+    );
   }
   const payrollShare = costMix?.payrollPercentOfExpenses;
   // Accept either 0–1 fraction or 0–100 percent from the client payload.

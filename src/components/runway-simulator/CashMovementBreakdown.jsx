@@ -17,7 +17,7 @@ import {
   buildOperatingLeverageStats,
 } from "../../lib/financial-simulator/cashMovementInsight.js";
 import { SCENARIO_MODES } from "../../lib/financial-simulator/dashboardOverlays.js";
-import { formatInr, formatPercent } from "../../lib/financial-simulator/format.js";
+import { formatMoney, formatPercent, stripMoneySymbol } from "../../lib/financial-simulator/format.js";
 
 const TINY_SHARE = 0.02;
 
@@ -109,6 +109,7 @@ export function CashMovementBreakdown({
   capexComparison,
   kpis,
   inputs,
+  currency = inputs?.currency || "INR",
   viewMode,
   onApplyOverlay,
 }) {
@@ -215,7 +216,7 @@ export function CashMovementBreakdown({
   }, [selectedPromptId, months, kpis, inputs]);
 
   const lineMeta = LINE_OPTIONS.find((o) => o.key === lineMetric) || LINE_OPTIONS[0];
-  const tickFmt = (v) => formatInr(v, { compact: true }).replace("₹", "");
+  const tickFmt = (v) => stripMoneySymbol(formatMoney(v, { currency, compact: true }), currency);
   const overlayActive = viewMode && viewMode.id !== "current";
 
   const toggleGroup = (id) => setGroupOn((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -451,6 +452,7 @@ export function CashMovementBreakdown({
                   activeSeries={activeSeries}
                   lineLabel={lineMeta.label}
                   showLine={groupOn.line}
+                  currency={currency}
                 />
               }
             />
@@ -471,7 +473,7 @@ export function CashMovementBreakdown({
                 stroke="#b45309"
                 strokeDasharray="4 4"
                 strokeWidth={1.5}
-                label={<CashOutChartLabel detail={cashOutDetail} />}
+                label={<CashOutChartLabel detail={cashOutDetail} currency={currency} />}
               />
             ) : null}
 
@@ -531,10 +533,10 @@ export function CashMovementBreakdown({
   );
 }
 
-function CashOutChartLabel({ viewBox, detail }) {
+function CashOutChartLabel({ viewBox, detail, currency = "INR" }) {
   const x = viewBox?.x ?? 0;
   const y = (viewBox?.y ?? 0) + 8;
-  const balance = formatInr(detail?.balance, { compact: true });
+  const balance = formatMoney(detail?.balance, { currency, compact: true });
   return (
     <g transform={`translate(${x + 6}, ${y})`}>
       <rect x={0} y={0} width={150} height={46} rx={6} fill="#fff7ed" stroke="#fdba74" />
@@ -890,7 +892,7 @@ function BenchmarkCard({ benchmark }) {
   );
 }
 
-function MovementTooltip({ active, payload, label, activeSeries, lineLabel, showLine }) {
+function MovementTooltip({ active, payload, label, activeSeries, lineLabel, showLine, currency = "INR" }) {
   if (!active || !payload?.length) return null;
   const row = payload[0]?.payload;
   if (!row?.abs) return null;
@@ -911,7 +913,7 @@ function MovementTooltip({ active, payload, label, activeSeries, lineLabel, show
   const fmt = (v, { signed = false } = {}) => {
     if (v == null || Number.isNaN(Number(v))) return "—";
     if (Math.abs(v) < 1) return "—";
-    const base = formatInr(v, { compact: true });
+    const base = formatMoney(v, { currency, compact: true });
     if (signed && v > 0) return `+${base}`;
     return base;
   };

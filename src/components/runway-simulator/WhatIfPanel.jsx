@@ -14,10 +14,11 @@ import {
 } from "recharts";
 import {
   forecastMonthOptions,
-  formatInr,
+  formatMoney,
   formatMonths,
-  parseInrInput,
+  parseMoneyInput,
   runWhatIfScenario,
+  stripMoneySymbol,
 } from "../../lib/financial-simulator/index.js";
 
 const TABS = [
@@ -27,11 +28,7 @@ const TABS = [
   { id: "payroll-delay", label: "Delay payroll growth" },
 ];
 
-const FUNDING_QUICK = [
-  { label: "₹25 lakh", amount: 2_500_000 },
-  { label: "₹50 lakh", amount: 5_000_000 },
-  { label: "₹1 crore", amount: 10_000_000 },
-];
+const FUNDING_QUICK_AMOUNTS = [2_500_000, 5_000_000, 10_000_000];
 
 const COST_QUICK = [
   { label: "5%", rate: 0.05 },
@@ -54,7 +51,8 @@ const DELAY_QUICK = [
 /**
  * @param {{ baseInputs: object, baseResult: { months: object[], kpis: object } }} props
  */
-export function WhatIfPanel({ baseInputs, baseResult }) {
+export function WhatIfPanel({ baseInputs, baseResult, currency = baseInputs?.currency || "INR" }) {
+  const money = (v) => formatMoney(v, { currency });
   const [tab, setTab] = useState("funding");
   const [fundingAmount, setFundingAmount] = useState(5_000_000);
   const [fundingMonth, setFundingMonth] = useState(6);
@@ -74,7 +72,7 @@ export function WhatIfPanel({ baseInputs, baseResult }) {
       if (tab === "funding") {
         const amount =
           customFunding !== "" && customFunding != null
-            ? Number(parseInrInput(customFunding) || 0)
+            ? Number(parseMoneyInput(customFunding) || 0)
             : Number(fundingAmount);
         if (!amount || amount <= 0) return null;
         return runWhatIfScenario(baseInputs, {
@@ -128,7 +126,7 @@ export function WhatIfPanel({ baseInputs, baseResult }) {
 
   const firstBaseOut = chartData.find((d) => d.baseOut);
   const firstScenOut = chartData.find((d) => d.scenarioOut);
-  const tickFmt = (v) => formatInr(v, { compact: true }).replace("₹", "");
+  const tickFmt = (v) => stripMoneySymbol(formatMoney(v, { currency, compact: true }), currency);
 
   const params = new URLSearchParams({
     source: "runway-simulator-what-if",
@@ -180,27 +178,27 @@ export function WhatIfPanel({ baseInputs, baseResult }) {
             <fieldset>
               <legend className="text-[13px] font-medium text-[#1a3673]">Raise additional funding</legend>
               <div className="mt-2 flex flex-wrap gap-2">
-                {FUNDING_QUICK.map((q) => (
+                {FUNDING_QUICK_AMOUNTS.map((amount) => (
                   <button
-                    key={q.label}
+                    key={amount}
                     type="button"
-                    aria-pressed={fundingAmount === q.amount && customFunding === ""}
+                    aria-pressed={fundingAmount === amount && customFunding === ""}
                     onClick={() => {
-                      setFundingAmount(q.amount);
+                      setFundingAmount(amount);
                       setCustomFunding("");
                     }}
                     className={`rounded-full border px-3 py-1.5 text-[12px] font-semibold ${
-                      fundingAmount === q.amount && customFunding === ""
+                      fundingAmount === amount && customFunding === ""
                         ? "border-[#fc7d25] bg-[rgba(252,125,37,0.08)] text-[#c55a12]"
                         : "border-[rgba(26,54,115,0.14)] text-[#1a3673]"
                     }`}
                   >
-                    {q.label}
+                    {formatMoney(amount, { currency, compact: true })}
                   </button>
                 ))}
               </div>
               <label className="mt-3 block text-[12px] text-slate-500">
-                Custom amount (₹)
+                Custom amount ({currency})
                 <input
                   className="mt-1 w-full rounded-xl border border-[rgba(26,54,115,0.12)] px-3 py-2 text-sm text-[#1a3673] outline-none focus:border-[#1a3673] focus:ring-2 focus:ring-[rgba(26,54,115,0.12)]"
                   inputMode="decimal"
@@ -337,8 +335,8 @@ export function WhatIfPanel({ baseInputs, baseResult }) {
       {comparison && (
         <div className="mt-6 space-y-5" aria-live="polite">
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            <CompareCard title="Before" metrics={comparison.base} />
-            <CompareCard title="After" metrics={comparison.scenario} emphasize />
+            <CompareCard title="Before" metrics={comparison.base} currency={currency} />
+            <CompareCard title="After" metrics={comparison.scenario} currency={currency} emphasize />
           </div>
 
           <div className="rounded-xl border border-[rgba(26,54,115,0.1)] bg-[#f8fafc] px-4 py-4">
@@ -352,12 +350,12 @@ export function WhatIfPanel({ baseInputs, baseResult }) {
               <li>
                 <span className="font-semibold text-[#1a3673]">{comparison.impacts.netBurn}</span>
                 {" — "}
-                {formatDeltaBurn(comparison.delta.avgNetBurn)}
+                {formatDeltaBurn(comparison.delta.avgNetBurn, currency)}
               </li>
               <li>
                 <span className="font-semibold text-[#1a3673]">{comparison.impacts.month24Cash}</span>
                 {" — "}
-                {formatDeltaCash(comparison.delta.month24ClosingCash)}
+                {formatDeltaCash(comparison.delta.month24ClosingCash, currency)}
               </li>
             </ul>
             <p className="mt-3 text-[14px] leading-relaxed text-slate-700">{comparison.insight}</p>
@@ -373,7 +371,7 @@ export function WhatIfPanel({ baseInputs, baseResult }) {
                 <CartesianGrid stroke="rgba(26,54,115,0.08)" strokeDasharray="3 3" />
                 <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#64748B" }} interval={3} />
                 <YAxis tick={{ fontSize: 10, fill: "#64748B" }} tickFormatter={tickFmt} width={56} />
-                <Tooltip formatter={(v) => formatInr(v)} />
+                <Tooltip formatter={(v) => money(v)} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
                 <ReferenceLine y={0} stroke="rgba(26,54,115,0.25)" strokeDasharray="3 3" />
                 {firstBaseOut && (
@@ -420,7 +418,8 @@ export function WhatIfPanel({ baseInputs, baseResult }) {
   );
 }
 
-function CompareCard({ title, metrics, emphasize = false }) {
+function CompareCard({ title, metrics, currency = "INR", emphasize = false }) {
+  const money = (v) => formatMoney(v, { currency });
   return (
     <div
       className={`rounded-xl border px-4 py-3.5 ${
@@ -441,11 +440,11 @@ function CompareCard({ title, metrics, emphasize = false }) {
         </div>
         <div className="flex justify-between gap-2">
           <dt className="text-slate-500">Avg net burn</dt>
-          <dd className="font-semibold text-[#1a3673]">{formatInr(metrics.avgNetBurn)}</dd>
+          <dd className="font-semibold text-[#1a3673]">{money(metrics.avgNetBurn)}</dd>
         </div>
         <div className="flex justify-between gap-2">
           <dt className="text-slate-500">Month 24 cash</dt>
-          <dd className="font-semibold text-[#1a3673]">{formatInr(metrics.month24ClosingCash)}</dd>
+          <dd className="font-semibold text-[#1a3673]">{money(metrics.month24ClosingCash)}</dd>
         </div>
       </dl>
     </div>
@@ -458,14 +457,14 @@ function formatDeltaRunway(d) {
   return `${sign}${d.toFixed(1)} months runway`;
 }
 
-function formatDeltaBurn(d) {
+function formatDeltaBurn(d, currency = "INR") {
   if (d == null || Math.abs(d) < 1) return "No material change in average net burn";
-  if (d < 0) return `${formatInr(Math.abs(d))} lower monthly net burn`;
-  return `${formatInr(d)} higher monthly net burn`;
+  if (d < 0) return `${formatMoney(Math.abs(d), { currency })} lower monthly net burn`;
+  return `${formatMoney(d, { currency })} higher monthly net burn`;
 }
 
-function formatDeltaCash(d) {
+function formatDeltaCash(d, currency = "INR") {
   if (d == null || Math.abs(d) < 1) return "No material change in Month 24 cash";
-  if (d > 0) return `${formatInr(d)} improvement in Month 24 cash`;
-  return `${formatInr(Math.abs(d))} decline in Month 24 cash`;
+  if (d > 0) return `${formatMoney(d, { currency })} improvement in Month 24 cash`;
+  return `${formatMoney(Math.abs(d), { currency })} decline in Month 24 cash`;
 }

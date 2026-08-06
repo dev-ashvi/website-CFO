@@ -1,7 +1,11 @@
 import { calculateProjection } from "./calculateProjection.js";
 import { calculateKpis } from "./calculateKpis.js";
 import { cloneInputs, runWhatIfScenario } from "./scenarios/index.js";
-import { formatInr, formatMonths, formatPercent } from "./format.js";
+import { formatMoney, formatMonths, formatPercent } from "./format.js";
+
+function money(amount, sim, opts = {}) {
+  return formatMoney(amount, { ...opts, currency: sim?.inputs?.currency });
+}
 
 const CHART_VARIABLE_KEYS = ["cogs", "otherDirectCosts"];
 const CHART_FIXED_KEYS = [
@@ -27,6 +31,14 @@ const GROSS_MARGIN_PEERS = {
   D2C: { low: 0.4, high: 0.55, median: 0.45, topQuartile: 0.52 },
   Other: { low: 0.45, high: 0.65, median: 0.5, topQuartile: 0.6 },
 };
+
+function peerKeyForIndustry(industry) {
+  const label = String(industry || "");
+  if (/saas|software|technology|deeptech|edtech|proptech/i.test(label)) return "SaaS";
+  if (/fintech|financial/i.test(label)) return "FinTech";
+  if (/retail|e-?commerce|fashion|beauty|fmcg|food|beverage|d2c/i.test(label)) return "D2C";
+  return "Other";
+}
 
 const BURN_MULTIPLE_MEDIAN = 1.2;
 const BURN_MULTIPLE_TOP = 0.8;
@@ -240,7 +252,7 @@ function pickOpportunity(sim, ctx) {
           : "Planned CapEx is advancing cash-out.",
         why: {
           headline: "Capital spend is advancing cash exhaustion.",
-          detail: `Planned CapEx totals ${formatInr(savings, { compact: true })} over the forecast. Delaying it by 3 months keeps operating cash available longer and extends runway by approximately ${formatDeltaMonths(delta)}.`,
+          detail: `Planned CapEx totals ${money(savings, sim, { compact: true })} over the forecast. Delaying it by 3 months keeps operating cash available longer and extends runway by approximately ${formatDeltaMonths(delta)}.`,
         },
         tone: "opportunity",
         runwayGainMonths: delta,
@@ -263,7 +275,7 @@ function pickOpportunity(sim, ctx) {
         body: `Payroll is ${Math.round(payrollOfRevenue * 100)}% of revenue.`,
         why: {
           headline: "Payroll is your largest controllable fixed commitment.",
-          detail: `A 10% reduction saves about ${formatInr(savings, { compact: true })} over the forecast period and extends runway by approximately ${formatDeltaMonths(delta)}.`,
+          detail: `A 10% reduction saves about ${money(savings, sim, { compact: true })} over the forecast period and extends runway by approximately ${formatDeltaMonths(delta)}.`,
         },
         tone: "alert",
         runwayGainMonths: delta,
@@ -286,7 +298,7 @@ function pickOpportunity(sim, ctx) {
         body: `Gross margin averages ${formatPercent(avgGrossMargin, 0)}.`,
         why: {
           headline: "Unit economics are the highest-leverage cash lever.",
-          detail: `COGS totals ${formatInr(cogsTotal, { compact: true })} over the forecast. A 5pp gross-margin lift frees about ${formatInr(savings, { compact: true })} of cash and extends runway by approximately ${formatDeltaMonths(delta)}.`,
+          detail: `COGS totals ${money(cogsTotal, sim, { compact: true })} over the forecast. A 5pp gross-margin lift frees about ${money(savings, sim, { compact: true })} of cash and extends runway by approximately ${formatDeltaMonths(delta)}.`,
         },
         tone: "opportunity",
         runwayGainMonths: delta,
@@ -309,7 +321,7 @@ function pickOpportunity(sim, ctx) {
         body: `${largestName} is ${Math.round(largestShareOpex * 100)}% of operating spend.`,
         why: {
           headline: `${largestName} is your largest controllable expense.`,
-          detail: `Reducing it by 10% saves about ${formatInr(savings, { compact: true })} over the forecast period and extends runway by approximately ${formatDeltaMonths(delta)}.`,
+          detail: `Reducing it by 10% saves about ${money(savings, sim, { compact: true })} over the forecast period and extends runway by approximately ${formatDeltaMonths(delta)}.`,
         },
         tone: "opportunity",
         runwayGainMonths: delta,
@@ -334,7 +346,7 @@ function pickOpportunity(sim, ctx) {
         body: `Variable costs represent ${Math.round(varShare * 100)}% of cash outflows.`,
         why: {
           headline: "Variable spend scales with every rupee of revenue.",
-          detail: `A 5% reduction saves about ${formatInr(savings, { compact: true })} over the forecast (vs ~${formatInr(varSpend, { compact: true })} of direct variable lines) and extends runway by approximately ${formatDeltaMonths(delta)}.`,
+          detail: `A 5% reduction saves about ${money(savings, sim, { compact: true })} over the forecast (vs ~${money(varSpend, sim, { compact: true })} of direct variable lines) and extends runway by approximately ${formatDeltaMonths(delta)}.`,
         },
         tone: "opportunity",
         runwayGainMonths: delta,
@@ -352,7 +364,7 @@ function pickOpportunity(sim, ctx) {
     body: `${largestName} represents ${Math.round(largestShareOpex * 100)}% of operating spend.`,
     why: {
       headline: `${largestName} dominates operating spend.`,
-      detail: `At ${Math.round(largestShareOpex * 100)}% of operating costs (${formatInr(largestAmount, { compact: true })} over the forecast), this line is the primary place to look for runway improvement.`,
+      detail: `At ${Math.round(largestShareOpex * 100)}% of operating costs (${money(largestAmount, sim, { compact: true })} over the forecast), this line is the primary place to look for runway improvement.`,
     },
     tone: "driver",
     runwayGainMonths: null,
@@ -422,11 +434,12 @@ function buildWhatIfSensitivities(inputs) {
 }
 
 function buildBenchmark(sim, avgGrossMargin, months) {
-  const industry = sim.inputs?.industry || "Other";
-  const peers = GROSS_MARGIN_PEERS[industry] ?? GROSS_MARGIN_PEERS.Other;
+  const industry = sim.inputs?.industry || "Others";
+  const peerKey = peerKeyForIndustry(industry);
+  const peers = GROSS_MARGIN_PEERS[peerKey] ?? GROSS_MARGIN_PEERS.Other;
   const burnMultiple = computeBurnMultiple(months);
 
-  if (industry === "SaaS" || industry === "FinTech" || avgGrossMargin >= 0.4) {
+  if (peerKey === "SaaS" || peerKey === "FinTech" || avgGrossMargin >= 0.4) {
     let status = "Within benchmark";
     let onTarget = true;
     if (avgGrossMargin < peers.low) {
