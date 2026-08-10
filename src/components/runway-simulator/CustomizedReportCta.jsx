@@ -25,6 +25,7 @@ export function buildConversionBridge(healthStatus) {
         title: "Your free assessment identified a critical runway risk.",
         body: "A customized model can show which cost actions, funding timing or growth changes could extend your runway.",
       };
+    case "Caution":
     case "Attention required":
       return {
         title: "Your free assessment shows runway that needs closer attention.",

@@ -173,9 +173,8 @@ function excelComparableExpected(expected, monthIndex0, excelField) {
     );
   }
   if (excelField === "Gross Burn") {
+    // Excel Gross Burn = operating expense burn only (excludes COGS + other direct).
     return (
-      expected["COGS"][monthIndex0] +
-      expected["Other Direct Costs"][monthIndex0] +
       expected["Fulfillment & other variable costs"][monthIndex0] +
       expected["Sales & Marketing costs"][monthIndex0] +
       expected["Salary / Payroll"][monthIndex0] +
@@ -307,6 +306,40 @@ describe("Excel golden-master scenarios", () => {
         month: 12,
         field: "twelveMonthClosingCash",
       });
+    });
+
+    it("Scenario 1 headline KPIs match approved Excel (gross burn + runway)", () => {
+      const { months, kpis } = runScenario("scenario1");
+      const m1 = months[0];
+
+      expectCurrency(m1.revenue, 3_000_000, { scenario: "Scenario 1", month: 1, field: "revenue" });
+      expectCurrency(m1.grossProfit, 1_950_000, { scenario: "Scenario 1", month: 1, field: "grossProfit" });
+      assert.ok(Math.abs(m1.grossMargin - 0.65) <= PCT_TOL);
+      expectCurrency(m1.ebitda, -225_000, { scenario: "Scenario 1", month: 1, field: "ebitda" });
+      assert.ok(Math.abs(m1.ebitdaMargin - -0.075) <= PCT_TOL);
+
+      expectCurrency(m1.grossBurn, 2_025_000, { scenario: "Scenario 1", month: 1, field: "grossBurn" });
+      expectCurrency(kpis.burnMetrics.monthlyGrossBurn, 2_025_000, {
+        scenario: "Scenario 1",
+        month: 1,
+        field: "monthlyGrossBurn KPI",
+      });
+
+      const wrongAllIn =
+        m1.cogs + m1.otherDirectCosts + m1.productAndTechnology + m1.salesAndMarketing + m1.payroll + m1.otherFixedCosts;
+      assert.notEqual(m1.grossBurn, wrongAllIn);
+      expectCurrency(
+        m1.grossBurn,
+        m1.productAndTechnology + m1.salesAndMarketing + m1.payroll + m1.otherFixedCosts,
+        { scenario: "Scenario 1", month: 1, field: "grossBurn operating definition" },
+      );
+
+      const avgNetBurn3 =
+        (months[0].netBurn + months[1].netBurn + months[2].netBurn) / 3;
+      const rawRunway = m1.closingCash / avgNetBurn3;
+      assert.ok(Math.abs(rawRunway - 12.30869952) < 0.0001);
+      assert.equal(kpis.runwayMonths, 12.3);
+      assert.equal(kpis.healthStatus, "Caution");
     });
   });
 

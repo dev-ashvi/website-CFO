@@ -336,7 +336,7 @@ export default function RunwaySimulatorPage() {
   const statusTone = useMemo(() => {
     const s = display?.kpis?.healthStatus;
     if (s === "Critical") return "border-red-200 bg-red-50 text-[#b91c1c]";
-    if (s === "Attention required") return "border-[rgba(252,125,37,0.25)] bg-[rgba(252,125,37,0.08)] text-[#c55a12]";
+    if (s === "Attention required" || s === "Caution") return "border-[rgba(252,125,37,0.25)] bg-[rgba(252,125,37,0.08)] text-[#c55a12]";
     if (s === "Stable") return "border-[rgba(26,54,115,0.14)] bg-[#f4f8ff] text-[#1a3673]";
     return "border-emerald-200 bg-emerald-50 text-emerald-700";
   }, [display]);

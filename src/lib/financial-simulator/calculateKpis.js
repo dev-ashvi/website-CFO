@@ -2,18 +2,17 @@ import { HEALTH_THRESHOLDS } from "./defaults.js";
 
 /**
  * @param {number|null} runwayMonths
- * @returns {'Critical' | 'Attention required' | 'Stable' | 'Healthy'}
+ * @returns {'Critical' | 'Caution' | 'Healthy'}
  */
 export function getHealthStatus(runwayMonths) {
   if (runwayMonths == null || Number.isNaN(runwayMonths)) return "Critical";
   if (runwayMonths < HEALTH_THRESHOLDS.criticalBelow) return "Critical";
-  if (runwayMonths < HEALTH_THRESHOLDS.attentionBelow) return "Attention required";
-  if (runwayMonths < HEALTH_THRESHOLDS.stableBelow) return "Stable";
+  if (runwayMonths < HEALTH_THRESHOLDS.cautionBelow) return "Caution";
   return "Healthy";
 }
 
 /**
- * Fractional runway from a cash series (same definition as primary runway).
+ * Fractional runway from a cash series (cash-out interpolation — CapEx comparison / legacy).
  * @param {import('./types.js').MonthlyProjection[]} months
  * @param {{ cashKey: string, cashOutKey: string, burnKey: string }} opts
  */
@@ -44,6 +43,21 @@ function computeRunwayMonths(months, { cashKey, cashOutKey, burnKey }) {
 }
 
 /**
+ * Excel headline runway: Month 1 ending cash ÷ 3-month average net burn (exc. CapEx).
+ * Net burn = −EBITDA per month; average uses months 1–3 net burn values.
+ * @param {import('./types.js').MonthlyProjection[]} months
+ */
+function computeHeadlineRunwayMonths(months) {
+  const m1 = months[0];
+  if (!m1 || m1.closingCash == null) return null;
+  const recent = months.slice(0, Math.min(3, months.length));
+  if (!recent.length) return null;
+  const avgNetBurn = average(recent.map((m) => m.netBurn));
+  if (avgNetBurn <= 0) return null;
+  return m1.closingCash / avgNetBurn;
+}
+
+/**
  * @param {import('./types.js').MonthlyProjection[]} months
  * @returns {import('./types.js').SimulatorKpis}
  */
@@ -51,14 +65,16 @@ export function calculateKpis(months) {
   const cashOutMonth = months.find((m) => m.cashOut) || null;
   const cashOutMonthIndex = cashOutMonth ? cashOutMonth.monthIndex : null;
 
-  const runwayMonths = computeRunwayMonths(months, {
+  const runwayMonths = computeHeadlineRunwayMonths(months);
+
+  const cashOutExcluding = months.find((m) => m.cashOutExcludingCapex) || null;
+  const cashOutMonthExcludingCapex = cashOutExcluding ? cashOutExcluding.monthIndex : null;
+
+  const runwayMonthsIncludingCapexSeries = computeRunwayMonths(months, {
     cashKey: "closingCash",
     cashOutKey: "cashOut",
     burnKey: "totalCashBurn",
   });
-
-  const cashOutExcluding = months.find((m) => m.cashOutExcludingCapex) || null;
-  const cashOutMonthExcludingCapex = cashOutExcluding ? cashOutExcluding.monthIndex : null;
 
   // Excluding CapEx: burn for fractional runway is operating cash burn only (no CapEx).
   const runwayMonthsExcludingCapex = computeRunwayMonths(months, {
@@ -142,6 +158,8 @@ export function calculateKpis(months) {
     month1OperatingExpenses > 0 ? largestExpenseCategoryAmount / month1OperatingExpenses : 0;
 
   const runwayIncluding = runwayMonths == null ? null : round1(runwayMonths);
+  const runwayIncludingCapexSeries =
+    runwayMonthsIncludingCapexSeries == null ? null : round1(runwayMonthsIncludingCapexSeries);
   const runwayExcluding =
     runwayMonthsExcludingCapex == null ? null : round1(runwayMonthsExcludingCapex);
 
@@ -219,7 +237,7 @@ export function calculateKpis(months) {
       cashOutMonthLabelExcludingCapex: cashOutExcluding
         ? cashOutExcluding.monthLabel
         : "Beyond 24-month horizon",
-      runwayMonthsIncludingCapex: runwayIncluding,
+      runwayMonthsIncludingCapex: runwayIncludingCapexSeries,
       runwayMonthsExcludingCapex: runwayExcluding,
       month24CashIncludingCapex: last?.closingCash ?? null,
       month24CashExcludingCapex: last?.closingCashExcludingCapex ?? null,

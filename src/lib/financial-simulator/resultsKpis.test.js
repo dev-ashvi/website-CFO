@@ -12,25 +12,24 @@ function run(overrides = {}) {
 }
 
 describe("Results KPI burn metrics (Month 1, not averages)", () => {
-  it("monthly gross burn equals Month 1 total operating expenses", () => {
+  it("monthly gross burn equals Month 1 operating expense burn (excludes COGS)", () => {
     const { months, kpis } = run({ capexEvents: [], equityEvents: [], debtEvents: [] });
     const m1 = months[0];
     assert.equal(kpis.burnMetrics.monthlyGrossBurn, m1.grossBurn);
     assert.equal(
       kpis.burnMetrics.monthlyGrossBurn,
-      m1.totalVariableExpenses + m1.totalFixedExpenses,
+      m1.productAndTechnology + m1.salesAndMarketing + m1.payroll + m1.otherFixedCosts,
     );
   });
 
-  it("monthly net burn excl. CapEx equals Month 1 gross burn minus revenue", () => {
+  it("monthly net burn excl. CapEx equals Month 1 −EBITDA", () => {
     const { months, kpis } = run({ capexEvents: [], equityEvents: [], debtEvents: [] });
     const m1 = months[0];
     assert.equal(kpis.burnMetrics.monthlyNetBurnExcludingCapex, m1.netBurn);
-    assert.equal(kpis.burnMetrics.monthlyNetBurnExcludingCapex, m1.grossBurn - m1.revenue);
     assert.ok(Math.abs(kpis.burnMetrics.monthlyNetBurnExcludingCapex - -m1.ebitda) < 1e-6);
   });
 
-  it("monthly net burn incl. CapEx equals Month 1 gross + CapEx - revenue", () => {
+  it("monthly net burn incl. CapEx equals Month 1 net burn + CapEx", () => {
     const { months, kpis } = run({
       equityEvents: [],
       debtEvents: [],
@@ -39,10 +38,7 @@ describe("Results KPI burn metrics (Month 1, not averages)", () => {
     const m1 = months[0];
     assert.equal(m1.capex, 50_000);
     assert.equal(kpis.burnMetrics.monthlyNetBurnIncludingCapex, m1.netBurnIncludingCapex);
-    assert.equal(
-      kpis.burnMetrics.monthlyNetBurnIncludingCapex,
-      m1.grossBurn + m1.capex - m1.revenue,
-    );
+    assert.equal(kpis.burnMetrics.monthlyNetBurnIncludingCapex, m1.netBurn + m1.capex);
   });
 
   it("funding does not affect either burn value", () => {

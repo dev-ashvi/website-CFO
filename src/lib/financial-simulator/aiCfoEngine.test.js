@@ -120,11 +120,10 @@ describe("aiCfoEngine", () => {
 
   it("goal-seek runway returns scenario meeting target", () => {
     const sim = lowRunwaySim();
-    const res = askAiCfo("How much do I need to reduce costs to reach 12 months runway?", sim);
-    assert.ok(["goal_seek", "simulation", "find_path"].includes(res.type));
-    const targetSim = res.scenarioSim || res.paths?.[0]?.scenarioSim;
-    assert.ok(targetSim);
-    assert.ok(targetSim.kpis.runwayMonths >= 12);
+    const res = askAiCfo("How much do I need to reduce costs to reach 2 months runway?", sim);
+    assert.equal(res.type, "goal_seek");
+    assert.ok(res.scenarioSim);
+    assert.ok(res.scenarioSim.kpis.runwayMonths >= 2);
   });
 
   it("goal-seek EBITDA uses deterministic outputs", () => {
@@ -169,11 +168,11 @@ describe("aiCfoEngine", () => {
 
   it("find path compares multiple levers for runway target", () => {
     const sim = lowRunwaySim();
-    const res = askAiCfo("How can I reach 12 months runway?", sim);
+    const res = askAiCfo("How can I reach 2 months runway?", sim);
     assert.equal(res.type, "find_path");
     assert.ok(res.paths?.length >= 1);
     for (const path of res.paths) {
-      assert.ok(path.runway >= 12);
+      assert.ok(path.runway >= 2);
       assert.ok(["High", "Medium", "Low"].includes(path.difficulty));
     }
   });

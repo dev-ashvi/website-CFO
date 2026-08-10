@@ -9,7 +9,7 @@ export function buildFallbackInsight(ctx) {
   const m = ctx.metrics || {};
   const b = ctx.businessContext || {};
   const runway = m.runwayMonths;
-  const status = m.healthStatus || "Attention required";
+  const status = m.healthStatus || "Caution";
   const priority = b.mainPriority || "";
   const cashOut = m.cashOutMonth;
   const expenseMix = ctx.expenseMix || {};
@@ -51,7 +51,7 @@ function buildSummary({ runway, status, cashOut, priority, expenseMix }) {
     return `With ${runwayLabel} of projected runway, the outlook is critical.${timing}${raise}${mixNote}`;
   }
 
-  if (status === "Attention required") {
+  if (status === "Caution" || status === "Attention required") {
     const timing = hasCashOut ? ` Watch the window around ${cashOut}.` : "";
     return `With ${runwayLabel} of projected runway, there is limited buffer for delays.${timing} Review burn and any planned funding so shortfalls are addressed before they tighten further.${mixNote}`;
   }

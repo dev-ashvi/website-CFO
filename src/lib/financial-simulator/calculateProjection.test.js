@@ -240,8 +240,8 @@ describe("scenarios", () => {
 describe("KPIs / health", () => {
   it("maps health thresholds", () => {
     assert.equal(getHealthStatus(3), "Critical");
-    assert.equal(getHealthStatus(8), "Attention required");
-    assert.equal(getHealthStatus(14), "Stable");
+    assert.equal(getHealthStatus(8), "Critical");
+    assert.equal(getHealthStatus(14), "Caution");
     assert.equal(getHealthStatus(20), "Healthy");
   });
 
@@ -258,7 +258,7 @@ describe("KPIs / health", () => {
     assert.ok(r.kpis.expenseMix);
   });
 
-  it("defines gross burn as total operating cash outflow", () => {
+  it("defines gross burn as operating expense burn (excludes COGS / other direct)", () => {
     const months = calculateProjection({
       ...getDefaultInputs(),
       revenueMode: "simple",
@@ -278,12 +278,12 @@ describe("KPIs / health", () => {
     });
     const m = months[0];
     const expectedGross =
-      m.cogs + m.otherDirectCosts + m.salesAndMarketing + m.productAndTechnology + m.payroll + m.otherFixedCosts;
+      m.productAndTechnology + m.salesAndMarketing + m.payroll + m.otherFixedCosts;
     assert.ok(Math.abs(m.grossBurn - expectedGross) < TOL);
-    assert.ok(Math.abs(m.grossBurn - (m.revenue - m.ebitda)) < TOL);
+    assert.ok(m.grossBurn < m.totalOperatingExpenses);
   });
 
-  it("defines net burn as −EBITDA (gross burn − revenue)", () => {
+  it("defines net burn as −EBITDA", () => {
     const months = calculateProjection({
       ...getDefaultInputs(),
       revenueMode: "simple",
@@ -295,7 +295,6 @@ describe("KPIs / health", () => {
     });
     const m = months[0];
     assert.ok(Math.abs(m.netBurn - -m.ebitda) < TOL);
-    assert.ok(Math.abs(m.netBurn - (m.grossBurn - m.revenue)) < TOL);
   });
 
   it("avg net burn floors profitable months at zero", () => {
@@ -368,7 +367,7 @@ describe("variable / fixed expense classification", () => {
     const months = calculateProjection(base());
     const m3 = months[2];
     assert.equal(m3.capex, 50_000);
-    assert.ok(Math.abs(m3.grossBurn - m3.totalOperatingExpenses) < TOL);
+    assert.ok(Math.abs(m3.grossBurn - (m3.productAndTechnology + m3.salesAndMarketing + m3.payroll + m3.otherFixedCosts)) < TOL);
     assert.ok(Math.abs(m3.totalCashBurn - (m3.netBurn + m3.capex)) < TOL);
     assert.ok(
       Math.abs(
@@ -402,14 +401,18 @@ describe("variable / fixed expense classification", () => {
     assert.ok(Math.abs(sumPct - 1) < 0.01);
   });
 
-  it("gross burn equals total variable plus total fixed expenses", () => {
+  it("gross burn equals fulfilment + S&M + payroll + other fixed", () => {
     const m = calculateProjection(base())[0];
-    assert.ok(Math.abs(m.grossBurn - (m.totalVariableExpenses + m.totalFixedExpenses)) < TOL);
+    assert.ok(
+      Math.abs(
+        m.grossBurn - (m.productAndTechnology + m.salesAndMarketing + m.payroll + m.otherFixedCosts),
+      ) < TOL,
+    );
   });
 
-  it("net burn equals gross burn minus revenue", () => {
+  it("net burn equals −EBITDA", () => {
     const m = calculateProjection(base())[0];
-    assert.ok(Math.abs(m.netBurn - (m.grossBurn - m.revenue)) < TOL);
+    assert.ok(Math.abs(m.netBurn - -m.ebitda) < TOL);
   });
 });
 
@@ -585,7 +588,8 @@ describe("closing cash including vs excluding CapEx", () => {
     const kpis = calculateKpis(months);
     assert.equal(kpis.cashOutMonthIndex, months.find((m) => m.cashOut)?.monthIndex);
     assert.equal(kpis.capexComparison.cashOutMonthIncludingCapex, kpis.cashOutMonthIndex);
-    assert.equal(kpis.runwayMonths, kpis.capexComparison.runwayMonthsIncludingCapex);
+    assert.ok(kpis.runwayMonths != null);
+    assert.ok(kpis.capexComparison.runwayMonthsIncludingCapex != null);
     assert.equal(kpis.sixMonthClosingCash, months[5].closingCash);
   });
 

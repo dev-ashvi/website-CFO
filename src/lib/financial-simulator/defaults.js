@@ -6,9 +6,8 @@ export { DEFAULT_CURRENCY } from "./currency.js";
 import { DEFAULT_CURRENCY } from "./currency.js";
 
 export const HEALTH_THRESHOLDS = {
-  criticalBelow: 6,
-  attentionBelow: 12,
-  stableBelow: 18,
+  criticalBelow: 9,
+  cautionBelow: 18,
 };
 
 /** Reasonable growth bounds for public tool validation. */

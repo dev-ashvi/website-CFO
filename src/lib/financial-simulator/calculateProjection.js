@@ -153,8 +153,9 @@ export function calculateProjection(inputs) {
     const netCashFlow = -totalCashBurn + fundsInflow;
     // Operating + funding only (no CapEx). Independent of including-CapEx series.
     const netCashFlowExcludingCapex = ebitda + fundsInflow;
-    // Gross burn = total cash operating outflow (all P&L cost lines). CapEx is excluded (capital).
-    const grossBurn = totalOperatingExpenses;
+    // Gross burn = operating expense burn only (Excel). Excludes COGS / other direct costs.
+    const grossBurn =
+      productAndTechnology + salesAndMarketing + payrollEff + otherFixedEff;
     // Net burn = operating cash loss after revenue (= −EBITDA). CapEx / funding excluded.
     const netBurn = -ebitda;
     // Net burn including CapEx (= totalCashBurn). Funding excluded.

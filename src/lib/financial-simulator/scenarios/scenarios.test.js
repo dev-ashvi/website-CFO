@@ -112,8 +112,8 @@ describe("what-if scenarios", () => {
       otherFixedGrowth: 0,
     };
     const cmp = runWhatIfScenario(base, {
-      type: "funding",
-      params: { amount: 10_000_000, monthIndex: 2 },
+      type: "cost-reduction",
+      params: { reductionRate: 0.15, target: "fixed" },
     });
     assert.ok(cmp.delta.runwayMonths != null);
     assert.ok(cmp.delta.runwayMonths > 0);
