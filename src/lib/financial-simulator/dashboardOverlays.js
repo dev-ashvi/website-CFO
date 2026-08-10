@@ -1,6 +1,7 @@
 import { cloneInputs } from "./scenarios/types.js";
 import { calculateProjection } from "./calculateProjection.js";
 import { calculateKpis } from "./calculateKpis.js";
+import { withFundingAwareRunway } from "./plannedFunding.js";
 
 /**
  * Deterministic dashboard overlays — mutate a clone of base inputs, then re-run the engine.
@@ -11,7 +12,7 @@ import { calculateKpis } from "./calculateKpis.js";
 function simulate(inputs) {
   const data = cloneInputs(inputs);
   const months = calculateProjection(data);
-  const kpis = calculateKpis(months);
+  const kpis = withFundingAwareRunway(data, months, calculateKpis(months));
   return { ok: true, inputs: data, months, kpis };
 }
 

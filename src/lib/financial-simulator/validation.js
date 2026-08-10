@@ -71,11 +71,14 @@ export function validateSimulatorInputs(inputs) {
     if (!Array.isArray(events)) return;
     events.forEach((ev, i) => {
       if (!ev) return;
+      const amount = Number(ev.amount);
       if (ev.amount === 0 || ev.amount === "" || ev.amount == null) return;
       requireNumber(ev.amount, `${label} #${i + 1} amount`, { min: 0 });
       const m = Number(ev.monthIndex);
       if (!Number.isInteger(m) || m < 1 || m > FORECAST_MONTHS) {
-        errors.push(`${label} #${i + 1} month must be between 1 and ${FORECAST_MONTHS}.`);
+        errors.push(
+          `${label} #${i + 1} month is required (1–${FORECAST_MONTHS}) when an amount is entered.`,
+        );
       }
     });
   };

@@ -22,7 +22,7 @@ export function answerAskAiCfo(promptId, sim, customQuestion = "") {
   const cashOut = k.cashOutMonthLabel;
   const gm = k.avgGrossMargin;
   const mix = k.expenseMix || {};
-  const largest = mix.largestExpenseCategory || "operating costs";
+  const largest = mix.largestExpenseCategoryLabel ?? mix.largestExpenseCategory ?? "operating costs";
   const varPct = Math.round(
     ((mix.variableSharePercent ?? mix.variableExpensePercent) || 0) * 100,
   );
@@ -84,9 +84,15 @@ export function answerAskAiCfo(promptId, sim, customQuestion = "") {
   }
 
   // why-runway default
+  const planned = k.plannedFunding;
+  const before = k.runwayBeforePlannedFundingMonths;
+  const fundingLine =
+    planned?.hasFutureFunding && before != null
+      ? ` Projected runway is ${formatMonths(k.projectedRunwayMonths ?? runway)} assuming planned financing of ${money(planned.totalAmount)} arrives; without that financing, runway is approximately ${formatMonths(before)}.`
+      : "";
   return {
     question: "Why is my runway only this long?",
-    answer: `Runway is ${formatMonths(runway)} because cash is drawn down by net burn of about ${money(burn)}/month, with expected cash-out at ${cashOut}. Expense mix is roughly ${varPct}% variable / ${fixPct}% fixed, led by ${largest}. Gross margin averages ${formatPercent(gm, 0)}. Those are the same drivers behind the Cash Flow Intelligence cards — change an assumption there and runway updates consistently across the dashboard.`,
+    answer: `Runway is ${formatMonths(runway)} because cash is drawn down by net burn of about ${money(burn)}/month, with expected cash-out at ${cashOut}. Expense mix is roughly ${varPct}% variable / ${fixPct}% fixed, led by ${largest}. Gross margin averages ${formatPercent(gm, 0)}.${fundingLine} Those are the same drivers behind the Cash Flow Intelligence cards — change an assumption there and runway updates consistently across the dashboard.`,
   };
 }
 

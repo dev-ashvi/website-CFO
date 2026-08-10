@@ -19,6 +19,11 @@ import {
   buildCapexImpactNote,
   buildClosingCashCaption,
 } from "../../lib/financial-simulator/capexCashInsight.js";
+import {
+  buildClosingCashChartSeries,
+  buildRevenueVsExpensesChartSeries,
+  findFirstNegativeCashMonth,
+} from "../../lib/financial-simulator/chartSeries.js";
 import { CashMovementBreakdown } from "./CashMovementBreakdown.jsx";
 
 const NAVY = "#1a3673";
@@ -36,41 +41,29 @@ export function SimulatorCharts({
   onApplyScenario,
 }) {
   const money = (v) => formatMoney(v, { currency });
-  const cashData = useMemo(
-    () =>
-      months.map((m) => ({
-        label: m.monthLabel,
-        includingCapex: m.closingCash == null ? 0 : m.closingCash,
-        excludingCapex: m.closingCashExcludingCapex == null ? 0 : m.closingCashExcludingCapex,
-        cashOut: m.cashOut,
-        cashOutExcludingCapex: m.cashOutExcludingCapex,
-        monthlyCapex: m.capex || 0,
-        cumulativeCapex: m.cumulativeCapex || 0,
-      })),
-    [months],
-  );
+  const cashData = useMemo(() => buildClosingCashChartSeries(months), [months]);
 
-  const firstCashOutIncluding = useMemo(() => cashData.find((d) => d.cashOut) || null, [cashData]);
+  const firstCashOutIncluding = useMemo(() => {
+    const hit = findFirstNegativeCashMonth(months, { includingCapex: true });
+    if (!hit) return null;
+    return cashData.find((d) => d.monthIndex === hit.monthIndex) ?? null;
+  }, [months, cashData]);
+
   const firstCashOutExcluding = useMemo(() => {
-    const pt = cashData.find((d) => d.cashOutExcludingCapex) || null;
+    const hit = findFirstNegativeCashMonth(months, { includingCapex: false });
+    if (!hit) return null;
+    const pt = cashData.find((d) => d.monthIndex === hit.monthIndex) ?? null;
     if (!pt) return null;
-    if (firstCashOutIncluding && firstCashOutIncluding.label === pt.label) return null;
+    if (firstCashOutIncluding && firstCashOutIncluding.monthIndex === pt.monthIndex) return null;
     return pt;
-  }, [cashData, firstCashOutIncluding]);
+  }, [months, cashData, firstCashOutIncluding]);
+
+  const cashOutLabel = kpis?.cashOutMonthLabel ?? firstCashOutIncluding?.label ?? null;
 
   const cashCaption = useMemo(() => buildClosingCashCaption(capexComparison), [capexComparison]);
   const capexNote = useMemo(() => buildCapexImpactNote(capexComparison), [capexComparison]);
 
-  const revExpData = useMemo(
-    () =>
-      months.map((m) => ({
-        label: m.monthLabel,
-        revenue: m.revenue,
-        expenses: m.totalOperatingExpenses ?? m.grossBurn,
-        monthIndex: m.monthIndex,
-      })),
-    [months],
-  );
+  const revExpData = useMemo(() => buildRevenueVsExpensesChartSeries(months), [months]);
 
   const revExpCaption = useMemo(() => {
     const firstRevLead = revExpData.find((d) => d.revenue > d.expenses);
@@ -131,7 +124,7 @@ export function SimulatorCharts({
         <ChartCard
           title="Expense breakdown"
           badge="MONTH 1 SNAPSHOT"
-          subtitle="Month 1 expense mix based on your starting assumptions"
+          subtitle="Month 1 operating expense mix (excludes COGS and other direct costs)"
         >
           <div className="grid grid-cols-1 gap-5 md:grid-cols-[1fr_1.1fr] md:items-center">
             <div className="space-y-3">
@@ -139,13 +132,13 @@ export function SimulatorCharts({
                 label="Variable expenses"
                 value={money(expenseMix.variableExpenses ?? expenseMix.averageMonthlyVariableExpenses)}
                 tone="orange"
-                help="Month 1 costs that scale with revenue according to the current model."
+                help="Month 1 fulfilment and sales & marketing operating costs only."
               />
               <MixStat
                 label="Fixed expenses"
                 value={money(expenseMix.fixedExpenses ?? expenseMix.averageMonthlyFixedExpenses)}
                 tone="navy"
-                help="Month 1 recurring costs that do not directly scale with revenue."
+                help="Month 1 payroll and other fixed operating costs."
               />
               <div className="grid grid-cols-2 gap-2">
                 <div
@@ -169,16 +162,19 @@ export function SimulatorCharts({
                   </p>
                 </div>
               </div>
-              {expenseMix.largestExpenseCategory ? (
+              {(expenseMix.largestExpenseCategoryLabel ?? expenseMix.largestExpenseCategory) ? (
                 <p className="text-[12px] leading-relaxed text-slate-500">
                   Largest category:{" "}
-                  <span className="font-semibold text-[#1a3673]">{expenseMix.largestExpenseCategory}</span>
+                  <span className="font-semibold text-[#1a3673]">
+                    {expenseMix.largestExpenseCategoryLabel ?? expenseMix.largestExpenseCategory}
+                  </span>
                   {expenseMix.largestExpenseCategoryAmount != null ? (
                     <span className="text-slate-400">
                       {" "}
                       · {money(expenseMix.largestExpenseCategoryAmount)}
-                      {expenseMix.largestExpenseCategoryPercent != null
-                        ? ` · ${formatPercent(expenseMix.largestExpenseCategoryPercent)} of Month 1 operating expenses`
+                      {(expenseMix.largestExpenseCategorySharePercent ??
+                        expenseMix.largestExpenseCategoryPercent) != null
+                        ? ` · ${formatPercent(expenseMix.largestExpenseCategorySharePercent ?? expenseMix.largestExpenseCategoryPercent)} of Month 1 operating expenses`
                         : ""}
                     </span>
                   ) : null}
@@ -226,13 +222,19 @@ export function SimulatorCharts({
               <Tooltip content={<CashPositionTooltip currency={currency} />} />
               <Legend wrapperStyle={{ fontSize: 11 }} />
               <ReferenceLine y={0} stroke="rgba(26,54,115,0.25)" strokeDasharray="3 3" />
-              {firstCashOutIncluding && (
+              {firstCashOutIncluding && cashOutLabel ? (
                 <>
                   <ReferenceLine
                     x={firstCashOutIncluding.label}
                     stroke="#1a3673"
                     strokeDasharray="4 4"
                     strokeWidth={1.5}
+                    label={{
+                      value: `Projected Cash-Out ${cashOutLabel}`,
+                      position: "insideTopRight",
+                      fill: "#1a3673",
+                      fontSize: 10,
+                    }}
                   />
                   <ReferenceDot
                     x={firstCashOutIncluding.label}
@@ -243,7 +245,7 @@ export function SimulatorCharts({
                     strokeWidth={1.5}
                   />
                 </>
-              )}
+              ) : null}
               {firstCashOutExcluding && (
                 <>
                   <ReferenceLine
@@ -291,7 +293,7 @@ export function SimulatorCharts({
           ) : null}
         </ChartCard>
 
-        <ChartCard title="Revenue vs total expenses">
+        <ChartCard title="Revenue vs total expenses" subtitle="Excludes CapEx">
           <ResponsiveContainer width="100%" height={240}>
             <LineChart data={revExpData}>
               <CartesianGrid stroke="rgba(26,54,115,0.08)" strokeDasharray="3 3" />
@@ -346,7 +348,8 @@ function CashPositionTooltip({ active, payload, label, currency = "INR" }) {
   const row = payload[0]?.payload;
   if (!row) return null;
   const money = (v) => formatMoney(v, { currency });
-  const cashOutNote = row.cashOut ? " · Cash-out including CapEx" : "";
+  const isCashOut = row.includingCapex < 0;
+  const cashOutNote = isCashOut ? " · Cash-out including CapEx" : "";
   return (
     <div style={tooltipStyle} className="bg-white px-3 py-2.5 text-[12px] text-[#1a3673]">
       <p className="font-semibold">

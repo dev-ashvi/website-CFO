@@ -73,17 +73,26 @@
  * @property {number} otherDirectCosts
  * @property {number} grossProfit
  * @property {number} grossMargin
- * @property {number} salesAndMarketing
- * @property {number} cm1
+ * @property {number} [grossMarginPercent] Alias of grossMargin
+ * @property {number} netProfitAfterDirectCosts Gross profit − other direct costs
+ * @property {number} fulfillmentCosts Excel Fulfilment (same amount as productAndTechnology)
+ * @property {number} productAndTechnology Fulfilment / other variable operating costs (legacy name)
+ * @property {number} cm1 Net profit after direct − fulfilment (before S&M)
  * @property {number} cm1Margin
- * @property {number} productAndTechnology
+ * @property {number} [cm1MarginPercent] Alias of cm1Margin
+ * @property {number} salesAndMarketing
+ * @property {number} cm2 CM1 − sales & marketing
+ * @property {number} cm2Margin
+ * @property {number} [cm2MarginPercent] Alias of cm2Margin
  * @property {number} payroll
  * @property {number} otherFixedCosts
+ * @property {number} totalFixedOpex Payroll + other fixed (= totalFixedExpenses)
  * @property {number} totalVariableExpenses
  * @property {number} totalFixedExpenses
  * @property {number} totalOperatingExpenses
  * @property {number} ebitda
  * @property {number} ebitdaMargin
+ * @property {number} [ebitdaMarginPercent] Alias of ebitdaMargin
  * @property {number} capex
  * @property {number} cumulativeCapex
  * @property {number} equityFunding
@@ -129,7 +138,8 @@
  * @property {number|null} cashOutMonthIncludingCapex
  * @property {number|null} cashOutMonthExcludingCapex
  * @property {string} cashOutMonthLabelIncludingCapex
- * @property {string} cashOutMonthLabelExcludingCapex
+ * @property {number|null} [excludingCashAtIncludingCashOutMonth]
+ * @property {number} [capexInIncludingCashOutMonth]
  * @property {number|null} runwayMonthsIncludingCapex
  * @property {number|null} runwayMonthsExcludingCapex
  * @property {number|null} month24CashIncludingCapex
@@ -141,13 +151,20 @@
 /**
  * @typedef {Object} ExpenseMix
  * @property {"month1"} [period]
- * @property {number} variableExpenses Month 1 total variable expenses
- * @property {number} fixedExpenses Month 1 total fixed expenses
+ * @property {"operating"} [scope] Operating expense burn only (excludes COGS / other direct)
+ * @property {number} variableExpenses Month 1 fulfilment + S&M operating costs
+ * @property {number} fixedExpenses Month 1 payroll + other fixed operating costs
+ * @property {number} [month1OperatingExpenses] Variable + fixed operating (= gross burn)
  * @property {number} variableSharePercent Month 1 variable ÷ operating (0–1)
  * @property {number} fixedSharePercent Month 1 fixed ÷ operating (0–1)
- * @property {string} largestExpenseCategory
+ * @property {Record<string, number>} [categoryAmounts] Month 1 amounts by engine field key
+ * @property {Record<string, string>} [categoryLabels] Canonical labels by engine field key
+ * @property {string} [largestExpenseCategoryKey] Engine field key for largest operating category
+ * @property {string} [largestExpenseCategoryLabel] Resolved display label for largest category
+ * @property {string} largestExpenseCategory Alias of largestExpenseCategoryLabel
  * @property {number} [largestExpenseCategoryAmount]
- * @property {number} [largestExpenseCategoryPercent]
+ * @property {number} [largestExpenseCategorySharePercent] Largest ÷ operating total (0–1)
+ * @property {number} [largestExpenseCategoryPercent] Alias of largestExpenseCategorySharePercent
  * @property {number} [variableExpensePercent] Alias of variableSharePercent
  * @property {number} [fixedExpensePercent] Alias of fixedSharePercent
  * @property {number} [averageMonthlyVariableExpenses] Forecast average (internal / backward compat)
@@ -156,7 +173,15 @@
 
 /**
  * @typedef {Object} SimulatorKpis
- * @property {number|null} runwayMonths
+ * @property {number|null} runwayMonths Primary CFO projected runway (no funding) or after-funding CFO runway
+ * @property {number|null} [projectedRunwayMonths] Alias of runwayMonths for hero / plan runway
+ * @property {number|null} [headlineRunwayMonths] Excel dashboard: M1 ending cash ÷ 3-mo avg net burn
+ * @property {number|null} [cashSeriesRunwayMonths] Deterministic cash zero-crossing (charts / analysis only)
+ * @property {number|null} [runwayBeforePlannedFundingMonths] CFO runway with equity/debt removed
+ * @property {number|null} [runwayAfterPlannedFundingMonths] CFO runway at first funding month post-inflow
+ * @property {object} [plannedFunding]
+ * @property {object} [cfoFundingRunway] Structured before/after funding CFO runway detail
+ * @property {number|null} [fundingRunwayImpactMonths] after − before (display, 1 decimal)
  * @property {string} cashOutMonthLabel
  * @property {number|null} cashOutMonthIndex
  * @property {number} avgMonthlyGrossBurn

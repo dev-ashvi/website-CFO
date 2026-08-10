@@ -130,17 +130,20 @@ export function calculateProjection(inputs) {
     const cogs = revenue * cogsPct * variableFactor;
     const grossProfit = revenue - cogs;
     const otherDirectCosts = revenue * otherDirectPct * variableFactor;
-    const afterDirect = grossProfit - otherDirectCosts;
-    const salesAndMarketing = revenue * smPct * variableFactor;
-    // Match Input month-1 CM1 path for all months (Excel M2+ formula drops other direct).
-    const cm1 = afterDirect - salesAndMarketing;
+    // Excel Output Model waterfall:
+    // Net Profit (after direct) → − Fulfilment = CM1 → − S&M = CM2 → − Fixed Opex = EBITDA.
+    // productAndTechnology stores Fulfilment (legacy field name).
+    const netProfitAfterDirectCosts = grossProfit - otherDirectCosts;
     const productAndTechnology = revenue * techPct * variableFactor;
-    const cm2 = cm1 - productAndTechnology;
+    const fulfillmentCosts = productAndTechnology;
+    const cm1 = netProfitAfterDirectCosts - fulfillmentCosts;
+    const salesAndMarketing = revenue * smPct * variableFactor;
+    const cm2 = cm1 - salesAndMarketing;
     const payrollEff = payroll * fixedFactor;
     const otherFixedEff = otherFixed * fixedFactor;
     // P&L "Total Opex" line used for EBITDA remains payroll + other fixed (Excel).
-    const fixedOpexForEbitda = payrollEff + otherFixedEff;
-    const ebitda = cm2 - fixedOpexForEbitda;
+    const totalFixedOpex = payrollEff + otherFixedEff;
+    const ebitda = cm2 - totalFixedOpex;
     const totalVariableExpenses = cogs + otherDirectCosts + salesAndMarketing + productAndTechnology;
     const totalFixedExpenses = payrollEff + otherFixedEff;
     // Reporting total: all operating cash costs (excludes CapEx).
@@ -176,6 +179,11 @@ export function calculateProjection(inputs) {
     const closingCashExcludingCapex = rawEx;
     cumulativeCapex += capexAmt;
 
+    const grossMargin = revenue === 0 ? 0 : grossProfit / revenue;
+    const cm1Margin = revenue === 0 ? 0 : cm1 / revenue;
+    const cm2Margin = revenue === 0 ? 0 : cm2 / revenue;
+    const ebitdaMargin = revenue === 0 ? 0 : ebitda / revenue;
+
     months.push({
       monthIndex: m,
       monthLabel: monthLabelFromStart(inputs.forecastStartMonth, m),
@@ -185,18 +193,27 @@ export function calculateProjection(inputs) {
       cogs,
       otherDirectCosts,
       grossProfit,
-      grossMargin: revenue === 0 ? 0 : grossProfit / revenue,
-      salesAndMarketing,
-      cm1,
-      cm1Margin: revenue === 0 ? 0 : cm1 / revenue,
+      grossMargin,
+      grossMarginPercent: grossMargin,
+      netProfitAfterDirectCosts,
+      fulfillmentCosts,
       productAndTechnology,
+      cm1,
+      cm1Margin,
+      cm1MarginPercent: cm1Margin,
+      salesAndMarketing,
+      cm2,
+      cm2Margin,
+      cm2MarginPercent: cm2Margin,
       payroll: payrollEff,
       otherFixedCosts: otherFixedEff,
+      totalFixedOpex,
       totalVariableExpenses,
       totalFixedExpenses,
       totalOperatingExpenses,
       ebitda,
-      ebitdaMargin: revenue === 0 ? 0 : ebitda / revenue,
+      ebitdaMargin,
+      ebitdaMarginPercent: ebitdaMargin,
       capex: capexAmt,
       cumulativeCapex,
       equityFunding: equityAmt,

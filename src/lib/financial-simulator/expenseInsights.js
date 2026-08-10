@@ -20,8 +20,9 @@ export function buildExpenseInsights(sim) {
     insights.push(`Fixed expenses account for ${fixedPct}% of Month 1 operating outflow.`);
   }
 
-  if (mix.largestExpenseCategory) {
-    insights.push(`${mix.largestExpenseCategory} is the largest Month 1 expense category.`);
+  const largestLabel = mix.largestExpenseCategoryLabel ?? mix.largestExpenseCategory;
+  if (largestLabel) {
+    insights.push(`${largestLabel} is the largest Month 1 expense category.`);
   }
 
   const fixedTotal = mix.fixedExpenses ?? mix.averageMonthlyFixedExpenses ?? 0;

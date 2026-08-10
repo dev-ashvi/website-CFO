@@ -21,11 +21,20 @@ import {
   formatMoneyInputDisplay,
   formatMonths,
   formatPercent,
-  getDefaultInputs,
   monthFullLabelFromStart,
   parseMoneyInput,
   percentDisplayValue,
   runSimulation,
+  buildRunwayUiDiagnostic,
+  compareScenario1Diagnostic,
+  getScenario1FormInputs,
+  getScenario2FormInputs,
+  getScenario4FormInputs,
+  normalizeFormInputs,
+  buildProjectedRunwayFundingNote,
+  buildFundingDependencyInsight,
+  loadStoredFormInputs,
+  persistFormInputs,
 } from "../lib/financial-simulator/index.js";
 import { runDashboardOverlay, SCENARIO_MODES } from "../lib/financial-simulator/dashboardOverlays.js";
 
@@ -53,7 +62,17 @@ const VARIABLE_EXPENSE_HELP =
 const FIXED_EXPENSE_HELP =
   "Monthly costs that do not directly change with revenue, such as payroll and other recurring overheads.";
 
-const emptyEvent = () => ({ monthIndex: 6, amount: "" });
+const emptyEvent = () => ({ monthIndex: "", amount: "" });
+const IS_DEV = import.meta.env.DEV;
+
+function healthStatusTone(status) {
+  if (status === "Critical") return "border-red-200 bg-red-50 text-[#b91c1c]";
+  if (status === "Attention required" || status === "Caution") {
+    return "border-[rgba(252,125,37,0.25)] bg-[rgba(252,125,37,0.08)] text-[#c55a12]";
+  }
+  if (status === "Stable") return "border-[rgba(26,54,115,0.14)] bg-[#f4f8ff] text-[#1a3673]";
+  return "border-emerald-200 bg-emerald-50 text-emerald-700";
+}
 
 const cardShellCls =
   "relative z-[1] mx-auto mt-8 max-w-[980px] rounded-2xl border border-[rgba(26,54,115,0.14)] bg-white px-5 py-7 shadow-[0_4px_6px_rgba(26,54,115,0.04),0_24px_48px_rgba(26,54,115,0.1),0_0_0_1px_rgba(255,255,255,0.8)_inset] sm:mt-10 sm:px-8 sm:py-9 md:rounded-[1.35rem] md:px-10 md:py-10 md:shadow-[0_8px_12px_rgba(26,54,115,0.05),0_32px_64px_rgba(26,54,115,0.12)]";
@@ -73,12 +92,9 @@ export default function RunwaySimulatorPage() {
   const [started, setStarted] = useState(false);
   const [step, setStep] = useState(0);
   const [phase, setPhase] = useState("form"); // form | calculating | results
-  const [inputs, setInputs] = useState(() => ({
-    ...getDefaultInputs(),
-    capexEvents: [{ monthIndex: 6, amount: "" }],
-    equityEvents: [{ monthIndex: 4, amount: "" }],
-    debtEvents: [{ monthIndex: 8, amount: "" }],
-  }));
+  const [inputs, setInputs] = useState(() => loadStoredFormInputs());
+  const inputsRef = useRef(inputs);
+  inputsRef.current = inputs;
   const [errors, setErrors] = useState([]);
   const [result, setResult] = useState(null);
   const [viewResult, setViewResult] = useState(null);
@@ -88,13 +104,30 @@ export default function RunwaySimulatorPage() {
   const formRef = useRef(null);
   const [scrollTick, setScrollTick] = useState(0);
 
-  const setField = (key, value) => setInputs((prev) => ({ ...prev, [key]: value }));
+  const setField = (key, value) =>
+    setInputs((prev) => {
+      const next = { ...prev, [key]: value };
+      inputsRef.current = next;
+      persistFormInputs(next);
+      return next;
+    });
 
   const setEvent = (key, patch) => {
-    setInputs((prev) => ({
-      ...prev,
-      [key]: [{ ...(prev[key]?.[0] || emptyEvent()), ...patch }],
-    }));
+    setInputs((prev) => {
+      const next = {
+        ...prev,
+        [key]: [{ ...(prev[key]?.[0] || emptyEvent()), ...patch }],
+      };
+      inputsRef.current = next;
+      persistFormInputs(next);
+      return next;
+    });
+  };
+
+  const applyFormInputs = (next) => {
+    inputsRef.current = next;
+    setInputs(next);
+    persistFormInputs(next);
   };
 
   const requestFormScroll = () => setScrollTick((t) => t + 1);
@@ -132,52 +165,7 @@ export default function RunwaySimulatorPage() {
     };
   }, [started, step, phase, scrollTick]);
 
-  const normalizeForCalc = (raw) => {
-    const toNum = (v) => (v === "" || v == null ? 0 : Number(v));
-    const cleanEvents = (arr) =>
-      (arr || [])
-        .map((e) => ({ monthIndex: Number(e.monthIndex), amount: toNum(e.amount) }))
-        .filter((e) => e.amount > 0 && e.monthIndex >= 1 && e.monthIndex <= FORECAST_MONTHS);
-
-    const flat = {
-      ...raw,
-      currentCashBalance: toNum(raw.currentCashBalance),
-      currentMonthlyRevenue: toNum(raw.currentMonthlyRevenue),
-      monthlyRevenueGrowth: toNum(raw.monthlyRevenueGrowth),
-      currentVolume: toNum(raw.currentVolume),
-      monthlyVolumeGrowth: toNum(raw.monthlyVolumeGrowth),
-      averageOrderValue: toNum(raw.averageOrderValue),
-      monthlyAovGrowth: toNum(raw.monthlyAovGrowth),
-      cogsPercent: toNum(raw.cogsPercent),
-      otherDirectCostsPercent: toNum(raw.otherDirectCostsPercent),
-      salesMarketingPercent: toNum(raw.salesMarketingPercent),
-      productTechPercent: toNum(raw.productTechPercent),
-      monthlyPayroll: toNum(raw.monthlyPayroll),
-      payrollGrowth: toNum(raw.payrollGrowth),
-      otherFixedCosts: toNum(raw.otherFixedCosts),
-      otherFixedGrowth: toNum(raw.otherFixedGrowth),
-      capexEvents: cleanEvents(raw.capexEvents),
-      equityEvents: cleanEvents(raw.equityEvents),
-      debtEvents: cleanEvents(raw.debtEvents),
-    };
-
-    // Compatibility grouping — engine still uses flat fields.
-    return {
-      ...flat,
-      variableExpenses: {
-        cogsPercent: flat.cogsPercent,
-        otherDirectCostsPercent: flat.otherDirectCostsPercent,
-        salesAndMarketingPercent: flat.salesMarketingPercent,
-        productAndTechnologyPercent: flat.productTechPercent,
-      },
-      fixedExpenses: {
-        monthlyPayroll: flat.monthlyPayroll,
-        payrollGrowthPercent: flat.payrollGrowth,
-        otherFixedCosts: flat.otherFixedCosts,
-        otherFixedCostGrowthPercent: flat.otherFixedGrowth,
-      },
-    };
-  };
+  const normalizeForCalc = normalizeFormInputs;
 
   const startAssessment = () => {
     setStarted(true);
@@ -187,14 +175,21 @@ export default function RunwaySimulatorPage() {
   };
 
   const runCalc = async () => {
-    const normalized = normalizeForCalc(inputs);
+    const rawInputs = inputsRef.current;
+    const normalized = normalizeForCalc(rawInputs);
     const sim = runSimulation(normalized);
     if (!sim.ok) {
       setErrors(sim.errors);
       return;
     }
+    const diagnostic = IS_DEV ? buildRunwayUiDiagnostic(sim.inputs, sim) : null;
+    if (IS_DEV) {
+      console.info("[runway-simulator] normalized inputs", diagnostic.normalizedInputs);
+      console.info("[runway-simulator] engine outputs", diagnostic.engineOutputs);
+      console.info("[runway-simulator] scenario1 parity", compareScenario1Diagnostic(diagnostic));
+    }
     setErrors([]);
-    setResult(sim);
+    setResult({ ...sim, diagnostic });
     setViewResult(null);
     setViewMode({ kind: "scenario", id: "current", label: "Current" });
     setInsight(null);
@@ -252,7 +247,12 @@ export default function RunwaySimulatorPage() {
         fixedExpenses: Math.round(sim.kpis.expenseMix.fixedExpenses),
         variableSharePercent: Math.round(sim.kpis.expenseMix.variableSharePercent * 1000) / 10,
         fixedSharePercent: Math.round(sim.kpis.expenseMix.fixedSharePercent * 1000) / 10,
-        largestExpenseCategory: sim.kpis.expenseMix.largestExpenseCategory,
+        largestExpenseCategoryKey: sim.kpis.expenseMix.largestExpenseCategoryKey,
+        largestExpenseCategoryLabel:
+          sim.kpis.expenseMix.largestExpenseCategoryLabel ??
+          sim.kpis.expenseMix.largestExpenseCategory,
+        largestExpenseCategory: sim.kpis.expenseMix.largestExpenseCategoryLabel ??
+          sim.kpis.expenseMix.largestExpenseCategory,
         largestExpenseCategoryAmount: Math.round(sim.kpis.expenseMix.largestExpenseCategoryAmount || 0),
       },
       currency: normalized.currency,
@@ -283,6 +283,27 @@ export default function RunwaySimulatorPage() {
       setPhase("results");
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
+  };
+
+  const loadScenario1Preset = () => {
+    applyFormInputs(getScenario1FormInputs());
+    setErrors([]);
+    setStep(5);
+    requestFormScroll();
+  };
+
+  const loadScenario2Preset = () => {
+    applyFormInputs(getScenario2FormInputs());
+    setErrors([]);
+    setStep(5);
+    requestFormScroll();
+  };
+
+  const loadScenario4Preset = () => {
+    applyFormInputs(getScenario4FormInputs());
+    setErrors([]);
+    setStep(5);
+    requestFormScroll();
   };
 
   const restart = () => {
@@ -333,21 +354,44 @@ export default function RunwaySimulatorPage() {
     }
   }, []);
 
-  const statusTone = useMemo(() => {
-    const s = display?.kpis?.healthStatus;
-    if (s === "Critical") return "border-red-200 bg-red-50 text-[#b91c1c]";
-    if (s === "Attention required" || s === "Caution") return "border-[rgba(252,125,37,0.25)] bg-[rgba(252,125,37,0.08)] text-[#c55a12]";
-    if (s === "Stable") return "border-[rgba(26,54,115,0.14)] bg-[#f4f8ff] text-[#1a3673]";
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }, [display]);
+  const statusTone = useMemo(() => healthStatusTone(display?.kpis?.healthStatus), [display]);
+
+  const hasFutureFunding = Boolean(display?.kpis?.plannedFunding?.hasFutureFunding);
+  const cfoFunding = display?.kpis?.cfoFundingRunway;
+  const beforeHealth =
+    cfoFunding?.runwayBeforeFunding?.healthStatus ??
+    display?.kpis?.healthStatusBeforePlannedFunding;
+  const afterHealth =
+    cfoFunding?.runwayAfterFunding?.healthStatus ??
+    display?.kpis?.healthStatusAfterPlannedFunding;
 
   const runwayExplain = useMemo(() => {
     if (!display) return "";
-    const { runwayMonths, cashOutMonthLabel, cashOutMonthIndex } = display.kpis;
+    const { runwayMonths, cashOutMonthLabel, cashOutMonthIndex, plannedFunding } = display.kpis;
+    if (plannedFunding?.hasFutureFunding) return "";
     if (cashOutMonthIndex == null) {
-      return `At your current burn rate, cash lasts beyond the 24-month forecast (${formatMonths(runwayMonths)} estimated).`;
+      return `Based on your current cash position and near-term burn, estimated runway is ${formatMonths(runwayMonths)}. The cash-flow forecast stays non-negative through the 24-month horizon.`;
     }
-    return `Based on your assumptions, cash is projected to run out around ${cashOutMonthLabel} (${formatMonths(runwayMonths)} of runway).`;
+    return `Based on your current cash position and near-term burn, estimated runway is ${formatMonths(runwayMonths)}. The cash-flow forecast turns negative in ${cashOutMonthLabel}.`;
+  }, [display]);
+
+  const fundingNote = useMemo(() => {
+    if (!display?.kpis?.plannedFunding?.hasFutureFunding) return null;
+    return buildProjectedRunwayFundingNote(display.kpis.plannedFunding, display.inputs?.currency);
+  }, [display]);
+
+  const fundingDependency = useMemo(() => {
+    if (!display?.kpis) return null;
+    return buildFundingDependencyInsight(
+      {
+        projectedRunwayMonths: display.kpis.runwayAfterPlannedFundingMonths ?? display.kpis.projectedRunwayMonths,
+        runwayAfterPlannedFundingMonths: display.kpis.runwayAfterPlannedFundingMonths,
+        runwayBeforePlannedFundingMonths: display.kpis.runwayBeforePlannedFundingMonths,
+        fundingRunwayImpactMonths: display.kpis.fundingRunwayImpactMonths,
+        plannedFunding: display.kpis.plannedFunding,
+      },
+      display.inputs?.currency,
+    );
   }, [display]);
 
   const eventLine = (ev) => {
@@ -640,13 +684,16 @@ export default function RunwaySimulatorPage() {
                         onChange={(v) => setField("otherDirectCostsPercent", v)}
                       />
                     </Field>
-                    <Field label="Sales & marketing (% of revenue)" hint="Enter 40 for 40% of revenue.">
+                      <Field label="Sales & marketing (% of revenue)" hint="Enter 20 for 20% of revenue (approved Scenario 1).">
                       <PctInput
                         value={inputs.salesMarketingPercent}
                         onChange={(v) => setField("salesMarketingPercent", v)}
                       />
                     </Field>
-                    <Field label="Product & technology (% of revenue)" hint="Enter 20 for 20% of revenue.">
+                    <Field
+                      label="Fulfilment / other variable operating costs (% of revenue)"
+                      hint="Enter 40 for 40% of revenue. Maps to engine productTechPercent (Fulfilment)."
+                    >
                       <PctInput value={inputs.productTechPercent} onChange={(v) => setField("productTechPercent", v)} />
                     </Field>
                   </ExpenseGroup>
@@ -761,7 +808,7 @@ export default function RunwaySimulatorPage() {
                         value={`${formatPercent(Number(inputs.salesMarketingPercent) || 0)} of revenue`}
                       />
                       <ReviewLine
-                        label="Product & technology"
+                        label="Fulfilment / other variable operating costs"
                         value={`${formatPercent(Number(inputs.productTechPercent) || 0)} of revenue`}
                       />
                     </ReviewBlock>
@@ -789,7 +836,32 @@ export default function RunwaySimulatorPage() {
                       <ReviewLine label="Debt / other" value={eventLine(inputs.debtEvents[0])} />
                     </ReviewBlock>
                   </div>
-                  <div className="md:col-span-2 pt-2">
+                  <div className="md:col-span-2 pt-2 flex flex-wrap items-center gap-3">
+                    {IS_DEV ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={loadScenario1Preset}
+                          className="rounded-xl border border-dashed border-[rgba(26,54,115,0.25)] px-4 py-2.5 text-sm font-semibold text-[#1a3673] hover:bg-[#f8fafc]"
+                        >
+                          Load Scenario 1 (dev)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={loadScenario2Preset}
+                          className="rounded-xl border border-dashed border-[rgba(26,54,115,0.25)] px-4 py-2.5 text-sm font-semibold text-[#1a3673] hover:bg-[#f8fafc]"
+                        >
+                          Load Scenario 2 (dev)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={loadScenario4Preset}
+                          className="rounded-xl border border-dashed border-[rgba(26,54,115,0.25)] px-4 py-2.5 text-sm font-semibold text-[#1a3673] hover:bg-[#f8fafc]"
+                        >
+                          Load Scenario 4 (dev)
+                        </button>
+                      </>
+                    ) : null}
                     <button type="button" onClick={runCalc} className={`${primaryBtnCls} w-full sm:w-auto`}>
                       Calculate 24-month projection <ArrowRight size={16} />
                     </button>
@@ -875,30 +947,118 @@ export default function RunwaySimulatorPage() {
               </div>
 
               <section className="rounded-2xl border border-[rgba(252,125,37,0.35)] bg-white px-6 py-6 shadow-[0_8px_32px_rgba(26,54,115,0.08)] ring-1 ring-[rgba(252,125,37,0.12)] md:rounded-[1.35rem] md:px-8 md:py-7">
-                <p className="text-[12px] font-semibold uppercase tracking-[0.16em] text-[#fc7d25]">
-                  Your estimated runway
-                </p>
-                <p className="mt-2 text-5xl font-semibold tracking-tight text-[#1a3673] md:text-6xl">
-                  {display.kpis.runwayMonths == null
-                    ? "—"
-                    : Number(display.kpis.runwayMonths).toFixed(1)}
-                </p>
-                <p className="mt-1 text-base font-medium text-slate-500">months of runway</p>
-                <div className="mt-4 flex flex-wrap items-center gap-3">
-                  <span className={"inline-flex items-center rounded-full border px-3.5 py-1.5 text-xs font-semibold " + statusTone}>
-                    {display.kpis.healthStatus}
-                  </span>
-                  <span className="text-sm text-slate-600">
-                    Expected cash-out:{" "}
-                    <span className="font-semibold text-[#1a3673]">{display.kpis.cashOutMonthLabel}</span>
-                  </span>
-                </div>
-                <p className="mt-4 max-w-2xl text-sm leading-relaxed text-slate-500">{runwayExplain}</p>
+                {hasFutureFunding &&
+                display.kpis.runwayBeforePlannedFundingMonths != null &&
+                display.kpis.runwayAfterPlannedFundingMonths != null ? (
+                  <div className="space-y-6">
+                    <div>
+                      {beforeHealth ? (
+                        <span
+                          className={
+                            "inline-flex items-center rounded-full border px-3.5 py-1.5 text-xs font-semibold uppercase tracking-[0.08em] " +
+                            healthStatusTone(beforeHealth)
+                          }
+                        >
+                          {beforeHealth}
+                        </span>
+                      ) : null}
+                      <p className="mt-3 text-[12px] font-semibold uppercase tracking-[0.16em] text-[#fc7d25]">
+                        Runway before planned funding
+                      </p>
+                      <p className="mt-2 text-5xl font-semibold tracking-tight text-[#1a3673] md:text-6xl">
+                        {Number(display.kpis.runwayBeforePlannedFundingMonths).toFixed(1)}
+                      </p>
+                      <p className="mt-1 text-base font-medium text-slate-500">months</p>
+                      <p className="mt-3 max-w-2xl text-sm leading-relaxed text-slate-500">
+                        Without the planned financing, current cash and near-term burn provide
+                        approximately {Number(display.kpis.runwayBeforePlannedFundingMonths).toFixed(1)}{" "}
+                        months of runway.
+                        {cfoFunding?.runwayBeforeFunding?.cashOutMonthLabel
+                          ? ` Cash would turn negative around ${cfoFunding.runwayBeforeFunding.cashOutMonthLabel}.`
+                          : null}
+                      </p>
+                    </div>
+
+                    <div className="border-t border-[rgba(26,54,115,0.1)] pt-5">
+                      {afterHealth ? (
+                        <span
+                          className={
+                            "inline-flex items-center rounded-full border px-3.5 py-1.5 text-xs font-semibold uppercase tracking-[0.08em] " +
+                            healthStatusTone(afterHealth)
+                          }
+                        >
+                          {afterHealth}
+                        </span>
+                      ) : null}
+                      <p className="mt-3 text-[12px] font-semibold uppercase tracking-[0.16em] text-[#fc7d25]">
+                        Runway after planned funding
+                      </p>
+                      <p className="mt-2 text-5xl font-semibold tracking-tight text-[#1a3673] md:text-6xl">
+                        {Number(display.kpis.runwayAfterPlannedFundingMonths).toFixed(1)}
+                      </p>
+                      <p className="mt-1 text-base font-medium text-slate-500">months</p>
+                      {fundingNote ? (
+                        <p className="mt-3 text-sm leading-relaxed text-slate-600">{fundingNote}</p>
+                      ) : null}
+                      {display.kpis.fundingRunwayImpactMonths != null ? (
+                        <p className="mt-2 text-sm font-semibold text-[#1a3673]">
+                          Funding impact:{" "}
+                          <span className="tabular-nums">
+                            {display.kpis.fundingRunwayImpactMonths >= 0 ? "+" : ""}
+                            {Number(display.kpis.fundingRunwayImpactMonths).toFixed(1)} months
+                          </span>
+                        </p>
+                      ) : null}
+                      {cfoFunding?.runwayAfterFunding?.cashOutMonthLabel &&
+                      cfoFunding.runwayAfterFunding.cashOutMonthLabel !==
+                        "Beyond 24-month horizon" ? (
+                        <p className="mt-2 text-[13px] leading-relaxed text-slate-500">
+                          With planned financing, the cash-flow forecast turns negative in{" "}
+                          {cfoFunding.runwayAfterFunding.cashOutMonthLabel}.
+                        </p>
+                      ) : cfoFunding?.runwayAfterFunding?.cashOutMonthLabel ===
+                        "Beyond 24-month horizon" ? (
+                        <p className="mt-2 text-[13px] leading-relaxed text-slate-500">
+                          With planned financing, cash stays non-negative through the 24-month horizon.
+                        </p>
+                      ) : null}
+                      {fundingDependency ? (
+                        <p className="mt-3 text-[13px] leading-relaxed text-slate-600">
+                          <span className="font-semibold text-[#1a3673]">{fundingDependency.title}: </span>
+                          {fundingDependency.body}
+                        </p>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-[12px] font-semibold uppercase tracking-[0.16em] text-[#fc7d25]">
+                      Projected runway
+                    </p>
+                    <p className="mt-2 text-5xl font-semibold tracking-tight text-[#1a3673] md:text-6xl">
+                      {display.kpis.runwayMonths == null
+                        ? "—"
+                        : Number(display.kpis.runwayMonths).toFixed(1)}
+                    </p>
+                    <p className="mt-1 text-base font-medium text-slate-500">months</p>
+                    <div className="mt-4 flex flex-wrap items-center gap-3">
+                      <span className={"inline-flex items-center rounded-full border px-3.5 py-1.5 text-xs font-semibold " + statusTone}>
+                        {display.kpis.healthStatus}
+                      </span>
+                      <span className="text-sm text-slate-600">
+                        Expected cash-out:{" "}
+                        <span className="font-semibold text-[#1a3673]">{display.kpis.cashOutMonthLabel}</span>
+                      </span>
+                    </div>
+                    <p className="mt-4 max-w-2xl text-sm leading-relaxed text-slate-500">{runwayExplain}</p>
+                  </>
+                )}
               </section>
 
               <ResultsSummaryKpis kpis={display.kpis} currency={display.inputs.currency} />
 
               <SimulatorCharts
+                key={`charts-${display.inputs?.forecastStartMonth}-${display.kpis?.cashOutMonthIndex}-${display.kpis?.expenseMix?.largestExpenseCategoryKey}-${display.months?.[12]?.closingCash}`}
                 months={display.months}
                 expenseMix={display.kpis.expenseMix}
                 capexComparison={display.kpis.capexComparison}
@@ -909,6 +1069,10 @@ export default function RunwaySimulatorPage() {
                 onApplyOverlay={applyOverlay}
                 onApplyScenario={applyAiCfoScenario}
               />
+
+              {IS_DEV && result?.diagnostic ? (
+                <RunwayDevDiagnostic diagnostic={result.diagnostic} />
+              ) : null}
 
               {buildExpenseInsights(display).length > 0 && (
                 <section className="rounded-2xl border border-[rgba(26,54,115,0.12)] bg-white px-5 py-5 shadow-[0_8px_32px_rgba(26,54,115,0.07)] md:rounded-[1.35rem] md:px-7 md:py-6">
@@ -1105,6 +1269,8 @@ function PctInput({ value, onChange }) {
 
 function EventRow({ label, event, onChange, forecastStartMonth, currency = "INR" }) {
   const hasAmount = event?.amount !== "" && event?.amount != null && Number(event.amount) > 0;
+  const hasMonth =
+    event?.monthIndex !== "" && event?.monthIndex != null && Number(event.monthIndex) >= 1;
   const options = useMemo(() => forecastMonthOptions(forecastStartMonth), [forecastStartMonth]);
 
   return (
@@ -1120,9 +1286,10 @@ function EventRow({ label, event, onChange, forecastStartMonth, currency = "INR"
               onChange({ amount: "", monthIndex: "" });
               return;
             }
+            const monthIndex = Number(event?.monthIndex);
             onChange({
               amount,
-              monthIndex: Number(event?.monthIndex) >= 1 ? Number(event.monthIndex) : 6,
+              monthIndex: Number.isInteger(monthIndex) && monthIndex >= 1 ? monthIndex : "",
             });
           }}
         />
@@ -1131,10 +1298,11 @@ function EventRow({ label, event, onChange, forecastStartMonth, currency = "INR"
         <select
           className={inputCls}
           disabled={!hasAmount}
-          value={hasAmount ? event?.monthIndex ?? 6 : ""}
+          value={hasAmount && hasMonth ? String(event.monthIndex) : ""}
           onChange={(e) => onChange({ monthIndex: Number(e.target.value) })}
         >
           {!hasAmount && <option value="">Enter an amount first</option>}
+          {hasAmount && !hasMonth ? <option value="">Select month</option> : null}
           {options.map((o) => (
             <option key={o.monthIndex} value={o.monthIndex}>
               {o.label}
@@ -1143,6 +1311,56 @@ function EventRow({ label, event, onChange, forecastStartMonth, currency = "INR"
         </select>
       </Field>
     </div>
+  );
+}
+
+function RunwayDevDiagnostic({ diagnostic }) {
+  const parity = compareScenario1Diagnostic(diagnostic);
+  const rows = [
+    ["openingCash", diagnostic.normalizedInputs.openingCash, 3_000_000],
+    ["revenueMode", diagnostic.normalizedInputs.revenueMode, "detailed"],
+    ["fulfillmentPercent", diagnostic.normalizedInputs.fulfillmentPercent, 40],
+    ["salesAndMarketingPercent", diagnostic.normalizedInputs.salesAndMarketingPercent, 20],
+    ["capexEvents", JSON.stringify(diagnostic.normalizedInputs.capexEvents), "[]"],
+    ["M12 closing incl", diagnostic.engineOutputs.month12ClosingCashIncludingCapex, 270_101.11],
+    ["M13 closing incl", diagnostic.engineOutputs.month13ClosingCashIncludingCapex, 39_641.31],
+    ["M13 closing excl", diagnostic.engineOutputs.month13ClosingCashExcludingCapex, 39_641.31],
+    ["first negative month", diagnostic.engineOutputs.firstNegativeMonthIndex, 14],
+    ["cash-out label", diagnostic.engineOutputs.cashOutLabel, "Aug 2027"],
+    ["largest key", diagnostic.engineOutputs.largestExpenseCategoryKey, "productAndTechnology"],
+    ["largest label", diagnostic.engineOutputs.largestExpenseCategoryLabel, "Fulfilment / other variable operating costs"],
+  ];
+
+  return (
+    <section className="rounded-2xl border border-dashed border-amber-300 bg-amber-50/60 p-4 text-[12px] text-slate-700">
+      <p className="font-semibold text-amber-900">Dev diagnostic — form → engine → KPI pipeline</p>
+      <p className="mt-1 text-[11px] text-amber-800">
+        Scenario 1 parity:{" "}
+        {Object.entries(parity)
+          .map(([k, v]) => `${k}: ${v ? "✓" : "✗"}`)
+          .join(" · ")}
+      </p>
+      <div className="mt-3 overflow-x-auto">
+        <table className="min-w-full border-collapse text-left">
+          <thead>
+            <tr className="border-b border-amber-200">
+              <th className="py-1 pr-4 font-semibold">Field</th>
+              <th className="py-1 pr-4 font-semibold">Actual</th>
+              <th className="py-1 font-semibold">Scenario 1 expected</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(([label, actual, expected]) => (
+              <tr key={label} className="border-b border-amber-100/80 align-top">
+                <td className="py-1 pr-4 font-medium text-slate-600">{label}</td>
+                <td className="py-1 pr-4 font-mono">{String(actual)}</td>
+                <td className="py-1 font-mono text-slate-500">{String(expected)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }
 

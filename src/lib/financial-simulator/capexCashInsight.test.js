@@ -40,7 +40,24 @@ describe("closing cash CapEx captions", () => {
     assert.match(text, /Operating burn/i);
   });
 
-  it("handles different cash-out months", () => {
+  it("handles CapEx-forwarded cash-out when excluding stays positive at including cash-out month", () => {
+    const text = buildClosingCashCaption({
+      cashOutMonthIncludingCapex: 13,
+      cashOutMonthExcludingCapex: 14,
+      cashOutMonthLabelIncludingCapex: "Jul 2027",
+      cashOutMonthLabelExcludingCapex: "Aug 2027",
+      excludingCashAtIncludingCashOutMonth: 39_641.31,
+      capexInIncludingCashOutMonth: 300_000,
+      capexRunwayImpactMonths: 0.9,
+      cumulativeCapex: 300_000,
+    });
+    assert.match(text, /Jul 2027/i);
+    assert.match(text, /remains positive in Jul 2027/i);
+    assert.match(text, /Month 13 capital expenditure/i);
+    assert.doesNotMatch(text, /Aug 2027/i);
+  });
+
+  it("handles different cash-out months without CapEx at including month", () => {
     const text = buildClosingCashCaption({
       cashOutMonthIncludingCapex: 5,
       cashOutMonthExcludingCapex: 8,

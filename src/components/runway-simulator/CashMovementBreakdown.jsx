@@ -727,6 +727,16 @@ function IntelligencePanel({
         ) : null}
       </div>
 
+      {/* Funding dependency */}
+      {insight.fundingDependency ? (
+        <div className="rounded-xl border border-[rgba(26,54,115,0.12)] bg-[#f8fafc] px-4 py-3">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#1a3673]">
+            {insight.fundingDependency.title}
+          </p>
+          <p className="mt-1 text-[13px] leading-relaxed text-slate-600">{insight.fundingDependency.body}</p>
+        </div>
+      ) : null}
+
       {/* 2. Cost Contribution + Expense Insights */}
       {cc?.categories?.length > 0 ? (
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">

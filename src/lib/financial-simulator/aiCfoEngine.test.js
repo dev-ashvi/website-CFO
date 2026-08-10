@@ -25,6 +25,8 @@ function lowRunwaySim() {
     monthlyRevenueGrowth: 0.02,
     monthlyPayroll: 320_000,
     salesMarketingPercent: 0.35,
+    // Pin fulfilment so AI goal-seek fixtures stay solvable independent of public defaults.
+    productTechPercent: 0.15,
     cogsPercent: 0.35,
   });
 }
@@ -120,10 +122,10 @@ describe("aiCfoEngine", () => {
 
   it("goal-seek runway returns scenario meeting target", () => {
     const sim = lowRunwaySim();
-    const res = askAiCfo("How much do I need to reduce costs to reach 2 months runway?", sim);
+    const res = askAiCfo("How much do I need to reduce costs to reach 6 months runway?", sim);
     assert.equal(res.type, "goal_seek");
     assert.ok(res.scenarioSim);
-    assert.ok(res.scenarioSim.kpis.runwayMonths >= 2);
+    assert.ok(res.scenarioSim.kpis.runwayMonths >= 6);
   });
 
   it("goal-seek EBITDA uses deterministic outputs", () => {

@@ -89,8 +89,9 @@ function buildRisks(m, costMix, expenseMix, currency) {
   if (shareAsFraction(expenseMix?.fixedSharePercent ?? expenseMix?.fixedExpensePercent) >= 0.55) {
     risks.push("Your fixed-cost base limits short-term flexibility.");
   }
-  if (expenseMix?.largestExpenseCategory) {
-    risks.push(`${expenseMix.largestExpenseCategory} is the largest Month 1 expense category.`);
+  const largestLabel = expenseMix?.largestExpenseCategoryLabel ?? expenseMix?.largestExpenseCategory;
+  if (largestLabel) {
+    risks.push(`${largestLabel} is the largest Month 1 expense category.`);
   }
   if (risks.length < 3) {
     risks.push("Simplified assumptions (no working capital or tax) may understate real cash needs.");

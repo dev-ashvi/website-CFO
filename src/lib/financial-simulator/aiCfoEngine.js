@@ -1,6 +1,7 @@
 import { calculateProjection } from "./calculateProjection.js";
 import { calculateKpis } from "./calculateKpis.js";
 import { cloneInputs } from "./scenarios/index.js";
+import { withFundingAwareRunway } from "./plannedFunding.js";
 import { applyCostReductionScenario } from "./scenarios/applyCostReductionScenario.js";
 import { applyRevenueGrowthScenario } from "./scenarios/applyRevenueGrowthScenario.js";
 import { buildCostContribution } from "./cashMovementInsight.js";
@@ -30,16 +31,30 @@ export function buildModelContext(sim) {
         ? inputs.monthlyVolumeGrowth
         : inputs.monthlyRevenueGrowth,
     grossMargin: m1.grossMargin,
+    /** CM1 = after COGS, other direct, fulfilment — before S&M and fixed opex */
+    cm1: m1.cm1,
+    cm1Margin: m1.cm1Margin,
+    /** CM2 = CM1 after sales & marketing */
+    cm2: m1.cm2,
+    cm2Margin: m1.cm2Margin,
     cogsPercent: inputs.cogsPercent,
     expenses: {
       cogs: m1.cogs,
       otherDirect: m1.otherDirectCosts,
+      fulfillment: m1.fulfillmentCosts ?? m1.productAndTechnology,
       salesMarketing: m1.salesAndMarketing,
       productTech: m1.productAndTechnology,
       payroll: m1.payroll,
       otherFixed: m1.otherFixedCosts,
     },
     runwayMonths: kpis.runwayMonths,
+    projectedRunwayMonths: kpis.projectedRunwayMonths ?? kpis.runwayMonths,
+    runwayBeforePlannedFundingMonths: kpis.runwayBeforePlannedFundingMonths ?? null,
+    runwayAfterPlannedFundingMonths: kpis.runwayAfterPlannedFundingMonths ?? null,
+    cashSeriesRunwayMonths: kpis.cashSeriesRunwayMonths ?? null,
+    plannedFunding: kpis.plannedFunding || null,
+    fundingRunwayImpactMonths: kpis.fundingRunwayImpactMonths ?? null,
+    cfoFundingRunway: kpis.cfoFundingRunway || null,
     cashOutMonth: kpis.cashOutMonthLabel,
     monthlyNetBurn: kpis.burnMetrics?.monthlyNetBurnExcludingCapex ?? m1.netBurn,
     ebitda: m1.ebitda,
@@ -255,23 +270,49 @@ function buildExplainRunway(sim) {
   const currency = ctx.currency;
   const money = (v) => formatMoney(v, { currency });
   const largest = ctx.costContribution.categories.sort((a, b) => b.shareOfRevenue - a.shareOfRevenue)[0];
+  const planned = ctx.plannedFunding;
+  const bullets = [
+    { label: "Opening cash", value: money(ctx.openingCash) },
+    { label: "Monthly net burn", value: money(ctx.monthlyNetBurn) },
+    {
+      label: "Largest cost pressure",
+      value: largest
+        ? `${largest.label} — ${formatPercent(largest.shareOfRevenue)} of revenue`
+        : "—",
+    },
+    { label: "EBITDA", value: `${money(m1.ebitda)} / month` },
+  ];
+  if (planned?.hasFutureFunding && ctx.runwayBeforePlannedFundingMonths != null) {
+    bullets.push({
+      label: "Runway after planned funding",
+      value: formatMonths(ctx.runwayAfterPlannedFundingMonths ?? ctx.projectedRunwayMonths ?? ctx.runwayMonths),
+    });
+    bullets.push({
+      label: "Runway before planned funding",
+      value: formatMonths(ctx.runwayBeforePlannedFundingMonths),
+    });
+    bullets.push({
+      label: "Planned funding",
+      value: `${money(planned.totalAmount)}${
+        planned.eventCount === 1 && planned.firstFundingMonth != null
+          ? ` (${planned.equityAmount > 0 ? "equity" : "debt/other"} in Month ${planned.firstFundingMonth})`
+          : ` across ${planned.eventCount} events`
+      }`,
+    });
+  }
+
+  const fundingObservation =
+    planned?.hasFutureFunding && ctx.runwayBeforePlannedFundingMonths != null
+      ? ` After planned financing, CFO runway is approximately ${formatMonths(ctx.runwayAfterPlannedFundingMonths ?? ctx.projectedRunwayMonths ?? ctx.runwayMonths)}. Without that financing, runway is approximately ${formatMonths(ctx.runwayBeforePlannedFundingMonths)}.`
+      : "";
+
   return {
     type: "explanation",
     question: "Why is my runway only this long?",
     title: `Why your runway is ${formatMonths(ctx.runwayMonths)}`,
     base: snapshotMetrics(sim),
-    bullets: [
-      { label: "Opening cash", value: money(ctx.openingCash) },
-      { label: "Monthly net burn", value: money(ctx.monthlyNetBurn) },
-      {
-        label: "Largest cost pressure",
-        value: largest
-          ? `${largest.label} — ${formatPercent(largest.shareOfRevenue)} of revenue`
-          : "—",
-      },
-      { label: "EBITDA", value: `${money(m1.ebitda)} / month` },
-    ],
-    observation: `Your gross margin is ${formatPercent(ctx.grossMargin)}, but operating costs consume enough of the remaining margin to keep EBITDA ${m1.ebitda < 0 ? "negative" : "positive"}. Expected cash-out: ${ctx.cashOutMonth}.`,
+    bullets,
+    observation: `Your gross margin is ${formatPercent(ctx.grossMargin)}, but operating costs consume enough of the remaining margin to keep EBITDA ${m1.ebitda < 0 ? "negative" : "positive"}. Expected cash-out: ${ctx.cashOutMonth}.${fundingObservation}`,
     followUps: buildFollowUps("explain_runway", sim),
   };
 }
@@ -596,10 +637,7 @@ function applyActionToInputs(baseInputs, action) {
 
 function searchCostReduction(baseInputs, targetMonths, target) {
   for (let pct = 0.05; pct <= 0.8; pct += 0.01) {
-    const scenarioInputs = applyCostReductionScenario(cloneInputs(baseInputs), {
-      reductionRate: pct,
-      target,
-    });
+    const scenarioInputs = scaleOperatingCosts(cloneInputs(baseInputs), { reductionRate: pct, target });
     const runway = runwayOf(scenarioInputs);
     if (runway != null && runway >= targetMonths) {
       return {
@@ -610,7 +648,7 @@ function searchCostReduction(baseInputs, targetMonths, target) {
           {
             label: `${target === "fixed" ? "Fixed" : "Variable"} cost reduction`,
             base: "0%",
-            scenario: `-${Math.round(pct * 100)}% from Month 2`,
+            scenario: `-${Math.round(pct * 100)}% (base run-rate)`,
           },
         ],
         observation: `Reducing ${target} costs by ~${Math.round(pct * 100)}% extends runway to approximately ${formatMonths(runway)}.`,
@@ -618,6 +656,22 @@ function searchCostReduction(baseInputs, targetMonths, target) {
     }
   }
   return null;
+}
+
+/**
+ * Permanently scale base operating cost inputs (affects Month 1+), so CFO headline
+ * runway (M1 ending cash ÷ near-term burn) can respond to goal-seek levers.
+ */
+function scaleOperatingCosts(inputs, { reductionRate, target = "variable" }) {
+  const keep = 1 - Number(reductionRate || 0);
+  if (target === "fixed") {
+    inputs.monthlyPayroll = Math.max(0, Number(inputs.monthlyPayroll || 0) * keep);
+    inputs.otherFixedCosts = Math.max(0, Number(inputs.otherFixedCosts || 0) * keep);
+  } else {
+    inputs.salesMarketingPercent = Math.max(0, Number(inputs.salesMarketingPercent || 0) * keep);
+    inputs.productTechPercent = Math.max(0, Number(inputs.productTechPercent || 0) * keep);
+  }
+  return inputs;
 }
 
 function searchRevenueGrowth(baseInputs, targetMonths) {
@@ -674,7 +728,7 @@ function searchCombinedPlan(baseInputs, targetMonths) {
         } else {
           next.monthlyRevenueGrowth = Number(next.monthlyRevenueGrowth || 0) + rev;
         }
-        next = applyCostReductionScenario(next, { reductionRate: fixed, target: "fixed" });
+        next = scaleOperatingCosts(next, { reductionRate: fixed, target: "fixed" });
         next.cogsPercent = Math.max(0, Number(next.cogsPercent || 0) - margin);
         const runway = runwayOf(next);
         if (runway != null && runway >= targetMonths) {
@@ -734,12 +788,12 @@ function snapshotMetrics(sim) {
 function runSim(inputs) {
   const data = cloneInputs(inputs);
   const months = calculateProjection(data);
-  const kpis = calculateKpis(months);
+  const kpis = withFundingAwareRunway(data, months, calculateKpis(months));
   return { inputs: data, months, kpis };
 }
 
 function runwayOf(inputs) {
-  return calculateKpis(calculateProjection(cloneInputs(inputs))).runwayMonths;
+  return runSim(inputs).kpis.runwayMonths;
 }
 
 function buildSimulationObservation(action, base, scenario, impact) {

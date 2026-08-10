@@ -27,6 +27,11 @@ export function buildClosingCashCaption(cmp) {
   }
 
   if (incOut != null && exOut != null && incOut !== exOut) {
+    const excludingAtIncOut = cmp.excludingCashAtIncludingCashOutMonth;
+    const capexAtIncOut = Number(cmp.capexInIncludingCashOutMonth) || 0;
+    if (excludingAtIncOut != null && excludingAtIncOut > 0 && capexAtIncOut > 0) {
+      return `Cash becomes negative in ${incLabel} including planned CapEx. Excluding CapEx, cash remains positive in ${incLabel}, showing that the Month ${incOut} capital expenditure brings forward the cash shortfall.`;
+    }
     const impact = cmp.capexRunwayImpactMonths;
     const impactText =
       impact != null && Math.abs(impact) >= 0.05

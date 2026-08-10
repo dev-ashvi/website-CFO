@@ -155,8 +155,8 @@ describe("Results KPI burn metrics (Month 1, not averages)", () => {
   });
 });
 
-describe("Expense Breakdown (Month 1 snapshot)", () => {
-  it("variable expenses equal Month 1 variable-expense total", () => {
+describe("Expense Breakdown (Month 1 operating snapshot)", () => {
+  it("variable expenses equal Month 1 fulfilment + S&M only", () => {
     const { months, kpis } = run({
       equityEvents: [],
       debtEvents: [],
@@ -164,42 +164,64 @@ describe("Expense Breakdown (Month 1 snapshot)", () => {
     });
     const m1 = months[0];
     assert.equal(kpis.expenseMix.period, "month1");
-    assert.equal(kpis.expenseMix.variableExpenses, m1.totalVariableExpenses);
-    assert.equal(
-      kpis.expenseMix.variableExpenses,
-      m1.cogs + m1.otherDirectCosts + m1.salesAndMarketing + m1.productAndTechnology,
-    );
+    assert.equal(kpis.expenseMix.scope, "operating");
+    assert.equal(kpis.expenseMix.variableExpenses, m1.productAndTechnology + m1.salesAndMarketing);
+    assert.notEqual(kpis.expenseMix.variableExpenses, m1.totalVariableExpenses);
   });
 
-  it("fixed expenses equal Month 1 fixed-expense total", () => {
+  it("fixed expenses equal Month 1 payroll + other fixed", () => {
     const { months, kpis } = run({
       equityEvents: [],
       debtEvents: [],
       capexEvents: [],
     });
     const m1 = months[0];
-    assert.equal(kpis.expenseMix.fixedExpenses, m1.totalFixedExpenses);
     assert.equal(kpis.expenseMix.fixedExpenses, m1.payroll + m1.otherFixedCosts);
+    assert.equal(kpis.expenseMix.fixedExpenses, m1.totalFixedExpenses);
   });
 
-  it("variable and fixed shares use Month 1 only and total ~100%", () => {
+  it("variable and fixed shares use Month 1 operating base and total ~100%", () => {
     const { months, kpis } = run({
       equityEvents: [],
       debtEvents: [],
       capexEvents: [],
     });
     const m1 = months[0];
-    const opex = m1.totalOperatingExpenses;
-    assert.ok(Math.abs(kpis.expenseMix.variableSharePercent - m1.totalVariableExpenses / opex) < 1e-9);
-    assert.ok(Math.abs(kpis.expenseMix.fixedSharePercent - m1.totalFixedExpenses / opex) < 1e-9);
+    const operating =
+      m1.productAndTechnology + m1.salesAndMarketing + m1.payroll + m1.otherFixedCosts;
+    assert.equal(kpis.expenseMix.month1OperatingExpenses, operating);
+    assert.equal(kpis.expenseMix.month1OperatingExpenses, m1.grossBurn);
+    assert.ok(
+      Math.abs(kpis.expenseMix.variableSharePercent - kpis.expenseMix.variableExpenses / operating) <
+        1e-9,
+    );
+    assert.ok(
+      Math.abs(kpis.expenseMix.fixedSharePercent - kpis.expenseMix.fixedExpenses / operating) < 1e-9,
+    );
     assert.ok(
       Math.abs(kpis.expenseMix.variableSharePercent + kpis.expenseMix.fixedSharePercent - 1) < 0.01,
     );
   });
 
-  it("largest category is determined from Month 1 only", () => {
+  it("COGS and other direct costs are excluded from expense mix", () => {
     const { months, kpis } = run({
-      // Make S&M the clear Month 1 leader; later months diverge via growth.
+      equityEvents: [],
+      debtEvents: [],
+      capexEvents: [],
+    });
+    const m1 = months[0];
+    assert.ok(m1.cogs > 0);
+    assert.ok(m1.otherDirectCosts > 0);
+    assert.notEqual(kpis.expenseMix.variableExpenses, m1.totalVariableExpenses);
+    assert.notEqual(
+      kpis.expenseMix.month1OperatingExpenses,
+      m1.totalOperatingExpenses,
+    );
+  });
+
+  it("largest category is determined from operating categories in Month 1 only", () => {
+    const { months, kpis } = run({
+      // Make S&M the clear Month 1 leader among operating categories; later months diverge via growth.
       currentMonthlyRevenue: 100_000,
       monthlyRevenueGrowth: 0.2,
       cogsPercent: 0.1,
@@ -215,7 +237,8 @@ describe("Expense Breakdown (Month 1 snapshot)", () => {
       capexEvents: [],
     });
     const m1 = months[0];
-    assert.equal(kpis.expenseMix.largestExpenseCategory, "Sales & marketing");
+    assert.equal(kpis.expenseMix.largestExpenseCategoryKey, "salesAndMarketing");
+    assert.equal(kpis.expenseMix.largestExpenseCategoryLabel, "Sales & marketing");
     assert.equal(kpis.expenseMix.largestExpenseCategoryAmount, m1.salesAndMarketing);
     // Month 24 S&M is much larger; mix must still use Month 1.
     assert.ok(months[23].salesAndMarketing > m1.salesAndMarketing * 2);
@@ -255,8 +278,17 @@ describe("Expense Breakdown (Month 1 snapshot)", () => {
       debtEvents: [],
       capexEvents: [],
     });
-    // Same Month 1 inputs → same expense mix despite different later months.
-    assert.equal(growing.months[0].totalVariableExpenses, flat.months[0].totalVariableExpenses);
+    const flatOperating =
+      flat.months[0].productAndTechnology +
+      flat.months[0].salesAndMarketing +
+      flat.months[0].payroll +
+      flat.months[0].otherFixedCosts;
+    const growingOperating =
+      growing.months[0].productAndTechnology +
+      growing.months[0].salesAndMarketing +
+      growing.months[0].payroll +
+      growing.months[0].otherFixedCosts;
+    assert.equal(growingOperating, flatOperating);
     assert.equal(growing.kpis.expenseMix.variableExpenses, flat.kpis.expenseMix.variableExpenses);
     assert.equal(growing.kpis.expenseMix.fixedExpenses, flat.kpis.expenseMix.fixedExpenses);
     assert.notEqual(

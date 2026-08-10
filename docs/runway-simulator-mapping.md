@@ -102,10 +102,10 @@ For month `m` (columns B…Y):
 5. **Gross Profit** = Revenue − COGS
 6. **Other Direct** = Revenue × otherDirect%
 7. **Net Profit (after direct)** = Gross Profit − Other Direct
-8. **S&M** = Revenue × S&M%
-9. **CM1** = Net Profit − S&M *(use month-1 formula for all months; Excel M2+ omitted other direct — treated as workbook inconsistency)*
-10. **Product/Tech** = Revenue × tech%
-11. **CM2** = CM1 − Product/Tech
+8. **Fulfilment** = Revenue × fulfilment% *(engine field `productAndTechnology` / `productTechPercent`)*
+9. **CM1** = Net Profit − Fulfilment *(before Sales & Marketing)*
+10. **S&M** = Revenue × S&M%
+11. **CM2** = CM1 − S&M
 12. **Payroll:** M1 = input payroll base; M2+ = prev × (1 + growth)
 13. **Other fixed:** same growth pattern as payroll
 14. **Excel Total Opex (for EBITDA)** = Payroll + Other fixed
@@ -189,8 +189,11 @@ Displayed under the runway hero. All values come from the deterministic engine �
 |---|---|
 | **Gross Profit** | Revenue − COGS |
 | **Gross Margin %** | Gross Profit ÷ Revenue |
-| **CM1** | Gross Profit − Other Direct − S&M *(workbook month-1 path applied every month)* |
+| **Net Profit (after direct)** | Gross Profit − Other Direct |
+| **CM1** | Net Profit − Fulfilment (`productAndTechnology`) |
 | **CM1 Margin %** | CM1 ÷ Revenue |
+| **CM2** | CM1 − Sales & Marketing *(internal; not shown in top KPI row)* |
+| **CM2 Margin %** | CM2 ÷ Revenue |
 | **EBITDA** | CM2 − Payroll − Other fixed |
 | **EBITDA Margin %** | EBITDA ÷ Revenue |
 
@@ -252,22 +255,52 @@ Identity (when both series start from the same cash):
 
 ## Result metrics — expense mix (Expense Breakdown)
 
-**Expense Breakdown is a Month 1 snapshot** — not a 24-month forecast average.
+**Expense Breakdown is a Month 1 operating expense structure only** — not a 24-month forecast average, and not full P&L variable costs.
 
-It answers: “What does my cost structure look like today?”  
+It answers: “What does my **operating expense burn** look like in Month 1?”  
 Cash Flow Intelligence remains the full-horizon view of cash movement over time.
+
+**Includes (operating expenses only):**
+
+- Fulfilment / other variable operating costs (`productAndTechnology`)
+- Sales & Marketing
+- Payroll
+- Other Fixed Costs
+
+**Excludes:**
+
+- COGS (still in gross margin, CM1, EBITDA, cash-flow)
+- Other Direct Costs (same)
+- CapEx
+- Funding
 
 | Field | Definition |
 |---|---|
 | `period` | Always `"month1"` for the displayed mix |
-| `variableExpenses` | Month 1 COGS + other direct + S&M + product/tech |
+| `scope` | `"operating"` — operating expense burn only |
+| `variableExpenses` | Month 1 fulfilment + S&M |
 | `fixedExpenses` | Month 1 payroll + other fixed costs |
-| `variableSharePercent` | Month 1 variable ÷ Month 1 operating expenses (0–1 in KPIs; percent in AI payload) |
-| `fixedSharePercent` | Month 1 fixed ÷ Month 1 operating expenses |
-| `largestExpenseCategory` | Highest Month 1 category among COGS, other direct, S&M, product/tech, payroll, other fixed |
+| `month1OperatingExpenses` | Variable + fixed operating (= Month 1 `grossBurn`) |
+| `variableSharePercent` | Month 1 variable operating ÷ operating total (0–1 in KPIs; percent in AI payload) |
+| `fixedSharePercent` | Month 1 fixed operating ÷ operating total |
+| `largestExpenseCategoryKey` | Engine field key (`productAndTechnology`, `salesAndMarketing`, `payroll`, `otherFixedCosts`) |
+| `largestExpenseCategoryLabel` | Canonical display label for that key (UI renders this) |
+| `largestExpenseCategory` | Alias of `largestExpenseCategoryLabel` |
 | `largestExpenseCategoryAmount` | Absolute Month 1 amount for that category |
+| `largestExpenseCategorySharePercent` | Largest ÷ operating total (0–1); alias `largestExpenseCategoryPercent` |
 
-CapEx and funding are excluded. Shares sum to 100% (within rounding).
+Canonical labels (keyed by engine field, not array order):
+
+| Engine field | Display label |
+|---|---|
+| `productAndTechnology` | Fulfilment / other variable operating costs |
+| `salesAndMarketing` | Sales & marketing |
+| `payroll` | Payroll |
+| `otherFixedCosts` | Other fixed costs |
+
+**Scenario 1 Month 1 reference:** variable ₹18,00,000 · fixed ₹2,25,000 · total ₹20,25,000 · variable share 88.9% · fixed 11.1% · largest fulfilment ₹12,00,000 (59.3%).
+
+Shares are computed from unrounded ratios; UI displays one decimal place. CapEx and funding are excluded. `variableExpenses + fixedExpenses = grossBurn` for Month 1.
 
 Forecast averages (`averageMonthlyVariableExpenses` / `averageMonthlyFixedExpenses`) may still exist internally for legacy consumers — they are **not** the displayed Expense Breakdown KPIs.
 

@@ -391,12 +391,15 @@ describe("variable / fixed expense classification", () => {
     assert.ok(Math.abs(months[1].payroll - 30_000 * 1.01) < TOL);
   });
 
-  it("expense-mix percentages sum to ~100%", () => {
+  it("expense-mix percentages sum to ~100% on operating base", () => {
     const months = calculateProjection(base());
     const kpis = calculateKpis(months);
     const m1 = months[0];
-    assert.equal(kpis.expenseMix.variableExpenses, m1.totalVariableExpenses);
-    assert.equal(kpis.expenseMix.fixedExpenses, m1.totalFixedExpenses);
+    const operating =
+      m1.productAndTechnology + m1.salesAndMarketing + m1.payroll + m1.otherFixedCosts;
+    assert.equal(kpis.expenseMix.variableExpenses, m1.productAndTechnology + m1.salesAndMarketing);
+    assert.equal(kpis.expenseMix.fixedExpenses, m1.payroll + m1.otherFixedCosts);
+    assert.equal(kpis.expenseMix.month1OperatingExpenses, operating);
     const sumPct = kpis.expenseMix.variableSharePercent + kpis.expenseMix.fixedSharePercent;
     assert.ok(Math.abs(sumPct - 1) < 0.01);
   });

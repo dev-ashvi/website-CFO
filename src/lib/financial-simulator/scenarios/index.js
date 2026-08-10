@@ -1,5 +1,6 @@
 import { calculateProjection } from "../calculateProjection.js";
 import { calculateKpis } from "../calculateKpis.js";
+import { withFundingAwareRunway } from "../plannedFunding.js";
 import { applyFundingScenario } from "./applyFundingScenario.js";
 import { applyCostReductionScenario } from "./applyCostReductionScenario.js";
 import { applyRevenueGrowthScenario } from "./applyRevenueGrowthScenario.js";
@@ -32,7 +33,7 @@ export {
 export function runWhatIfScenario(baseInputs, spec) {
   const baseClone = cloneInputs(baseInputs);
   const baseMonths = calculateProjection(baseClone);
-  const baseKpis = calculateKpis(baseMonths);
+  const baseKpis = withFundingAwareRunway(baseClone, baseMonths, calculateKpis(baseMonths));
   const baseSim = { months: baseMonths, kpis: baseKpis };
   const base = snapshotComparisonMetrics(baseSim);
 
@@ -77,7 +78,11 @@ export function runWhatIfScenario(baseInputs, spec) {
 
   // Ensure baseInputs was not mutated by apply* (clone inside each apply).
   const scenarioMonths = calculateProjection(scenarioInputs);
-  const scenarioKpis = calculateKpis(scenarioMonths);
+  const scenarioKpis = withFundingAwareRunway(
+    scenarioInputs,
+    scenarioMonths,
+    calculateKpis(scenarioMonths),
+  );
   const scenarioSim = { months: scenarioMonths, kpis: scenarioKpis };
   const scenario = snapshotComparisonMetrics(scenarioSim);
   const delta = computeDeltas(base, scenario);

@@ -1,7 +1,9 @@
+import { findFirstNegativeCashMonth } from "./chartSeries.js";
 import { calculateProjection } from "./calculateProjection.js";
 import { calculateKpis } from "./calculateKpis.js";
 import { cloneInputs, runWhatIfScenario } from "./scenarios/index.js";
 import { formatMoney, formatMonths, formatPercent } from "./format.js";
+import { buildFundingDependencyInsight } from "./plannedFunding.js";
 
 /** Default visible horizon for Cash Flow Intelligence chart (model still runs 24 months). */
 export const CHART_DEFAULT_HORIZON = 12;
@@ -225,6 +227,16 @@ export function buildCashMovementInsight(sim) {
     month1,
   });
 
+  const fundingDependency = buildFundingDependencyInsight(
+    {
+      projectedRunwayMonths: sim.kpis?.projectedRunwayMonths ?? sim.kpis?.runwayMonths ?? null,
+      runwayBeforePlannedFundingMonths: sim.kpis?.runwayBeforePlannedFundingMonths ?? null,
+      fundingRunwayImpactMonths: sim.kpis?.fundingRunwayImpactMonths ?? null,
+      plannedFunding: sim.kpis?.plannedFunding,
+    },
+    sim.inputs?.currency,
+  );
+
   return {
     ...opportunity,
     primaryDriver,
@@ -233,6 +245,7 @@ export function buildCashMovementInsight(sim) {
     costContribution,
     expenseInsights,
     cashOutDetail,
+    fundingDependency,
   };
 }
 
@@ -563,7 +576,7 @@ function buildBenchmark(sim, month1) {
 }
 
 function buildCashOutDetail(months) {
-  const hit = months.find((m) => m.cashOut);
+  const hit = findFirstNegativeCashMonth(months, { includingCapex: true });
   if (!hit) return null;
   return {
     monthLabel: hit.monthLabel,

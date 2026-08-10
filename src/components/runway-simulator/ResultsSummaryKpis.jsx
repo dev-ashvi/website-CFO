@@ -6,7 +6,7 @@ const REVENUE_HELP = "Month 1 revenue used as the starting point of the forecast
 const GROSS_MARGIN_HELP =
   "Month 1 gross profit (Revenue − COGS) shown as value and margin %. Other direct costs are deducted after gross profit in the WYZ model.";
 const CM1_HELP =
-  "Month 1 contribution margin after other direct costs and sales & marketing (WYZ workbook CM1).";
+  "Month 1 contribution margin after COGS, other direct costs, and fulfilment / other variable operating costs — before sales & marketing and fixed opex (WYZ workbook CM1).";
 const EBITDA_HELP = "Month 1 operating profit before interest, tax, depreciation and amortization.";
 const NET_BURN_EXCL_HELP =
   "Current monthly operating cash burn after revenue, excluding capital expenditure and funding.";

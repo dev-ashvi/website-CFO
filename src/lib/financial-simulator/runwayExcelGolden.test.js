@@ -5,6 +5,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { calculateProjection } from "./calculateProjection.js";
 import { calculateKpis } from "./calculateKpis.js";
+import { mapExcelInputsToSimulator } from "./excelScenarioMapper.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const FIXTURE_PATH = join(__dirname, "__fixtures__", "runwayExcelGoldenFixtures.json");
@@ -22,69 +23,6 @@ function deepFreeze(value) {
 }
 
 deepFreeze(FIXTURES);
-
-/**
- * Map approved Excel golden inputs → simulator schema.
- * Fulfilment maps to productAndTechnology (website % of revenue category).
- * Do not use displayedMonthlyRevenueGrowth — revenue is Volume × AOV (detailed mode).
- */
-export function mapExcelInputsToSimulator(excelInputs) {
-  const capexEvents = [];
-  const equityEvents = [];
-  const debtEvents = [];
-  (excelInputs.capexByMonth || []).forEach((amount, i) => {
-    if (Number(amount) > 0) capexEvents.push({ monthIndex: i + 1, amount: Number(amount) });
-  });
-  (excelInputs.equityByMonth || []).forEach((amount, i) => {
-    if (Number(amount) > 0) equityEvents.push({ monthIndex: i + 1, amount: Number(amount) });
-  });
-  (excelInputs.otherFundingByMonth || []).forEach((amount, i) => {
-    if (Number(amount) > 0) debtEvents.push({ monthIndex: i + 1, amount: Number(amount) });
-  });
-
-  /** @type {import('./types.js').SimulatorInputs} */
-  const inputs = {
-    companyName: "Golden Excel",
-    email: "golden@example.com",
-    phone: "+91 9876543210",
-    industry: "Other",
-    businessModel: "Other",
-    startupStage: "Growth",
-    mainPriority: "",
-    currency: "INR",
-    currentCashBalance: Number(excelInputs.startingCash),
-    forecastStartMonth: "2026-07",
-    revenueMode: "detailed",
-    currentMonthlyRevenue: Number(excelInputs.displayedMonthlyRevenue) || 0,
-    monthlyRevenueGrowth: 0, // unused in detailed mode; do not use displayed 5%
-    currentVolume: Number(excelInputs.currentVolume),
-    monthlyVolumeGrowth: Number(excelInputs.monthlyVolumeGrowth),
-    averageOrderValue: Number(excelInputs.aov),
-    monthlyAovGrowth: Number(excelInputs.monthlyAovGrowth),
-    cogsPercent: Number(excelInputs.cogsPercent),
-    otherDirectCostsPercent: Number(excelInputs.otherDirectPercent),
-    salesMarketingPercent: Number(excelInputs.salesMarketingPercent),
-    productTechPercent: Number(excelInputs.fulfillmentPercent),
-    monthlyPayroll: Number(excelInputs.monthlyPayroll),
-    payrollGrowth: Number(excelInputs.payrollGrowth),
-    otherFixedCosts: Number(excelInputs.otherFixed),
-    otherFixedGrowth: Number(excelInputs.otherFixedGrowth),
-    capexEvents,
-    equityEvents,
-    debtEvents,
-  };
-
-  if (excelInputs.fulfillmentChangeMonth && excelInputs.fulfillmentChangedPercent != null) {
-    const match = String(excelInputs.fulfillmentChangeMonth).match(/(\d+)/);
-    const fromMonth = match ? Number(match[1]) : 0;
-    if (fromMonth >= 1) {
-      inputs.productTechPercentChangeFromMonth = fromMonth;
-      inputs.productTechPercentAfterChange = Number(excelInputs.fulfillmentChangedPercent);
-    }
-  }
-
-  return inputs;
-}
 
 function expectCurrency(actual, expected, context) {
   const a = Number(actual);
@@ -274,16 +212,20 @@ describe("Excel golden-master scenarios", () => {
       expectCurrency(m12.ebitda, -229_999.7982, { scenario: "Scenario 1", month: 12, field: "ebitda" });
       expectCurrency(m12.closingCash, 270_101.1061, { scenario: "Scenario 1", month: 12, field: "closingCash" });
 
-      expectCurrency(m13.capex, 300_000, { scenario: "Scenario 1", month: 13, field: "capex" });
+      expectCurrency(m13.capex, 0, { scenario: "Scenario 1", month: 13, field: "capex" });
       expectCurrency(m13.ebitda, -230_459.7978, { scenario: "Scenario 1", month: 13, field: "ebitda" });
-      expectCurrency(m13.closingCash, -260_358.6916, { scenario: "Scenario 1", month: 13, field: "closingCash" });
+      expectCurrency(m13.closingCash, 39_641.3084, {
+        scenario: "Scenario 1",
+        month: 13,
+        field: "closingCash",
+      });
       expectCurrency(m13.closingCashExcludingCapex, 39_641.3084, {
         scenario: "Scenario 1",
         month: 13,
         field: "closingCashExcludingCapex",
       });
 
-      expectCurrency(m24.closingCash, -2_826_040.881, { scenario: "Scenario 1", month: 24, field: "closingCash" });
+      expectCurrency(m24.closingCash, -2_526_040.881, { scenario: "Scenario 1", month: 24, field: "closingCash" });
       expectCurrency(m24.closingCashExcludingCapex, -2_526_040.881, {
         scenario: "Scenario 1",
         month: 24,
@@ -291,11 +233,13 @@ describe("Excel golden-master scenarios", () => {
       });
     });
 
-    it("reports CapEx-driven cash-out comparison KPIs from including-CapEx series", () => {
+    it("reports cash-out from forecast series independently of CFO headline runway", () => {
       const { kpis, months } = runScenario("scenario1");
-      assert.equal(kpis.cashOutMonthIndex, months.find((m) => m.cashOut)?.monthIndex);
+      assert.equal(kpis.cashOutMonthIndex, 14);
+      assert.equal(kpis.cashOutMonthLabel, "Aug 2027");
+      assert.equal(kpis.cashOutMonthIndex, months.find((m) => m.closingCash < 0)?.monthIndex);
       assert.equal(kpis.capexComparison.cashOutMonthIncludingCapex, kpis.cashOutMonthIndex);
-      assert.ok(kpis.capexComparison.cumulativeCapex >= 300_000 - CURRENCY_TOL);
+      assert.equal(kpis.capexComparison.cumulativeCapex, 0);
       expectCurrency(kpis.sixMonthClosingCash, months[5].closingCash, {
         scenario: "Scenario 1",
         month: 6,
@@ -338,6 +282,8 @@ describe("Excel golden-master scenarios", () => {
         (months[0].netBurn + months[1].netBurn + months[2].netBurn) / 3;
       const rawRunway = m1.closingCash / avgNetBurn3;
       assert.ok(Math.abs(rawRunway - 12.30869952) < 0.0001);
+      assert.equal(kpis.headlineRunwayMonths, 12.3);
+      assert.equal(kpis.projectedRunwayMonths, 12.3);
       assert.equal(kpis.runwayMonths, 12.3);
       assert.equal(kpis.healthStatus, "Caution");
     });
@@ -376,14 +322,14 @@ describe("Excel golden-master scenarios", () => {
       });
       expectCurrency(m6.closingCash, 6_643_231.973, { scenario: "Scenario 2", month: 6, field: "closingCash" });
 
-      expectCurrency(m13.closingCash, 4_739_641.308, { scenario: "Scenario 2", month: 13, field: "closingCash" });
+      expectCurrency(m13.closingCash, 5_039_641.308, { scenario: "Scenario 2", month: 13, field: "closingCash" });
       expectCurrency(m13.closingCashExcludingCapex, 5_039_641.308, {
         scenario: "Scenario 2",
         month: 13,
         field: "closingCashExcludingCapex",
       });
 
-      expectCurrency(m24.closingCash, 2_173_959.119, { scenario: "Scenario 2", month: 24, field: "closingCash" });
+      expectCurrency(m24.closingCash, 2_473_959.119, { scenario: "Scenario 2", month: 24, field: "closingCash" });
       expectCurrency(m24.closingCashExcludingCapex, 2_473_959.119, {
         scenario: "Scenario 2",
         month: 24,

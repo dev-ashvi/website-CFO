@@ -1,4 +1,5 @@
 import { HEALTH_THRESHOLDS } from "./defaults.js";
+import { buildMonth1OperatingExpenseMix } from "./buildMonth1OperatingExpenseMix.js";
 
 /**
  * @param {number|null} runwayMonths
@@ -12,11 +13,12 @@ export function getHealthStatus(runwayMonths) {
 }
 
 /**
- * Fractional runway from a cash series (cash-out interpolation — CapEx comparison / legacy).
+ * Fractional runway from a cash series (cash-out interpolation — CapEx comparison / funding projection).
+ * Independent of CFO headline runway.
  * @param {import('./types.js').MonthlyProjection[]} months
  * @param {{ cashKey: string, cashOutKey: string, burnKey: string }} opts
  */
-function computeRunwayMonths(months, { cashKey, cashOutKey, burnKey }) {
+export function computeCashSeriesRunwayMonths(months, { cashKey, cashOutKey, burnKey }) {
   const cashOutMonth = months.find((m) => m[cashOutKey]) || null;
   const cashOutMonthIndex = cashOutMonth ? cashOutMonth.monthIndex : null;
 
@@ -43,18 +45,54 @@ function computeRunwayMonths(months, { cashKey, cashOutKey, burnKey }) {
 }
 
 /**
- * Excel headline runway: Month 1 ending cash ÷ 3-month average net burn (exc. CapEx).
- * Net burn = −EBITDA per month; average uses months 1–3 net burn values.
+ * CFO / Excel runway at a given 0-based month index:
+ * that month's ending cash ÷ forward 3-month average net operating burn (excl. CapEx).
+ * Do NOT derive from first-negative cash month.
  * @param {import('./types.js').MonthlyProjection[]} months
+ * @param {number} monthIndex0
+ * @returns {{
+ *   rawMonths: number,
+ *   endingCash: number,
+ *   threeMonthAvgNetBurn: number,
+ *   monthIndex: number,
+ *   monthLabel: string,
+ * }|null}
  */
-function computeHeadlineRunwayMonths(months) {
-  const m1 = months[0];
-  if (!m1 || m1.closingCash == null) return null;
-  const recent = months.slice(0, Math.min(3, months.length));
-  if (!recent.length) return null;
-  const avgNetBurn = average(recent.map((m) => m.netBurn));
+export function computeCfoRunwayAtMonth(months, monthIndex0) {
+  const m = months[monthIndex0];
+  if (!m || m.closingCash == null) return null;
+  const window = months.slice(monthIndex0, Math.min(monthIndex0 + 3, months.length));
+  if (!window.length) return null;
+  const avgNetBurn = average(window.map((row) => row.netBurn));
   if (avgNetBurn <= 0) return null;
-  return m1.closingCash / avgNetBurn;
+  return {
+    rawMonths: m.closingCash / avgNetBurn,
+    endingCash: m.closingCash,
+    threeMonthAvgNetBurn: avgNetBurn,
+    monthIndex: m.monthIndex,
+    monthLabel: m.monthLabel,
+  };
+}
+
+/**
+ * CFO / Excel headline runway — Month 1 ending cash ÷ forward 3-month average net burn (exc. CapEx).
+ * Do NOT derive from first-negative cash month.
+ * @param {import('./types.js').MonthlyProjection[]} months
+ * @returns {number|null}
+ */
+export function computeCfoHeadlineRunwayMonths(months) {
+  const detail = computeCfoRunwayAtMonth(months, 0);
+  return detail ? detail.rawMonths : null;
+}
+
+/**
+ * Expected cash-out from deterministic forecast — first month with closingCash < 0.
+ * Independent of CFO headline runway.
+ * @param {import('./types.js').MonthlyProjection[]} months
+ * @returns {import('./types.js').MonthlyProjection|null}
+ */
+export function findExpectedCashOutMonth(months) {
+  return months.find((m) => m.closingCash != null && m.closingCash < 0) || null;
 }
 
 /**
@@ -62,29 +100,28 @@ function computeHeadlineRunwayMonths(months) {
  * @returns {import('./types.js').SimulatorKpis}
  */
 export function calculateKpis(months) {
-  const cashOutMonth = months.find((m) => m.cashOut) || null;
+  const cashOutMonth = findExpectedCashOutMonth(months);
   const cashOutMonthIndex = cashOutMonth ? cashOutMonth.monthIndex : null;
 
-  const runwayMonths = computeHeadlineRunwayMonths(months);
-
-  const cashOutExcluding = months.find((m) => m.cashOutExcludingCapex) || null;
-  const cashOutMonthExcludingCapex = cashOutExcluding ? cashOutExcluding.monthIndex : null;
-
-  const runwayMonthsIncludingCapexSeries = computeRunwayMonths(months, {
+  const headlineRunwayMonthsRaw = computeCfoHeadlineRunwayMonths(months);
+  const cashSeriesRunwayMonthsRaw = computeCashSeriesRunwayMonths(months, {
     cashKey: "closingCash",
     cashOutKey: "cashOut",
     burnKey: "totalCashBurn",
   });
 
-  // Excluding CapEx: burn for fractional runway is operating cash burn only (no CapEx).
-  const runwayMonthsExcludingCapex = computeRunwayMonths(months, {
+  const cashOutExcluding =
+    months.find((m) => m.closingCashExcludingCapex != null && m.closingCashExcludingCapex < 0) ||
+    null;
+  const cashOutMonthExcludingCapex = cashOutExcluding ? cashOutExcluding.monthIndex : null;
+
+  const runwayMonthsExcludingCapex = computeCashSeriesRunwayMonths(months, {
     cashKey: "closingCashExcludingCapex",
     cashOutKey: "cashOutExcludingCapex",
     burnKey: "netBurn",
   });
 
   const avgMonthlyGrossBurn = average(months.map((m) => m.grossBurn));
-  // Forecast averages retained for runway / internal use (not primary displayed KPIs).
   const avgMonthlyNetBurn = average(months.map((m) => Math.max(m.netBurn, 0)));
   const avgMonthlyNetBurnIncludingCapex = average(
     months.map((m) => Math.max(m.netBurnIncludingCapex ?? m.totalCashBurn, 0)),
@@ -107,7 +144,6 @@ export function calculateKpis(months) {
     ebitdaMarginPercent: month1?.ebitdaMargin ?? 0,
   };
 
-  // Displayed Burn & Cash KPIs: Month 1 / current-period (signed; not averages).
   const monthlyGrossBurn = month1?.grossBurn ?? 0;
   const monthlyNetBurnExcludingCapex = month1?.netBurn ?? 0;
   const monthlyNetBurnIncludingCapex = month1?.netBurnIncludingCapex ?? month1?.totalCashBurn ?? 0;
@@ -116,7 +152,6 @@ export function calculateKpis(months) {
     monthlyNetBurnExcludingCapex,
     monthlyNetBurnIncludingCapex,
     monthlyGrossBurn,
-    // Backward-compatible aliases (forecast averages) — not shown as primary KPIs.
     avgNetBurnExcludingCapex: avgMonthlyNetBurn,
     avgNetBurnIncludingCapex: avgMonthlyNetBurnIncludingCapex,
     avgGrossBurn: avgMonthlyGrossBurn,
@@ -128,38 +163,18 @@ export function calculateKpis(months) {
   const techSum = sum(totalOpexSample.map((m) => m.productAndTechnology));
   const expenseBase = payrollSum + marketingSum + techSum + sum(totalOpexSample.map((m) => m.otherFixedCosts));
 
-  // Forecast averages retained separately (not shown in Expense Breakdown).
   const avgMonthlyVariableExpenses = average(months.map((m) => m.totalVariableExpenses));
   const avgMonthlyFixedExpenses = average(months.map((m) => m.totalFixedExpenses));
 
-  // Displayed Expense Breakdown: Month 1 snapshot only (CapEx / funding excluded).
-  const month1VariableExpenses = month1?.totalVariableExpenses ?? 0;
-  const month1FixedExpenses = month1?.totalFixedExpenses ?? 0;
-  const month1OperatingExpenses =
-    month1?.totalOperatingExpenses ?? month1VariableExpenses + month1FixedExpenses;
-  const variableShare =
-    month1OperatingExpenses > 0 ? month1VariableExpenses / month1OperatingExpenses : 0;
-  const fixedShare =
-    month1OperatingExpenses > 0 ? month1FixedExpenses / month1OperatingExpenses : 0;
+  const operatingMix = buildMonth1OperatingExpenseMix(month1);
 
-  const categoryTotals = {
-    COGS: month1?.cogs ?? 0,
-    "Other direct costs": month1?.otherDirectCosts ?? 0,
-    "Sales & marketing": month1?.salesAndMarketing ?? 0,
-    "Product & technology": month1?.productAndTechnology ?? 0,
-    Payroll: month1?.payroll ?? 0,
-    "Other fixed costs": month1?.otherFixedCosts ?? 0,
-  };
-  const largestEntry =
-    Object.entries(categoryTotals).sort((a, b) => b[1] - a[1])[0] || ["Payroll", 0];
-  const largestExpenseCategory = largestEntry[0];
-  const largestExpenseCategoryAmount = largestEntry[1];
-  const largestExpenseCategoryPercent =
-    month1OperatingExpenses > 0 ? largestExpenseCategoryAmount / month1OperatingExpenses : 0;
-
-  const runwayIncluding = runwayMonths == null ? null : round1(runwayMonths);
-  const runwayIncludingCapexSeries =
-    runwayMonthsIncludingCapexSeries == null ? null : round1(runwayMonthsIncludingCapexSeries);
+  const headlineRunwayMonths =
+    headlineRunwayMonthsRaw == null ? null : round1(headlineRunwayMonthsRaw);
+  /** Default primary runway with no future funding = CFO headline methodology. */
+  const runwayIncluding = headlineRunwayMonths;
+  const cashSeriesRunwayMonths =
+    cashSeriesRunwayMonthsRaw == null ? null : round1(cashSeriesRunwayMonthsRaw);
+  const runwayIncludingCapexSeries = cashSeriesRunwayMonths;
   const runwayExcluding =
     runwayMonthsExcludingCapex == null ? null : round1(runwayMonthsExcludingCapex);
 
@@ -167,14 +182,17 @@ export function calculateKpis(months) {
   if (
     cashOutMonthIndex != null &&
     cashOutMonthExcludingCapex != null &&
-    runwayIncluding != null &&
+    runwayIncludingCapexSeries != null &&
     runwayExcluding != null
   ) {
-    capexRunwayImpactMonths = round1(runwayExcluding - runwayIncluding);
-  } else if (cashOutMonthIndex != null && cashOutMonthExcludingCapex == null && runwayIncluding != null) {
-    // Including hits cash-out; excluding stays positive in horizon — impact is at least the remaining buffer.
+    capexRunwayImpactMonths = round1(runwayExcluding - runwayIncludingCapexSeries);
+  } else if (
+    cashOutMonthIndex != null &&
+    cashOutMonthExcludingCapex == null &&
+    runwayIncludingCapexSeries != null
+  ) {
     capexRunwayImpactMonths =
-      runwayExcluding != null ? round1(runwayExcluding - runwayIncluding) : null;
+      runwayExcluding != null ? round1(runwayExcluding - runwayIncludingCapexSeries) : null;
   } else if (cashOutMonthIndex == null && cashOutMonthExcludingCapex == null) {
     capexRunwayImpactMonths = 0;
   }
@@ -183,6 +201,29 @@ export function calculateKpis(months) {
 
   return {
     runwayMonths: runwayIncluding,
+    headlineRunwayMonths,
+    cashSeriesRunwayMonths,
+    projectedRunwayMonths: runwayIncluding,
+    runwayBeforePlannedFundingMonths: null,
+    runwayAfterPlannedFundingMonths: null,
+    plannedFunding: {
+      hasFutureFunding: false,
+      totalAmount: 0,
+      eventCount: 0,
+      equityAmount: 0,
+      debtOtherAmount: 0,
+      firstFundingMonth: null,
+      firstFundingDate: null,
+      events: [],
+    },
+    fundingRunwayImpactMonths: null,
+    cfoFundingRunway: {
+      hasFutureFunding: false,
+      runwayBeforeFunding: null,
+      runwayAfterFunding: null,
+      fundingRunwayImpactMonths: null,
+      fundingRunwayImpactDisplayMonths: null,
+    },
     cashOutMonthLabel: cashOutMonth
       ? cashOutMonth.monthLabel
       : "Beyond 24-month horizon",
@@ -204,7 +245,7 @@ export function calculateKpis(months) {
     avgEbitda,
     sixMonthClosingCash: six?.closingCash ?? null,
     twelveMonthClosingCash: twelve?.closingCash ?? null,
-    healthStatus: getHealthStatus(runwayMonths),
+    healthStatus: getHealthStatus(runwayIncluding),
     financialPerformance,
     burnMetrics,
     costMix: {
@@ -213,18 +254,7 @@ export function calculateKpis(months) {
       technologyPercentOfExpenses: expenseBase ? techSum / expenseBase : 0,
     },
     expenseMix: {
-      period: "month1",
-      variableExpenses: month1VariableExpenses,
-      fixedExpenses: month1FixedExpenses,
-      variableSharePercent: variableShare,
-      fixedSharePercent: fixedShare,
-      largestExpenseCategory,
-      largestExpenseCategoryAmount,
-      largestExpenseCategoryPercent,
-      // Backward-compatible aliases (Month 1 shares / values — not averages).
-      variableExpensePercent: variableShare,
-      fixedExpensePercent: fixedShare,
-      // Forecast averages kept separately for internal / legacy consumers.
+      ...operatingMix,
       averageMonthlyVariableExpenses: avgMonthlyVariableExpenses,
       averageMonthlyFixedExpenses: avgMonthlyFixedExpenses,
     },
@@ -237,6 +267,8 @@ export function calculateKpis(months) {
       cashOutMonthLabelExcludingCapex: cashOutExcluding
         ? cashOutExcluding.monthLabel
         : "Beyond 24-month horizon",
+      excludingCashAtIncludingCashOutMonth: cashOutMonth?.closingCashExcludingCapex ?? null,
+      capexInIncludingCashOutMonth: cashOutMonth?.capex ?? 0,
       runwayMonthsIncludingCapex: runwayIncludingCapexSeries,
       runwayMonthsExcludingCapex: runwayExcluding,
       month24CashIncludingCapex: last?.closingCash ?? null,
