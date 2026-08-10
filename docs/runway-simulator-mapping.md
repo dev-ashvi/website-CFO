@@ -132,15 +132,69 @@ Excel’s “Total Opex” line remains payroll + other fixed for the **EBITDA**
 
 ## Burn metric definitions (web)
 
+### Engine (per month)
+
 | Metric | Definition | Notes |
 |---|---|---|
-| **Gross burn** (monthly) | Total variable + total fixed | Total **cash operating outflow**. CapEx excluded (capital). |
-| **Net burn** (monthly) | −EBITDA = Gross burn − Revenue | Operating cash loss **after** revenue. CapEx and funding inflows excluded. |
-| **Total cash burn** (runway math) | −EBITDA + CapEx = Net burn + CapEx | Used for cash roll-forward / runway. |
-| **Avg monthly gross burn** | Mean of monthly gross burn over 24 months | |
-| **Avg monthly net burn** | Mean of `max(netBurn, 0)` over 24 months | Profitable months contribute 0 so the average reflects cash-consuming months only. |
+| **Gross burn** | Total variable + total fixed | Operating cash outflow **before** revenue. CapEx excluded. Exposed as `grossBurn`. |
+| **Net burn excl. CapEx** | −EBITDA = Gross burn − Revenue | Operating cash burn **after** revenue. CapEx and funding excluded. Exposed as `netBurn`. |
+| **Net burn incl. CapEx** | −EBITDA + CapEx = `totalCashBurn` | Net burn plus that month’s CapEx. Funding excluded. Exposed as `netBurnIncludingCapex`. |
 
-Algebra check: `grossBurn − revenue = −EBITDA = netBurn`.
+Algebra check: `grossBurn − revenue = −EBITDA = netBurn`. Funding never enters burn metrics.
+
+### Displayed Burn & Cash KPIs (Month 1 / current period)
+
+These are the primary values shown on the results page and in the AI assessment `burnMetrics` payload. They are **not** averages.
+
+| Card | Definition | Engine fields |
+|---|---|---|
+| **Monthly gross burn** | Month 1 operating outflow before revenue | `months[0].grossBurn` → `burnMetrics.monthlyGrossBurn` |
+| **Monthly net burn (excl. CapEx)** | Month 1 operating burn after revenue | `months[0].netBurn` → `burnMetrics.monthlyNetBurnExcludingCapex` |
+| **Monthly net burn (incl. CapEx)** | Month 1 operating burn after revenue + Month 1 CapEx | `months[0].netBurnIncludingCapex` → `burnMetrics.monthlyNetBurnIncludingCapex` |
+
+Subtitle: “Current monthly burn based on your starting assumptions.”
+
+Signed values are shown as-is (negative net burn = cash-flow positive month). Expected cash-out remains on the **runway hero only** — not repeated in Burn & Cash.
+
+### Internal forecast averages (not primary KPIs)
+
+Retained for runway math, charts, and backward compatibility. Do not confuse with displayed Month 1 burn cards.
+
+| Metric | Definition | Fields |
+|---|---|---|
+| Avg monthly gross burn | Mean of monthly gross burn over 24 months | `avgMonthlyGrossBurn` / `burnMetrics.avgGrossBurn` |
+| Avg monthly net burn (excl. CapEx) | Mean of `max(netBurn, 0)` over 24 months | `avgMonthlyNetBurn` / `burnMetrics.avgNetBurnExcludingCapex` |
+| Avg monthly net burn (incl. CapEx) | Mean of `max(totalCashBurn, 0)` over 24 months | `avgMonthlyNetBurnIncludingCapex` / `burnMetrics.avgNetBurnIncludingCapex` |
+
+What-if scenario comparisons use the same **Month 1 net burn (excl. CapEx)** definition for base and scenario (`snapshotComparisonMetrics.avgNetBurn`).
+
+## Results KPI card definitions (Month 1 unless noted)
+
+Displayed under the runway hero. All values come from the deterministic engine — the AI assessment may explain them but must not recalculate.
+
+**Page order:** (1) Runway hero → (2) Financial Performance → (3) Burn & Cash → (4) charts / Cash Flow Intelligence.
+
+### Financial Performance
+
+| Card | Absolute value | Secondary | Engine fields |
+|---|---|---|---|
+| **Revenue** | Month 1 revenue | Label: “Current monthly revenue” | `months[0].revenue` → `financialPerformance.revenue` |
+| **Gross Margin** | Month 1 gross profit | Gross margin % | `grossProfit`, `grossMargin` |
+| **CM1** | Month 1 CM1 | CM1 margin % | `cm1`, `cm1Margin` |
+| **EBITDA** | Month 1 EBITDA | EBITDA margin % | `ebitda`, `ebitdaMargin` |
+
+### Formula notes (unchanged workbook logic)
+
+| Metric | Formula |
+|---|---|
+| **Gross Profit** | Revenue − COGS |
+| **Gross Margin %** | Gross Profit ÷ Revenue |
+| **CM1** | Gross Profit − Other Direct − S&M *(workbook month-1 path applied every month)* |
+| **CM1 Margin %** | CM1 ÷ Revenue |
+| **EBITDA** | CM2 − Payroll − Other fixed |
+| **EBITDA Margin %** | EBITDA ÷ Revenue |
+
+> **Ambiguity resolved:** Some product copy describes “gross margin after COGS and other direct costs.” The **approved engine / Excel Gross Profit** line is **Revenue − COGS only**. Other direct costs are deducted on the path to CM1, not inside Gross Profit. KPI cards and tooltips follow the engine.
 
 ## Closing cash including vs excluding CapEx
 
@@ -196,17 +250,26 @@ Identity (when both series start from the same cash):
 - Deterministic comparison caption + optional CapEx impact note
 - What-if scenario charts continue to compare **including-CapEx** cash only (base vs scenario)
 
-## Result metrics — expense mix
+## Result metrics — expense mix (Expense Breakdown)
 
-From the 24-month projection (deterministic):
+**Expense Breakdown is a Month 1 snapshot** — not a 24-month forecast average.
+
+It answers: “What does my cost structure look like today?”  
+Cash Flow Intelligence remains the full-horizon view of cash movement over time.
 
 | Field | Definition |
 |---|---|
-| `averageMonthlyVariableExpenses` | Mean of `totalVariableExpenses` |
-| `averageMonthlyFixedExpenses` | Mean of `totalFixedExpenses` |
-| `variableExpensePercent` | Variable ÷ (Variable + Fixed) |
-| `fixedExpensePercent` | Fixed ÷ (Variable + Fixed) |
-| `largestExpenseCategory` | Highest average among COGS, other direct, S&M, product/tech, payroll, other fixed |
+| `period` | Always `"month1"` for the displayed mix |
+| `variableExpenses` | Month 1 COGS + other direct + S&M + product/tech |
+| `fixedExpenses` | Month 1 payroll + other fixed costs |
+| `variableSharePercent` | Month 1 variable ÷ Month 1 operating expenses (0–1 in KPIs; percent in AI payload) |
+| `fixedSharePercent` | Month 1 fixed ÷ Month 1 operating expenses |
+| `largestExpenseCategory` | Highest Month 1 category among COGS, other direct, S&M, product/tech, payroll, other fixed |
+| `largestExpenseCategoryAmount` | Absolute Month 1 amount for that category |
+
+CapEx and funding are excluded. Shares sum to 100% (within rounding).
+
+Forecast averages (`averageMonthlyVariableExpenses` / `averageMonthlyFixedExpenses`) may still exist internally for legacy consumers — they are **not** the displayed Expense Breakdown KPIs.
 
 ## What-if cost scenarios
 

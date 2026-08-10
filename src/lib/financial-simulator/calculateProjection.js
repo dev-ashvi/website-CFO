@@ -157,6 +157,8 @@ export function calculateProjection(inputs) {
     const grossBurn = totalOperatingExpenses;
     // Net burn = operating cash loss after revenue (= −EBITDA). CapEx / funding excluded.
     const netBurn = -ebitda;
+    // Net burn including CapEx (= totalCashBurn). Funding excluded.
+    const netBurnIncludingCapex = totalCashBurn;
 
     const open = openingCash;
     const raw = open + netCashFlow;
@@ -184,6 +186,8 @@ export function calculateProjection(inputs) {
       grossProfit,
       grossMargin: revenue === 0 ? 0 : grossProfit / revenue,
       salesAndMarketing,
+      cm1,
+      cm1Margin: revenue === 0 ? 0 : cm1 / revenue,
       productAndTechnology,
       payroll: payrollEff,
       otherFixedCosts: otherFixedEff,
@@ -201,6 +205,7 @@ export function calculateProjection(inputs) {
       netCashFlowExcludingCapex,
       grossBurn,
       netBurn,
+      netBurnIncludingCapex,
       openingCash: open,
       closingCash,
       closingCashIncludingCapex: closingCash,

@@ -7,11 +7,16 @@ import { monthFullLabelFromStart } from "../calculateProjection.js";
  */
 export function snapshotComparisonMetrics(sim) {
   const last = sim.months[sim.months.length - 1];
+  const month1 = sim.months[0];
   return {
     runwayMonths: sim.kpis.runwayMonths,
     cashOutMonth: sim.kpis.cashOutMonthLabel,
     cashOutMonthIndex: sim.kpis.cashOutMonthIndex,
-    avgNetBurn: sim.kpis.avgMonthlyNetBurn,
+    // Month 1 net burn excl. CapEx — aligned with displayed Burn & Cash KPI (not 24-mo average).
+    avgNetBurn: month1?.netBurn ?? sim.kpis.burnMetrics?.monthlyNetBurnExcludingCapex ?? 0,
+    month1NetBurnExcludingCapex: month1?.netBurn ?? 0,
+    month1NetBurnIncludingCapex: month1?.netBurnIncludingCapex ?? month1?.totalCashBurn ?? 0,
+    month1GrossBurn: month1?.grossBurn ?? 0,
     month24ClosingCash: last?.closingCash ?? null,
   };
 }
@@ -65,7 +70,7 @@ export function buildScenarioInsight({
     const burnDelta = delta.avgNetBurn;
     const burnText =
       burnDelta != null && burnDelta < 0
-        ? ` lowers average net burn by ${money(Math.abs(burnDelta))}`
+        ? ` lowers monthly net burn by ${money(Math.abs(burnDelta))}`
         : "";
     const runwayText =
       runwayDelta != null && runwayDelta > 0.05

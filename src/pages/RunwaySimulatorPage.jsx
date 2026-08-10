@@ -6,6 +6,7 @@ import { SimulatorCharts } from "../components/runway-simulator/SimulatorCharts.
 import { CustomizedReportCta } from "../components/runway-simulator/CustomizedReportCta.jsx";
 import { WhatIfPanel } from "../components/runway-simulator/WhatIfPanel.jsx";
 import { CurrencySelect } from "../components/runway-simulator/CurrencySelect.jsx";
+import { ResultsSummaryKpis } from "../components/runway-simulator/ResultsSummaryKpis.jsx";
 import {
   FORECAST_MONTHS,
   INDUSTRY_OPTIONS,
@@ -212,8 +213,10 @@ export default function RunwaySimulatorPage() {
       metrics: {
         runwayMonths: sim.kpis.runwayMonths,
         cashOutMonth: sim.kpis.cashOutMonthLabel,
-        monthlyNetBurn: Math.round(sim.kpis.avgMonthlyNetBurn),
-        monthlyGrossBurn: Math.round(sim.kpis.avgMonthlyGrossBurn),
+        monthlyNetBurn: Math.round(sim.kpis.burnMetrics.monthlyNetBurnExcludingCapex),
+        monthlyGrossBurn: Math.round(sim.kpis.burnMetrics.monthlyGrossBurn),
+        avgMonthlyNetBurn: Math.round(sim.kpis.avgMonthlyNetBurn),
+        avgMonthlyGrossBurn: Math.round(sim.kpis.avgMonthlyGrossBurn),
         grossMarginPercent: Math.round(sim.kpis.avgGrossMargin * 1000) / 10,
         monthlyRevenueGrowthPercent:
           normalized.revenueMode === "simple"
@@ -224,17 +227,33 @@ export default function RunwaySimulatorPage() {
         twelveMonthClosingCash: sim.kpis.twelveMonthClosingCash,
         healthStatus: sim.kpis.healthStatus,
       },
+      financialPerformance: {
+        revenue: Math.round(sim.kpis.financialPerformance.revenue),
+        grossProfit: Math.round(sim.kpis.financialPerformance.grossProfit),
+        grossMarginPercent: Math.round(sim.kpis.financialPerformance.grossMarginPercent * 1000) / 10,
+        cm1: Math.round(sim.kpis.financialPerformance.cm1),
+        cm1MarginPercent: Math.round(sim.kpis.financialPerformance.cm1MarginPercent * 1000) / 10,
+        ebitda: Math.round(sim.kpis.financialPerformance.ebitda),
+        ebitdaMarginPercent: Math.round(sim.kpis.financialPerformance.ebitdaMarginPercent * 1000) / 10,
+      },
+      burnMetrics: {
+        monthlyNetBurnExcludingCapex: Math.round(sim.kpis.burnMetrics.monthlyNetBurnExcludingCapex),
+        monthlyNetBurnIncludingCapex: Math.round(sim.kpis.burnMetrics.monthlyNetBurnIncludingCapex),
+        monthlyGrossBurn: Math.round(sim.kpis.burnMetrics.monthlyGrossBurn),
+      },
       costMix: {
         payrollPercentOfExpenses: Math.round(sim.kpis.costMix.payrollPercentOfExpenses * 100),
         marketingPercentOfExpenses: Math.round(sim.kpis.costMix.marketingPercentOfExpenses * 100),
         technologyPercentOfExpenses: Math.round(sim.kpis.costMix.technologyPercentOfExpenses * 100),
       },
       expenseMix: {
-        averageMonthlyVariableExpenses: Math.round(sim.kpis.expenseMix.averageMonthlyVariableExpenses),
-        averageMonthlyFixedExpenses: Math.round(sim.kpis.expenseMix.averageMonthlyFixedExpenses),
-        variableExpensePercent: Math.round(sim.kpis.expenseMix.variableExpensePercent * 1000) / 10,
-        fixedExpensePercent: Math.round(sim.kpis.expenseMix.fixedExpensePercent * 1000) / 10,
+        period: "month1",
+        variableExpenses: Math.round(sim.kpis.expenseMix.variableExpenses),
+        fixedExpenses: Math.round(sim.kpis.expenseMix.fixedExpenses),
+        variableSharePercent: Math.round(sim.kpis.expenseMix.variableSharePercent * 1000) / 10,
+        fixedSharePercent: Math.round(sim.kpis.expenseMix.fixedSharePercent * 1000) / 10,
         largestExpenseCategory: sim.kpis.expenseMix.largestExpenseCategory,
+        largestExpenseCategoryAmount: Math.round(sim.kpis.expenseMix.largestExpenseCategoryAmount || 0),
       },
       currency: normalized.currency,
     };
@@ -305,6 +324,15 @@ export default function RunwaySimulatorPage() {
     [result, viewResult],
   );
 
+  const applyAiCfoScenario = useCallback((scenarioInputs) => {
+    const sim = runSimulation(scenarioInputs);
+    if (sim.ok) {
+      setResult(sim);
+      setViewResult(null);
+      setViewMode({ kind: "scenario", id: "current", label: "Current" });
+    }
+  }, []);
+
   const statusTone = useMemo(() => {
     const s = display?.kpis?.healthStatus;
     if (s === "Critical") return "border-red-200 bg-red-50 text-[#b91c1c]";
@@ -368,10 +396,10 @@ export default function RunwaySimulatorPage() {
                 />
                 WYZ Cashflow Assessment Tool
               </div>
-              <h1 className="text-balance text-3xl font-normal leading-[1.12] tracking-tight text-slate-800 sm:text-4xl md:text-5xl">
-                Understand Your Runway —
+              <h1 className="text-balance text-[2.4rem] md:text-[2.6rem] font-semibold tracking-tight leading-[1.15] text-[#1a3673]">
+                Understand your runway —
                 <br className="hidden sm:block" />{" "}
-                <span className="text-[#fc7d25]">Plan With More Clarity</span>
+                <span className="text-[#fc7d25]">Plan with more clarity</span>
               </h1>
               <p className="mx-auto mt-5 max-w-2xl text-base font-light leading-relaxed text-slate-500 md:mt-6 md:text-lg">
                 Enter a few business assumptions to generate a 24-month cash-flow projection, runway estimate, and
@@ -818,7 +846,7 @@ export default function RunwaySimulatorPage() {
                 <div>
                   <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#fc7d25]">Results</p>
                   <h2 className="mt-1 text-2xl font-semibold tracking-tight text-[#1a3673] md:text-[1.85rem]">
-                    Your free projection
+                    Your projection
                   </h2>
                   <p className="mt-1 text-sm text-slate-500">
                     {viewMode?.id !== "current"
@@ -868,45 +896,7 @@ export default function RunwaySimulatorPage() {
                 <p className="mt-4 max-w-2xl text-sm leading-relaxed text-slate-500">{runwayExplain}</p>
               </section>
 
-              <div className="space-y-3">
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                  <Metric
-                    label="Avg monthly net burn"
-                    value={formatMoney(display.kpis.avgMonthlyNetBurn, { currency: display.inputs.currency })}
-                    help={NET_BURN_HELP}
-                    primary
-                  />
-                  <Metric label="Expected cash-out" value={display.kpis.cashOutMonthLabel} primary />
-                  <Metric
-                    label="Cash after 6 months"
-                    value={formatHorizonCash(
-                      display.kpis.sixMonthClosingCash,
-                      6,
-                      display.kpis.cashOutMonthIndex,
-                      { currency: display.inputs.currency },
-                    )}
-                    primary
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-                  <Metric
-                    label="Avg monthly gross burn"
-                    value={formatMoney(display.kpis.avgMonthlyGrossBurn, { currency: display.inputs.currency })}
-                    help={GROSS_BURN_HELP}
-                  />
-                  <Metric label="Gross margin (avg)" value={formatPercent(display.kpis.avgGrossMargin)} />
-                  <Metric label="EBITDA (month 1)" value={formatMoney(display.kpis.month1Ebitda, { currency: display.inputs.currency })} />
-                  <Metric
-                    label="Cash after 12 months"
-                    value={formatHorizonCash(
-                      display.kpis.twelveMonthClosingCash,
-                      12,
-                      display.kpis.cashOutMonthIndex,
-                      { currency: display.inputs.currency },
-                    )}
-                  />
-                </div>
-              </div>
+              <ResultsSummaryKpis kpis={display.kpis} currency={display.inputs.currency} />
 
               <SimulatorCharts
                 months={display.months}
@@ -917,6 +907,7 @@ export default function RunwaySimulatorPage() {
                 currency={display.inputs.currency}
                 viewMode={viewMode}
                 onApplyOverlay={applyOverlay}
+                onApplyScenario={applyAiCfoScenario}
               />
 
               {buildExpenseInsights(display).length > 0 && (
@@ -929,8 +920,6 @@ export default function RunwaySimulatorPage() {
                   </ul>
                 </section>
               )}
-
-              <WhatIfPanel baseInputs={result.inputs} baseResult={result} currency={display.inputs.currency} />
 
               <section className="rounded-2xl border border-[rgba(26,54,115,0.12)] bg-white p-5 shadow-[0_8px_32px_rgba(26,54,115,0.07)] md:rounded-[1.35rem] md:p-7">
                 <div className="flex items-start gap-3">
@@ -977,6 +966,8 @@ export default function RunwaySimulatorPage() {
                   </div>
                 )}
               </section>
+
+              <WhatIfPanel baseInputs={result.inputs} baseResult={result} currency={display.inputs.currency} />
 
               <CustomizedReportCta
                 priority={result.inputs.mainPriority}

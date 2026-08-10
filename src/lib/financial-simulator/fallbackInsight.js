@@ -32,10 +32,12 @@ export function buildFallbackInsight(ctx) {
 function buildSummary({ runway, status, cashOut, priority, expenseMix }) {
   const runwayLabel = formatMonths(runway);
   const hasCashOut = cashOut && cashOut !== "Beyond 24-month horizon";
-  const varPct = expenseMix?.variableExpensePercent;
+  const varPct = shareAsFraction(
+    expenseMix?.variableSharePercent ?? expenseMix?.variableExpensePercent,
+  );
   const mixNote =
     varPct != null && varPct >= 0.55
-      ? " Variable expenses account for most of your operating outflow."
+      ? " Variable expenses account for most of your Month 1 operating outflow."
       : varPct != null && varPct <= 0.45
         ? " Your fixed-cost base limits short-term flexibility."
         : "";
@@ -84,11 +86,11 @@ function buildRisks(m, costMix, expenseMix, currency) {
   if (payrollHigh) {
     risks.push("Payroll is a large share of operating spend, which can limit near-term flexibility.");
   }
-  if ((expenseMix?.fixedExpensePercent || 0) >= 0.55) {
+  if (shareAsFraction(expenseMix?.fixedSharePercent ?? expenseMix?.fixedExpensePercent) >= 0.55) {
     risks.push("Your fixed-cost base limits short-term flexibility.");
   }
   if (expenseMix?.largestExpenseCategory) {
-    risks.push(`${expenseMix.largestExpenseCategory} is the largest expense category.`);
+    risks.push(`${expenseMix.largestExpenseCategory} is the largest Month 1 expense category.`);
   }
   if (risks.length < 3) {
     risks.push("Simplified assumptions (no working capital or tax) may understate real cash needs.");
@@ -113,7 +115,7 @@ function buildActions(priority, cashOut, expenseMix) {
     actions.push("Identify two or three cost or timing changes that would extend runway within the next quarter.");
   } else if (/growth|revenue/i.test(priority)) {
     actions.push("Tie growth plans to cash impact so revenue gains do not outpace funding capacity.");
-  } else if ((expenseMix?.variableExpensePercent || 0) >= 0.55) {
+  } else if (shareAsFraction(expenseMix?.variableSharePercent ?? expenseMix?.variableExpensePercent) >= 0.55) {
     actions.push("Pressure-test variable cost rates (COGS, marketing, product) against growth plans.");
   } else {
     actions.push("Translate this projection into a short list of decisions for the next two quarters.");
@@ -140,4 +142,11 @@ function buildPriorityNote(priority, m) {
     return `Keep decisions aligned with your stated priority while watching runway and burn as leading indicators.`;
   }
   return "Treat runway and burn efficiency as the primary near-term control metrics.";
+}
+
+/** Accept 0–1 fraction or 0–100 percent from KPI / assessment payload. */
+function shareAsFraction(value) {
+  if (value == null || Number.isNaN(Number(value))) return null;
+  const n = Number(value);
+  return n > 1 ? n / 100 : n;
 }

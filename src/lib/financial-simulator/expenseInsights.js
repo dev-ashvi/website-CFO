@@ -10,23 +10,26 @@ export function buildExpenseInsights(sim) {
   if (!months.length || !mix) return [];
 
   const insights = [];
-  const variablePct = Math.round((mix.variableExpensePercent || 0) * 100);
-  const fixedPct = Math.round((mix.fixedExpensePercent || 0) * 100);
+  const variablePct = Math.round(
+    (mix.variableSharePercent ?? mix.variableExpensePercent ?? 0) * 100,
+  );
+  const fixedPct = Math.round((mix.fixedSharePercent ?? mix.fixedExpensePercent ?? 0) * 100);
 
   if (variablePct + fixedPct > 0) {
-    insights.push(`Variable expenses account for ${variablePct}% of operating outflow.`);
-    insights.push(`Fixed expenses account for ${fixedPct}% of operating outflow.`);
+    insights.push(`Variable expenses account for ${variablePct}% of Month 1 operating outflow.`);
+    insights.push(`Fixed expenses account for ${fixedPct}% of Month 1 operating outflow.`);
   }
 
   if (mix.largestExpenseCategory) {
-    insights.push(`${mix.largestExpenseCategory} is the largest expense category.`);
+    insights.push(`${mix.largestExpenseCategory} is the largest Month 1 expense category.`);
   }
 
-  const avgPayroll = average(months.map((m) => m.payroll));
-  const avgOtherFixed = average(months.map((m) => m.otherFixedCosts));
-  if (avgPayroll >= avgOtherFixed && mix.averageMonthlyFixedExpenses > 0) {
+  const fixedTotal = mix.fixedExpenses ?? mix.averageMonthlyFixedExpenses ?? 0;
+  const m1Payroll = months[0]?.payroll ?? 0;
+  const m1OtherFixed = months[0]?.otherFixedCosts ?? 0;
+  if (m1Payroll >= m1OtherFixed && fixedTotal > 0) {
     insights.push("Payroll is the largest fixed expense.");
-  } else if (avgOtherFixed > avgPayroll && mix.averageMonthlyFixedExpenses > 0) {
+  } else if (m1OtherFixed > m1Payroll && fixedTotal > 0) {
     insights.push("Other fixed costs are the largest fixed expense.");
   }
 
@@ -45,9 +48,4 @@ export function buildExpenseInsights(sim) {
   }
 
   return insights.slice(0, 5);
-}
-
-function average(arr) {
-  if (!arr.length) return 0;
-  return arr.reduce((a, b) => a + b, 0) / arr.length;
 }

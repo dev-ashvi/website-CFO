@@ -1,7 +1,5 @@
 import { useMemo } from "react";
 import {
-  Area,
-  AreaChart,
   CartesianGrid,
   Cell,
   Legend,
@@ -35,6 +33,7 @@ export function SimulatorCharts({
   currency = "INR",
   viewMode,
   onApplyOverlay,
+  onApplyScenario,
 }) {
   const money = (v) => formatMoney(v, { currency });
   const cashData = useMemo(
@@ -62,16 +61,6 @@ export function SimulatorCharts({
   const cashCaption = useMemo(() => buildClosingCashCaption(capexComparison), [capexComparison]);
   const capexNote = useMemo(() => buildCapexImpactNote(capexComparison), [capexComparison]);
 
-  const expenseOverTime = useMemo(
-    () =>
-      months.map((m) => ({
-        label: m.monthLabel,
-        variable: m.totalVariableExpenses,
-        fixed: m.totalFixedExpenses,
-      })),
-    [months],
-  );
-
   const revExpData = useMemo(
     () =>
       months.map((m) => ({
@@ -92,18 +81,26 @@ export function SimulatorCharts({
   }, [revExpData]);
 
   const mixPie = useMemo(() => {
-    const variable = expenseMix?.averageMonthlyVariableExpenses ?? 0;
-    const fixed = expenseMix?.averageMonthlyFixedExpenses ?? 0;
+    const variable = expenseMix?.variableExpenses ?? expenseMix?.averageMonthlyVariableExpenses ?? 0;
+    const fixed = expenseMix?.fixedExpenses ?? expenseMix?.averageMonthlyFixedExpenses ?? 0;
+    const total = variable + fixed;
     return [
-      { name: "Variable expenses", value: variable, color: ORANGE },
-      { name: "Fixed expenses", value: fixed, color: NAVY },
+      {
+        name: "Variable expenses",
+        value: variable,
+        share: total > 0 ? variable / total : 0,
+        color: ORANGE,
+      },
+      {
+        name: "Fixed expenses",
+        value: fixed,
+        share: total > 0 ? fixed / total : 0,
+        color: NAVY,
+      },
     ];
   }, [expenseMix]);
 
   const ebitdaPoints = useMemo(() => {
-    const m1 = months[0];
-    const m12 = months[11];
-    const m24 = months[months.length - 1];
     const values = months.map((m) => m.ebitda);
     const allNeg = values.every((v) => v < 0);
     const allPos = values.every((v) => v > 0);
@@ -116,12 +113,13 @@ export function SimulatorCharts({
     const max = Math.max(...values);
     const pad = Math.max(Math.abs(max - min) * 0.15, Math.abs(max) * 0.05, 1000);
     return {
-      m1,
-      m12,
-      m24,
       caption,
       domain: [min - pad, max + pad],
-      spark: months.map((m) => ({ label: m.monthLabel, ebitda: m.ebitda })),
+      series: months.map((m) => ({
+        label: m.monthLabel,
+        ebitda: m.ebitda,
+        ebitdaMargin: m.ebitdaMargin ?? 0,
+      })),
     };
   }, [months]);
 
@@ -130,32 +128,44 @@ export function SimulatorCharts({
   return (
     <div className="space-y-4">
       {expenseMix ? (
-        <ChartCard title="Expense breakdown">
+        <ChartCard
+          title="Expense breakdown"
+          badge="MONTH 1 SNAPSHOT"
+          subtitle="Month 1 expense mix based on your starting assumptions"
+        >
           <div className="grid grid-cols-1 gap-5 md:grid-cols-[1fr_1.1fr] md:items-center">
             <div className="space-y-3">
               <MixStat
-                label="Avg monthly variable expenses"
-                value={money(expenseMix.averageMonthlyVariableExpenses)}
+                label="Variable expenses"
+                value={money(expenseMix.variableExpenses ?? expenseMix.averageMonthlyVariableExpenses)}
                 tone="orange"
-                help="Costs that change with revenue, such as COGS, direct costs, marketing, and product or technology expenses."
+                help="Month 1 costs that scale with revenue according to the current model."
               />
               <MixStat
-                label="Avg monthly fixed expenses"
-                value={money(expenseMix.averageMonthlyFixedExpenses)}
+                label="Fixed expenses"
+                value={money(expenseMix.fixedExpenses ?? expenseMix.averageMonthlyFixedExpenses)}
                 tone="navy"
-                help="Monthly costs that do not directly change with revenue, such as payroll and other recurring overheads."
+                help="Month 1 recurring costs that do not directly scale with revenue."
               />
               <div className="grid grid-cols-2 gap-2">
-                <div className="rounded-xl border border-[rgba(252,125,37,0.25)] bg-[rgba(252,125,37,0.06)] px-3 py-2.5">
+                <div
+                  className="rounded-xl border border-[rgba(252,125,37,0.25)] bg-[rgba(252,125,37,0.06)] px-3 py-2.5"
+                  title="Variable expenses as a percentage of Month 1 operating expenses."
+                >
                   <p className="text-[11px] font-medium text-slate-500">Variable share</p>
                   <p className="mt-0.5 text-sm font-semibold text-[#fc7d25]">
-                    {formatPercent(expenseMix.variableExpensePercent)}
+                    {formatPercent(
+                      expenseMix.variableSharePercent ?? expenseMix.variableExpensePercent,
+                    )}
                   </p>
                 </div>
-                <div className="rounded-xl border border-[rgba(26,54,115,0.18)] bg-[#f4f8ff] px-3 py-2.5">
+                <div
+                  className="rounded-xl border border-[rgba(26,54,115,0.18)] bg-[#f4f8ff] px-3 py-2.5"
+                  title="Fixed expenses as a percentage of Month 1 operating expenses."
+                >
                   <p className="text-[11px] font-medium text-slate-500">Fixed share</p>
                   <p className="mt-0.5 text-sm font-semibold text-[#1a3673]">
-                    {formatPercent(expenseMix.fixedExpensePercent)}
+                    {formatPercent(expenseMix.fixedSharePercent ?? expenseMix.fixedExpensePercent)}
                   </p>
                 </div>
               </div>
@@ -163,6 +173,15 @@ export function SimulatorCharts({
                 <p className="text-[12px] leading-relaxed text-slate-500">
                   Largest category:{" "}
                   <span className="font-semibold text-[#1a3673]">{expenseMix.largestExpenseCategory}</span>
+                  {expenseMix.largestExpenseCategoryAmount != null ? (
+                    <span className="text-slate-400">
+                      {" "}
+                      · {money(expenseMix.largestExpenseCategoryAmount)}
+                      {expenseMix.largestExpenseCategoryPercent != null
+                        ? ` · ${formatPercent(expenseMix.largestExpenseCategoryPercent)} of Month 1 operating expenses`
+                        : ""}
+                    </span>
+                  ) : null}
                 </p>
               ) : null}
             </div>
@@ -183,7 +202,7 @@ export function SimulatorCharts({
                       <Cell key={entry.name} fill={entry.color} stroke="transparent" />
                     ))}
                   </Pie>
-                  <Tooltip formatter={(v) => money(v)} contentStyle={tooltipStyle} />
+                  <Tooltip content={<ExpenseMixTooltip currency={currency} />} />
                   <Legend wrapperStyle={{ fontSize: 11 }} />
                 </PieChart>
               </ResponsiveContainer>
@@ -287,75 +306,23 @@ export function SimulatorCharts({
           <p className="mt-2 text-[12px] leading-relaxed text-slate-500">{revExpCaption}</p>
         </ChartCard>
 
-        <ChartCard title="Fixed vs variable expenses over time">
+        <ChartCard title="EBITDA trend" className="lg:col-span-2">
           <ResponsiveContainer width="100%" height={240}>
-            <AreaChart data={expenseOverTime}>
-              <defs>
-                <linearGradient id="varFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={ORANGE} stopOpacity={0.35} />
-                  <stop offset="100%" stopColor={ORANGE} stopOpacity={0.05} />
-                </linearGradient>
-                <linearGradient id="fixFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={NAVY} stopOpacity={0.35} />
-                  <stop offset="100%" stopColor={NAVY} stopOpacity={0.05} />
-                </linearGradient>
-              </defs>
+            <LineChart data={ebitdaPoints.series} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
               <CartesianGrid stroke="rgba(26,54,115,0.08)" strokeDasharray="3 3" />
               <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#64748B" }} interval={3} />
-              <YAxis tick={{ fontSize: 10, fill: "#64748B" }} tickFormatter={tickFmt} width={64} />
-              <Tooltip formatter={(v) => money(v)} contentStyle={tooltipStyle} />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
-              <Area
-                type="monotone"
-                dataKey="variable"
-                name="Variable"
-                stackId="1"
-                stroke={ORANGE}
-                fill="url(#varFill)"
-                strokeWidth={1.5}
+              <YAxis
+                tick={{ fontSize: 10, fill: "#64748B" }}
+                tickFormatter={tickFmt}
+                width={64}
+                domain={ebitdaPoints.domain}
               />
-              <Area
-                type="monotone"
-                dataKey="fixed"
-                name="Fixed"
-                stackId="1"
-                stroke={NAVY}
-                fill="url(#fixFill)"
-                strokeWidth={1.5}
-              />
-            </AreaChart>
+              <Tooltip content={<EbitdaTooltip currency={currency} />} />
+              <ReferenceLine y={0} stroke="rgba(26,54,115,0.35)" strokeDasharray="4 4" />
+              <Line type="monotone" dataKey="ebitda" name="EBITDA" stroke="#1a3673" strokeWidth={2} dot={false} />
+            </LineChart>
           </ResponsiveContainer>
-          <p className="mt-2 text-[12px] leading-relaxed text-slate-500">
-            CapEx is excluded. Variable costs scale with revenue; fixed costs grow from monthly assumptions.
-          </p>
-        </ChartCard>
-
-        <ChartCard title="EBITDA trend" className="lg:col-span-2">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-[1fr_1.2fr] md:items-center">
-            <div className="grid grid-cols-3 gap-2 sm:gap-3">
-              <EbitdaCheckpoint label="Month 1" value={ebitdaPoints.m1?.ebitda} currency={currency} />
-              <EbitdaCheckpoint label="Month 12" value={ebitdaPoints.m12?.ebitda} currency={currency} />
-              <EbitdaCheckpoint label="Month 24" value={ebitdaPoints.m24?.ebitda} currency={currency} />
-            </div>
-            <div>
-              <ResponsiveContainer width="100%" height={120}>
-                <LineChart data={ebitdaPoints.spark} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                  <CartesianGrid stroke="rgba(26,54,115,0.06)" strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="label" hide />
-                  <YAxis
-                    tick={{ fontSize: 10, fill: "#64748B" }}
-                    tickFormatter={tickFmt}
-                    width={56}
-                    domain={ebitdaPoints.domain}
-                  />
-                  <Tooltip formatter={(v) => money(v)} contentStyle={tooltipStyle} />
-                  <ReferenceLine y={0} stroke="rgba(26,54,115,0.35)" strokeDasharray="4 4" />
-                  <Line type="monotone" dataKey="ebitda" name="EBITDA" stroke="#1a3673" strokeWidth={2} dot={false} />
-                </LineChart>
-              </ResponsiveContainer>
-              <p className="mt-2 text-[12px] leading-relaxed text-slate-500">{ebitdaPoints.caption}</p>
-            </div>
-          </div>
+          <p className="mt-2 text-center text-[12px] leading-relaxed text-slate-500">{ebitdaPoints.caption}</p>
         </ChartCard>
       </div>
 
@@ -368,6 +335,7 @@ export function SimulatorCharts({
         currency={currency}
         viewMode={viewMode}
         onApplyOverlay={onApplyOverlay}
+        onApplyScenario={onApplyScenario}
       />
     </div>
   );
@@ -393,6 +361,32 @@ function CashPositionTooltip({ active, payload, label, currency = "INR" }) {
   );
 }
 
+function ExpenseMixTooltip({ active, payload, currency = "INR" }) {
+  if (!active || !payload?.length) return null;
+  const row = payload[0]?.payload;
+  if (!row) return null;
+  return (
+    <div style={tooltipStyle} className="bg-white px-3 py-2.5 text-[12px] text-[#1a3673]">
+      <p className="font-semibold">{row.name}</p>
+      <p className="mt-1">{formatMoney(row.value, { currency })}</p>
+      <p className="text-slate-500">{formatPercent(row.share)}</p>
+    </div>
+  );
+}
+
+function EbitdaTooltip({ active, payload, label, currency = "INR" }) {
+  if (!active || !payload?.length) return null;
+  const row = payload[0]?.payload;
+  if (!row) return null;
+  return (
+    <div style={tooltipStyle} className="bg-white px-3 py-2.5 text-[12px] text-[#1a3673]">
+      <p className="font-semibold">{label}</p>
+      <p className="mt-1.5">EBITDA: {formatMoney(row.ebitda, { currency })}</p>
+      <p className="text-slate-500">EBITDA margin: {formatPercent(row.ebitdaMargin)}</p>
+    </div>
+  );
+}
+
 function MixStat({ label, value, tone, help }) {
   const border =
     tone === "orange" ? "border-[rgba(252,125,37,0.22)]" : "border-[rgba(26,54,115,0.14)]";
@@ -406,24 +400,22 @@ function MixStat({ label, value, tone, help }) {
   );
 }
 
-function EbitdaCheckpoint({ label, value, currency = "INR" }) {
-  const negative = Number(value) < 0;
-  return (
-    <div className="rounded-xl border border-[rgba(26,54,115,0.1)] bg-[#f8fafc] px-2.5 py-3 text-center sm:px-3">
-      <p className="text-[12px] font-medium text-slate-500">{label}</p>
-      <p className={`mt-1 text-[13px] font-semibold sm:text-sm ${negative ? "text-[#c55a12]" : "text-[#1a3673]"}`}>
-        {formatMoney(value, { currency })}
-      </p>
-    </div>
-  );
-}
-
-function ChartCard({ title, children, className = "" }) {
+function ChartCard({ title, subtitle, badge, children, className = "" }) {
   return (
     <div
       className={`rounded-2xl border border-[rgba(26,54,115,0.12)] bg-white p-4 shadow-[0_8px_32px_rgba(26,54,115,0.07)] md:rounded-[1.35rem] md:p-5 ${className}`}
     >
-      <h3 className="mb-3 text-sm font-semibold text-[#1a3673]">{title}</h3>
+      <div className="mb-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <h3 className="text-sm font-semibold text-[#1a3673]">{title}</h3>
+          {badge ? (
+            <span className="rounded-full bg-[rgba(252,125,37,0.1)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#fc7d25]">
+              {badge}
+            </span>
+          ) : null}
+        </div>
+        {subtitle ? <p className="mt-1 text-[12px] text-slate-500">{subtitle}</p> : null}
+      </div>
       {children}
     </div>
   );

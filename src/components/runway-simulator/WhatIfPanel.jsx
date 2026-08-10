@@ -439,7 +439,7 @@ function CompareCard({ title, metrics, currency = "INR", emphasize = false }) {
           <dd className="font-semibold text-[#1a3673]">{metrics.cashOutMonth}</dd>
         </div>
         <div className="flex justify-between gap-2">
-          <dt className="text-slate-500">Avg net burn</dt>
+          <dt className="text-slate-500">Monthly net burn</dt>
           <dd className="font-semibold text-[#1a3673]">{money(metrics.avgNetBurn)}</dd>
         </div>
         <div className="flex justify-between gap-2">
@@ -458,7 +458,7 @@ function formatDeltaRunway(d) {
 }
 
 function formatDeltaBurn(d, currency = "INR") {
-  if (d == null || Math.abs(d) < 1) return "No material change in average net burn";
+  if (d == null || Math.abs(d) < 1) return "No material change in monthly net burn";
   if (d < 0) return `${formatMoney(Math.abs(d), { currency })} lower monthly net burn`;
   return `${formatMoney(d, { currency })} higher monthly net burn`;
 }

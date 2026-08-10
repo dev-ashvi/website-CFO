@@ -11,13 +11,14 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { ASK_AI_PROMPTS, answerAskAiCfo } from "../../lib/financial-simulator/askAiCfo.js";
+import { AiCfoPanel } from "./AiCfoPanel.jsx";
 import {
   buildCashMovementInsight,
   buildOperatingLeverageStats,
+  CHART_DEFAULT_HORIZON,
+  sliceMonthsForChart,
 } from "../../lib/financial-simulator/cashMovementInsight.js";
-import { SCENARIO_MODES } from "../../lib/financial-simulator/dashboardOverlays.js";
-import { formatMoney, formatPercent, stripMoneySymbol } from "../../lib/financial-simulator/format.js";
+import { formatMoney, formatMonths, formatPercent, stripMoneySymbol } from "../../lib/financial-simulator/format.js";
 
 const TINY_SHARE = 0.02;
 
@@ -59,10 +60,10 @@ const SERIES_META = {
 };
 
 const LINE_OPTIONS = [
+  { key: "closingCash", label: "Closing Cash" },
   { key: "netCashFlow", label: "Net Cash Flow" },
   { key: "ebitda", label: "EBITDA" },
   { key: "freeCashFlow", label: "Free Cash Flow" },
-  { key: "closingCash", label: "Closing Cash" },
 ];
 
 const GROUP_DEFS = [
@@ -101,6 +102,7 @@ const GROUP_DEFS = [
  *   inputs?: object,
  *   viewMode?: { kind: string, id: string, label: string },
  *   onApplyOverlay?: (overlay: { kind: 'scenario'|'whatif'|'opportunity', id: string }) => void,
+ *   onApplyScenario?: (inputs: object) => void,
  * }} props
  */
 export function CashMovementBreakdown({
@@ -112,9 +114,10 @@ export function CashMovementBreakdown({
   currency = inputs?.currency || "INR",
   viewMode,
   onApplyOverlay,
+  onApplyScenario,
 }) {
   const [timeframe, setTimeframe] = useState("monthly");
-  const [lineMetric, setLineMetric] = useState("netCashFlow");
+  const [lineMetric, setLineMetric] = useState("closingCash");
   const [groupOn, setGroupOn] = useState({
     revenue: true,
     variable: true,
@@ -135,9 +138,19 @@ export function CashMovementBreakdown({
     other: true,
   });
   const [expanded, setExpanded] = useState({ variable: false, fixed: false });
-  const [selectedPromptId, setSelectedPromptId] = useState(null);
+  const [scenarioPreview, setScenarioPreview] = useState(null);
 
-  const categoryShares = useMemo(() => computeCategoryShares(months), [months]);
+  const baseSim = useMemo(
+    () => ({ months, kpis, inputs }),
+    [months, kpis, inputs],
+  );
+
+  const chartMonths = useMemo(
+    () => sliceMonthsForChart(months, CHART_DEFAULT_HORIZON),
+    [months],
+  );
+
+  const categoryShares = useMemo(() => computeCategoryShares(chartMonths), [chartMonths]);
   const collapsedKeys = useMemo(() => {
     const tiny = new Set();
     for (const key of [
@@ -184,11 +197,13 @@ export function CashMovementBreakdown({
   }, [categoryShares, collapsedKeys]);
 
   const data = useMemo(() => {
-    const base = buildChartData(months, timeframe, collapsedKeys);
-    return withLineMetric(base, lineMetric);
-  }, [months, timeframe, collapsedKeys, lineMetric]);
+    const base = buildChartData(chartMonths, timeframe, collapsedKeys);
+    const withLine = withLineMetric(base, lineMetric);
+    if (!scenarioPreview?.months?.length || lineMetric !== "closingCash") return withLine;
+    return withScenarioClosingCash(withLine, scenarioPreview.months, timeframe, lineMetric);
+  }, [chartMonths, timeframe, collapsedKeys, lineMetric, scenarioPreview]);
 
-  const leverage = useMemo(() => buildOperatingLeverageStats(months), [months]);
+  const leverage = useMemo(() => buildOperatingLeverageStats(chartMonths), [chartMonths]);
 
   const insight = useMemo(
     () =>
@@ -210,14 +225,9 @@ export function CashMovementBreakdown({
     return row?.label || cashOutDetail.monthLabel;
   }, [cashOutDetail, months, timeframe, data]);
 
-  const askAiAnswer = useMemo(() => {
-    if (!selectedPromptId) return null;
-    return answerAskAiCfo(selectedPromptId, { months, kpis, inputs });
-  }, [selectedPromptId, months, kpis, inputs]);
-
   const lineMeta = LINE_OPTIONS.find((o) => o.key === lineMetric) || LINE_OPTIONS[0];
   const tickFmt = (v) => stripMoneySymbol(formatMoney(v, { currency, compact: true }), currency);
-  const overlayActive = viewMode && viewMode.id !== "current";
+  const overlayActive = viewMode && viewMode.id !== "current" && viewMode.kind !== "scenario";
 
   const toggleGroup = (id) => setGroupOn((prev) => ({ ...prev, [id]: !prev[id] }));
   const toggleChild = (key) => setChildOn((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -227,6 +237,19 @@ export function CashMovementBreakdown({
 
   return (
     <section className="rounded-2xl border border-[rgba(26,54,115,0.12)] bg-white p-4 shadow-[0_8px_32px_rgba(26,54,115,0.07)] md:rounded-[1.35rem] md:p-6">
+      {scenarioPreview ? (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[rgba(252,125,37,0.35)] bg-[rgba(252,125,37,0.06)] px-4 py-2.5">
+          <p className="text-[12px] font-semibold text-[#1a3673]">Scenario preview</p>
+          <button
+            type="button"
+            onClick={() => setScenarioPreview(null)}
+            className="rounded-lg border border-[rgba(26,54,115,0.2)] bg-white px-3 py-1 text-[11px] font-semibold text-[#1a3673] hover:border-[#1a3673]"
+          >
+            Clear scenario
+          </button>
+        </div>
+      ) : null}
+
       {overlayActive ? (
         <div className="mb-4 rounded-xl border border-[rgba(252,125,37,0.35)] bg-[rgba(252,125,37,0.06)] px-4 py-3">
           <p className="text-[13px] font-semibold text-[#1a3673]">
@@ -431,7 +454,7 @@ export function CashMovementBreakdown({
           </label>
         ))}
         <span className="text-[10px] text-slate-400">
-          Closing cash also lives on the chart above.
+          Showing first {CHART_DEFAULT_HORIZON} months · full 24-month model retained.
         </span>
       </div>
 
@@ -510,11 +533,23 @@ export function CashMovementBreakdown({
                 type="monotone"
                 dataKey="lineValue"
                 name={lineMeta.label}
-                stroke="#0f172a"
-                strokeWidth={3}
-                dot={{ r: 3.5, fill: "#0f172a", stroke: "#fff", strokeWidth: 2 }}
-                activeDot={{ r: 6, fill: "#0f172a", stroke: "#fff", strokeWidth: 2 }}
+                stroke={lineMetric === "closingCash" ? "#1a3673" : "#0f172a"}
+                strokeWidth={lineMetric === "closingCash" ? 3.5 : 2.5}
+                dot={lineMetric === "closingCash" ? { r: 3, fill: "#1a3673", stroke: "#fff", strokeWidth: 2 } : false}
+                activeDot={{ r: 6, fill: lineMetric === "closingCash" ? "#fc7d25" : "#0f172a", stroke: "#fff", strokeWidth: 2 }}
                 isAnimationActive={true}
+              />
+            ) : null}
+            {scenarioPreview && groupOn.line && lineMetric === "closingCash" ? (
+              <Line
+                type="monotone"
+                dataKey="scenarioLineValue"
+                name="Scenario Closing Cash"
+                stroke="#fc7d25"
+                strokeWidth={2.5}
+                strokeDasharray="6 4"
+                dot={false}
+                isAnimationActive={false}
               />
             ) : null}
           </ComposedChart>
@@ -525,9 +560,10 @@ export function CashMovementBreakdown({
         insight={insight}
         viewMode={viewMode}
         onApplyOverlay={applyOverlay}
-        selectedPromptId={selectedPromptId}
-        onSelectPrompt={setSelectedPromptId}
-        askAiAnswer={askAiAnswer}
+        currency={currency}
+        baseSim={baseSim}
+        onScenarioPreview={setScenarioPreview}
+        onApplyScenario={onApplyScenario}
       />
     </section>
   );
@@ -541,7 +577,7 @@ function CashOutChartLabel({ viewBox, detail, currency = "INR" }) {
     <g transform={`translate(${x + 6}, ${y})`}>
       <rect x={0} y={0} width={150} height={46} rx={6} fill="#fff7ed" stroke="#fdba74" />
       <text x={10} y={14} fill="#9a3412" fontSize={9} fontWeight={700}>
-        ⚠ Cash Exhausted
+        ⚠ Cash exhausted
       </text>
       <text x={10} y={26} fill="#1a3673" fontSize={11} fontWeight={600}>
         {detail?.monthLabel || "—"}
@@ -586,9 +622,10 @@ function IntelligencePanel({
   insight,
   viewMode,
   onApplyOverlay,
-  selectedPromptId,
-  onSelectPrompt,
-  askAiAnswer,
+  currency = "INR",
+  baseSim,
+  onScenarioPreview,
+  onApplyScenario,
 }) {
   const tone = insight.tone || "neutral";
   const toneStyles = {
@@ -604,88 +641,17 @@ function IntelligencePanel({
     neutral: "text-[#fc7d25]",
   };
   const driverShare =
-    insight.primaryDriver?.shareOfOperatingSpend != null
-      ? Math.round(insight.primaryDriver.shareOfOperatingSpend * 100)
+    insight.primaryDriver?.shareOfRevenue != null
+      ? Math.round(insight.primaryDriver.shareOfRevenue * 100)
       : null;
   const opportunityActive =
     viewMode?.kind === "opportunity" && viewMode?.id === insight.applyId;
+  const cc = insight.costContribution;
+  const ei = insight.expenseInsights;
 
   return (
     <div className="mt-4 space-y-3">
-      {/* Scenario mode radios */}
-      <div className="rounded-xl border border-[rgba(26,54,115,0.12)] bg-white px-4 py-3">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#1a3673]">Scenario mode</p>
-        <div className="mt-2 flex flex-wrap gap-2">
-          {SCENARIO_MODES.map((mode) => {
-            const active = viewMode?.kind === "scenario" && viewMode?.id === mode.id;
-            const isCurrent = mode.id === "current" && (!viewMode || viewMode.id === "current");
-            const highlighted = active || (isCurrent && !viewMode);
-            return (
-              <label
-                key={mode.id}
-                className={`inline-flex cursor-pointer items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-medium transition ${
-                  highlighted
-                    ? "border-[#1a3673] bg-[#1a3673] text-white"
-                    : "border-[rgba(26,54,115,0.15)] bg-white text-[#1a3673] hover:border-[rgba(26,54,115,0.3)]"
-                }`}
-              >
-                <input
-                  type="radio"
-                  className="sr-only"
-                  name="scenario-mode"
-                  checked={highlighted}
-                  onChange={() => onApplyOverlay?.({ kind: "scenario", id: mode.id })}
-                />
-                {mode.label}
-              </label>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* What-if cards */}
-      {insight.whatIfs?.length > 0 ? (
-        <div className="rounded-xl border border-[rgba(26,54,115,0.12)] bg-white px-4 py-3">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#1a3673]">What-if</p>
-          <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
-            {insight.whatIfs.map((row) => {
-              const active = viewMode?.kind === "whatif" && viewMode?.id === row.id;
-              return (
-                <div
-                  key={row.id}
-                  className={`flex flex-col gap-2 rounded-xl border px-3 py-2.5 transition ${
-                    active
-                      ? "border-[#1a3673] bg-[rgba(26,54,115,0.04)] ring-1 ring-[#1a3673]"
-                      : "border-[rgba(26,54,115,0.08)] bg-[#f8fafc]"
-                  }`}
-                >
-                  <span className="text-[12px] font-medium text-slate-600">{row.label}</span>
-                  <span
-                    className={`text-[14px] font-semibold tabular-nums ${
-                      row.runwayDelta > 0 ? "text-[#15803d]" : row.runwayDelta < 0 ? "text-[#dc2626]" : "text-slate-500"
-                    }`}
-                  >
-                    {row.display}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => onApplyOverlay?.({ kind: "whatif", id: row.id })}
-                    className={`mt-auto rounded-lg px-3 py-1.5 text-[11px] font-semibold transition ${
-                      active
-                        ? "bg-[#1a3673] text-white"
-                        : "border border-[rgba(26,54,115,0.2)] bg-white text-[#1a3673] hover:border-[#1a3673]"
-                    }`}
-                  >
-                    Simulate
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      ) : null}
-
-      {/* Opportunity panel */}
+      {/* 1. AI CFO Recommendation */}
       <div
         className={`rounded-xl border px-4 py-4 ${toneStyles[tone]} ${
           opportunityActive ? "ring-2 ring-[#1a3673]" : ""
@@ -720,7 +686,7 @@ function IntelligencePanel({
             ) : null}
             {insight.runwayGainMonths != null ? (
               <div className="rounded-lg border border-[rgba(26,54,115,0.1)] bg-white/80 px-3 py-2">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">Runway Gain</p>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">Runway gain</p>
                 <p className="mt-0.5 text-[15px] font-semibold tabular-nums text-[#15803d]">
                   +{insight.runwayGainMonths} months
                 </p>
@@ -738,7 +704,7 @@ function IntelligencePanel({
                 <p className="mt-0.5 text-[13px] font-semibold text-[#1a3673]">
                   {insight.primaryDriver.name}
                   {driverShare != null ? (
-                    <span className="font-medium text-slate-500"> · {driverShare}% of operating spend</span>
+                    <span className="font-medium text-slate-500"> · {driverShare}% of Month 1 revenue</span>
                   ) : null}
                 </p>
               </div>
@@ -761,66 +727,83 @@ function IntelligencePanel({
         ) : null}
       </div>
 
-      {/* Contribution bars */}
-      {(insight.mixBars?.length > 0 || insight.costDrivers?.length > 0) && (
-        <div className="rounded-xl border border-[rgba(26,54,115,0.12)] bg-white px-4 py-3">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#1a3673]">
-            Cost contribution
-          </p>
-          {insight.mixBars?.length > 0 ? (
-            <div className="mt-3 space-y-2">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">Mix</p>
-              {insight.mixBars.map((bar) => (
-                <ContributionBar key={bar.id} label={bar.label} share={bar.share} color={bar.color} />
-              ))}
+      {/* 2. Cost Contribution + Expense Insights */}
+      {cc?.categories?.length > 0 ? (
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+          <div className="rounded-xl border border-[rgba(26,54,115,0.12)] bg-white px-4 py-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#1a3673]">
+              Cost contribution
+            </p>
+            <p className="mt-0.5 text-[12px] text-slate-500">% of revenue — Month 1</p>
+            <div className="mt-3 space-y-3">
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#c2410c]">Variable</p>
+                <div className="mt-1.5 space-y-2">
+                  {cc.variableGroup.map((cat) => (
+                    <ContributionBar
+                      key={cat.key}
+                      label={cat.label}
+                      share={cat.shareOfRevenue}
+                      color={SERIES_META[cat.key]?.color || "#c2410c"}
+                    />
+                  ))}
+                </div>
+              </div>
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#1a3673]">
+                  Fixed / operating
+                </p>
+                <div className="mt-1.5 space-y-2">
+                  {cc.fixedGroup.map((cat) => (
+                    <ContributionBar
+                      key={cat.key}
+                      label={cat.label}
+                      share={cat.shareOfRevenue}
+                      color={SERIES_META[cat.key]?.color || "#1a3673"}
+                    />
+                  ))}
+                </div>
+              </div>
             </div>
-          ) : null}
-          {insight.costDrivers?.length > 0 ? (
-            <div className="mt-3 space-y-2">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">Top drivers</p>
-              {insight.costDrivers.map((bar) => (
-                <ContributionBar
-                  key={bar.key}
-                  label={bar.name}
-                  share={bar.share}
-                  color={SERIES_META[bar.key]?.color || "#1a3673"}
-                />
-              ))}
-            </div>
-          ) : null}
-        </div>
-      )}
+          </div>
 
+          <div className="rounded-xl border border-[rgba(26,54,115,0.12)] bg-white px-4 py-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#1a3673]">Expense insights</p>
+            <p className="mt-0.5 text-[12px] text-slate-500">AI CFO interpretation</p>
+            {ei?.summary?.operatingCostToRevenue > 0 ? (
+              <div className="mt-3 rounded-xl border border-[rgba(26,54,115,0.1)] bg-[#f8fafc] px-3 py-2.5">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">
+                  Total operating cost / revenue
+                </p>
+                <p className="mt-0.5 text-2xl font-semibold tabular-nums text-[#1a3673]">
+                  {ei.summary.operatingCostToRevenuePercent}%
+                </p>
+                <p className="mt-0.5 text-[11px] text-slate-500">
+                  {ei.summary.spendPerUnitOfRevenue.toFixed(2)} spent for every 1.00 of revenue
+                </p>
+              </div>
+            ) : null}
+            <ul className="mt-3 space-y-2.5">
+              {(ei?.items || []).map((item) => (
+                <ExpenseInsightItem key={item.id} item={item} />
+              ))}
+            </ul>
+          </div>
+        </div>
+      ) : null}
+
+      {/* 3. Benchmark */}
       {insight.benchmark ? <BenchmarkCard benchmark={insight.benchmark} /> : null}
 
-      {/* Ask AI CFO */}
-      <div className="rounded-xl border border-[rgba(26,54,115,0.12)] bg-white px-4 py-3">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#1a3673]">Ask AI CFO</p>
-        <div className="mt-2 flex flex-wrap gap-2">
-          {ASK_AI_PROMPTS.map((prompt) => (
-            <button
-              key={prompt.id}
-              type="button"
-              onClick={() => onSelectPrompt(prompt.id)}
-              className={`rounded-full border px-3 py-1.5 text-[11px] font-medium transition ${
-                selectedPromptId === prompt.id
-                  ? "border-[#fc7d25] bg-[rgba(252,125,37,0.1)] text-[#c2410c]"
-                  : "border-[rgba(26,54,115,0.15)] bg-[#f8fafc] text-[#1a3673] hover:border-[rgba(26,54,115,0.3)]"
-              }`}
-            >
-              {prompt.label}
-            </button>
-          ))}
-        </div>
-        {askAiAnswer ? (
-          <div className="mt-3 rounded-lg border border-[rgba(26,54,115,0.1)] bg-[#f8fafc] px-3 py-2.5">
-            <p className="text-[12px] font-semibold text-[#1a3673]">{askAiAnswer.question}</p>
-            <p className="mt-1.5 text-[13px] leading-relaxed text-slate-600">{askAiAnswer.answer}</p>
-          </div>
-        ) : null}
-      </div>
+      {/* 4. AI CFO */}
+      <AiCfoPanel
+        baseSim={baseSim}
+        currency={currency}
+        onPreview={onScenarioPreview}
+        onApplyScenario={onApplyScenario}
+      />
 
-      {/* Trust footer */}
+      {/* 5. Trust footer */}
       <p className="rounded-xl border border-[rgba(26,54,115,0.08)] bg-[#f8fafc] px-4 py-3 text-center text-[11px] leading-relaxed text-slate-500">
         Generated from 24-month deterministic financial model. Every metric updates consistently across revenue,
         costs, cash flow, EBITDA and runway.
@@ -829,8 +812,26 @@ function IntelligencePanel({
   );
 }
 
+function ExpenseInsightItem({ item }) {
+  const toneCls =
+    item.tone === "good"
+      ? "border-[rgba(22,163,74,0.2)] bg-[rgba(240,253,244,0.5)]"
+      : item.tone === "warn"
+        ? "border-[rgba(220,38,38,0.15)] bg-[rgba(254,242,242,0.4)]"
+        : item.tone === "watch"
+          ? "border-[rgba(252,125,37,0.2)] bg-[rgba(255,247,237,0.5)]"
+          : "border-[rgba(26,54,115,0.08)] bg-[#f8fafc]";
+  return (
+    <li className={`rounded-lg border px-3 py-2 ${toneCls}`}>
+      <p className="text-[11px] font-semibold text-[#1a3673]">{item.title}</p>
+      <p className="mt-0.5 text-[12px] leading-relaxed text-slate-600">{item.body}</p>
+    </li>
+  );
+}
+
 function ContributionBar({ label, share, color }) {
   const pct = Math.round((share || 0) * 100);
+  const barWidth = Math.min(Math.abs(pct), 100);
   return (
     <div>
       <div className="mb-1 flex items-center justify-between gap-2 text-[11px]">
@@ -840,7 +841,7 @@ function ContributionBar({ label, share, color }) {
       <div className="h-2 overflow-hidden rounded-full bg-[rgba(26,54,115,0.08)]">
         <div
           className="h-full rounded-full transition-all"
-          style={{ width: `${pct}%`, backgroundColor: color }}
+          style={{ width: `${barWidth}%`, backgroundColor: color }}
         />
       </div>
     </div>
@@ -848,6 +849,17 @@ function ContributionBar({ label, share, color }) {
 }
 
 function BenchmarkCard({ benchmark }) {
+  if (benchmark.available === false) {
+    return (
+      <div className="rounded-xl border border-[rgba(26,54,115,0.12)] bg-white px-4 py-3">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#1a3673]">
+          Industry benchmark
+        </p>
+        <p className="mt-2 text-[13px] leading-relaxed text-slate-500">{benchmark.message}</p>
+      </div>
+    );
+  }
+
   const peerFields = [
     { label: benchmark.rangeLabel, value: benchmark.rangeValue },
     { label: benchmark.medianLabel, value: benchmark.medianValue },
@@ -1095,6 +1107,25 @@ function withLineMetric(data, lineMetric) {
     ...row,
     lineValue: row.abs?.[lineMetric] ?? row[lineMetric] ?? 0,
   }));
+}
+
+/** Overlay scenario closing cash on chart rows (preview only — base model unchanged). */
+function withScenarioClosingCash(data, scenarioMonths, timeframe, lineMetric) {
+  const scenChart = buildChartData(sliceMonthsForChart(scenarioMonths, CHART_DEFAULT_HORIZON), timeframe, new Set());
+  const byIndex = new Map();
+  for (const row of scenChart) {
+    for (const idx of row.monthIndexes || []) {
+      byIndex.set(idx, row.abs?.[lineMetric] ?? row[lineMetric] ?? 0);
+    }
+  }
+  return (data || []).map((row) => {
+    const idx = row.monthIndexes?.[row.monthIndexes.length - 1] ?? row.monthIndex;
+    const val = byIndex.get(idx);
+    return {
+      ...row,
+      scenarioLineValue: val != null ? val : null,
+    };
+  });
 }
 
 function formatSignedPct(decimal) {

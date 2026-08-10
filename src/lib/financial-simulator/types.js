@@ -74,6 +74,8 @@
  * @property {number} grossProfit
  * @property {number} grossMargin
  * @property {number} salesAndMarketing
+ * @property {number} cm1
+ * @property {number} cm1Margin
  * @property {number} productAndTechnology
  * @property {number} payroll
  * @property {number} otherFixedCosts
@@ -91,6 +93,7 @@
  * @property {number} netCashFlowExcludingCapex
  * @property {number} grossBurn
  * @property {number} netBurn
+ * @property {number} netBurnIncludingCapex
  * @property {number} openingCash
  * @property {number|null} closingCash
  * @property {number|null} closingCashIncludingCapex
@@ -98,6 +101,27 @@
  * @property {number|null} closingCashExcludingCapex
  * @property {boolean} cashOut
  * @property {boolean} cashOutExcludingCapex
+ */
+
+/**
+ * @typedef {Object} FinancialPerformanceKpis
+ * @property {number} revenue
+ * @property {number} grossProfit
+ * @property {number} grossMarginPercent
+ * @property {number} cm1
+ * @property {number} cm1MarginPercent
+ * @property {number} ebitda
+ * @property {number} ebitdaMarginPercent
+ */
+
+/**
+ * @typedef {Object} BurnMetricsKpis
+ * @property {number} monthlyNetBurnExcludingCapex
+ * @property {number} monthlyNetBurnIncludingCapex
+ * @property {number} monthlyGrossBurn
+ * @property {number} [avgNetBurnExcludingCapex] Forecast average (internal / backward compat)
+ * @property {number} [avgNetBurnIncludingCapex] Forecast average (internal / backward compat)
+ * @property {number} [avgGrossBurn] Forecast average (internal / backward compat)
  */
 
 /**
@@ -116,11 +140,18 @@
 
 /**
  * @typedef {Object} ExpenseMix
- * @property {number} averageMonthlyVariableExpenses
- * @property {number} averageMonthlyFixedExpenses
- * @property {number} variableExpensePercent
- * @property {number} fixedExpensePercent
+ * @property {"month1"} [period]
+ * @property {number} variableExpenses Month 1 total variable expenses
+ * @property {number} fixedExpenses Month 1 total fixed expenses
+ * @property {number} variableSharePercent Month 1 variable ÷ operating (0–1)
+ * @property {number} fixedSharePercent Month 1 fixed ÷ operating (0–1)
  * @property {string} largestExpenseCategory
+ * @property {number} [largestExpenseCategoryAmount]
+ * @property {number} [largestExpenseCategoryPercent]
+ * @property {number} [variableExpensePercent] Alias of variableSharePercent
+ * @property {number} [fixedExpensePercent] Alias of fixedSharePercent
+ * @property {number} [averageMonthlyVariableExpenses] Forecast average (internal / backward compat)
+ * @property {number} [averageMonthlyFixedExpenses] Forecast average (internal / backward compat)
  */
 
 /**
@@ -130,13 +161,24 @@
  * @property {number|null} cashOutMonthIndex
  * @property {number} avgMonthlyGrossBurn
  * @property {number} avgMonthlyNetBurn
+ * @property {number} avgMonthlyNetBurnIncludingCapex
+ * @property {number} month1GrossBurn
+ * @property {number} month1NetBurnExcludingCapex
+ * @property {number} month1NetBurnIncludingCapex
+ * @property {number} month1Revenue
+ * @property {number} month1GrossProfit
  * @property {number} month1GrossMargin
+ * @property {number} month1Cm1
+ * @property {number} month1Cm1Margin
  * @property {number} avgGrossMargin
  * @property {number} month1Ebitda
+ * @property {number} month1EbitdaMargin
  * @property {number} avgEbitda
  * @property {number|null} sixMonthClosingCash
  * @property {number|null} twelveMonthClosingCash
  * @property {string} healthStatus
+ * @property {FinancialPerformanceKpis} financialPerformance
+ * @property {BurnMetricsKpis} burnMetrics
  * @property {Object} costMix
  * @property {ExpenseMix} expenseMix
  * @property {CapexComparison} capexComparison

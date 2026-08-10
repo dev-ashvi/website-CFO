@@ -395,7 +395,10 @@ describe("variable / fixed expense classification", () => {
   it("expense-mix percentages sum to ~100%", () => {
     const months = calculateProjection(base());
     const kpis = calculateKpis(months);
-    const sumPct = kpis.expenseMix.variableExpensePercent + kpis.expenseMix.fixedExpensePercent;
+    const m1 = months[0];
+    assert.equal(kpis.expenseMix.variableExpenses, m1.totalVariableExpenses);
+    assert.equal(kpis.expenseMix.fixedExpenses, m1.totalFixedExpenses);
+    const sumPct = kpis.expenseMix.variableSharePercent + kpis.expenseMix.fixedSharePercent;
     assert.ok(Math.abs(sumPct - 1) < 0.01);
   });
 

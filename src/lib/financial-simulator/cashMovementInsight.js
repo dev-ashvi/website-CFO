@@ -3,45 +3,175 @@ import { calculateKpis } from "./calculateKpis.js";
 import { cloneInputs, runWhatIfScenario } from "./scenarios/index.js";
 import { formatMoney, formatMonths, formatPercent } from "./format.js";
 
+/** Default visible horizon for Cash Flow Intelligence chart (model still runs 24 months). */
+export const CHART_DEFAULT_HORIZON = 12;
+
 function money(amount, sim, opts = {}) {
   return formatMoney(amount, { ...opts, currency: sim?.inputs?.currency });
 }
 
-const CHART_VARIABLE_KEYS = ["cogs", "otherDirectCosts"];
-const CHART_FIXED_KEYS = [
-  "salesAndMarketing",
-  "payroll",
-  "productAndTechnology",
-  "otherFixedCosts",
+const COST_CONTRIBUTION_CATEGORIES = [
+  { key: "cogs", label: "COGS", group: "variable" },
+  { key: "otherDirectCosts", label: "Other direct costs", group: "variable" },
+  { key: "salesAndMarketing", label: "Sales & marketing", group: "fixed" },
+  { key: "productAndTechnology", label: "Product & technology", group: "fixed" },
+  { key: "payroll", label: "Payroll", group: "fixed" },
+  { key: "otherFixedCosts", label: "Other fixed costs", group: "fixed" },
 ];
 
-const CATEGORY_LABELS = {
-  cogs: "COGS",
-  otherDirectCosts: "Other direct costs",
-  salesAndMarketing: "Sales & marketing",
-  payroll: "Payroll",
-  productAndTechnology: "Product & technology",
-  otherFixedCosts: "Other fixed costs",
+/** Peer gross-margin ranges keyed by industry label (validated only — do not invent). */
+const INDUSTRY_GROSS_MARGIN_BENCHMARKS = {
+  "SaaS / Software": { low: 0.6, high: 0.75, median: 0.65, topQuartile: 0.72 },
+  Technology: { low: 0.6, high: 0.75, median: 0.65, topQuartile: 0.72 },
+  Fintech: { low: 0.55, high: 0.7, median: 0.6, topQuartile: 0.68 },
+  "Financial Services": { low: 0.55, high: 0.7, median: 0.6, topQuartile: 0.68 },
+  "Retail & E-commerce": { low: 0.4, high: 0.55, median: 0.45, topQuartile: 0.52 },
+  "Fashion & Apparel": { low: 0.4, high: 0.55, median: 0.45, topQuartile: 0.52 },
+  "Beauty & Personal Care": { low: 0.4, high: 0.55, median: 0.45, topQuartile: 0.52 },
+  FMCG: { low: 0.4, high: 0.55, median: 0.45, topQuartile: 0.52 },
+  "Food & Beverage": { low: 0.4, high: 0.55, median: 0.45, topQuartile: 0.52 },
 };
 
-/** Peer ranges for display (static references — not engine inputs). */
-const GROSS_MARGIN_PEERS = {
-  SaaS: { low: 0.6, high: 0.75, median: 0.65, topQuartile: 0.72 },
-  FinTech: { low: 0.55, high: 0.7, median: 0.6, topQuartile: 0.68 },
-  D2C: { low: 0.4, high: 0.55, median: 0.45, topQuartile: 0.52 },
-  Other: { low: 0.45, high: 0.65, median: 0.5, topQuartile: 0.6 },
-};
-
-function peerKeyForIndustry(industry) {
-  const label = String(industry || "");
-  if (/saas|software|technology|deeptech|edtech|proptech/i.test(label)) return "SaaS";
-  if (/fintech|financial/i.test(label)) return "FinTech";
-  if (/retail|e-?commerce|fashion|beauty|fmcg|food|beverage|d2c/i.test(label)) return "D2C";
-  return "Other";
+/**
+ * Month 1 cost contribution as % of revenue (not normalized to 100%).
+ * @param {import('./types.js').MonthlyProjection | undefined} month1
+ */
+export function buildCostContribution(month1) {
+  if (!month1) {
+    return {
+      period: "month1",
+      revenue: 0,
+      categories: [],
+      variableGroup: [],
+      fixedGroup: [],
+      totalOperatingCostToRevenue: 0,
+    };
+  }
+  const revenue = Number(month1.revenue) || 0;
+  const categories = COST_CONTRIBUTION_CATEGORIES.map(({ key, label, group }) => {
+    const amount = Number(month1[key]) || 0;
+    return {
+      key,
+      label,
+      group,
+      amount,
+      shareOfRevenue: revenue > 0 ? amount / revenue : 0,
+    };
+  });
+  const opex =
+    Number(month1.totalOperatingExpenses) ||
+    sum(categories.map((c) => c.amount));
+  return {
+    period: "month1",
+    revenue,
+    categories,
+    variableGroup: categories.filter((c) => c.group === "variable"),
+    fixedGroup: categories.filter((c) => c.group === "fixed"),
+    totalOperatingCostToRevenue: revenue > 0 ? opex / revenue : 0,
+    totalVariableShareOfRevenue:
+      revenue > 0 ? (Number(month1.totalVariableExpenses) || 0) / revenue : 0,
+    totalFixedShareOfRevenue:
+      revenue > 0 ? (Number(month1.totalFixedExpenses) || 0) / revenue : 0,
+  };
 }
 
-const BURN_MULTIPLE_MEDIAN = 1.2;
-const BURN_MULTIPLE_TOP = 0.8;
+/**
+ * Deterministic CFO-style expense insights from Month 1 values.
+ * @param {import('./types.js').MonthlyProjection | undefined} month1
+ * @param {import('./types.js').SimulatorKpis | undefined} kpis
+ * @param {{ inputs?: import('./types.js').SimulatorInputs }} [sim]
+ */
+export function buildExpenseInsights(month1, kpis, sim = {}) {
+  const cc = buildCostContribution(month1);
+  const revenue = cc.revenue;
+  const currency = sim.inputs?.currency;
+  const fmt = (v) => formatMoney(v, { currency });
+  const items = [];
+
+  const largest = [...cc.categories].sort((a, b) => b.shareOfRevenue - a.shareOfRevenue)[0];
+  if (largest?.shareOfRevenue > 0) {
+    items.push({
+      id: "largest",
+      title: "Largest cost driver",
+      body: `${largest.label} represents ${formatPercent(largest.shareOfRevenue)} of monthly revenue.`,
+      tone: largest.shareOfRevenue >= 0.35 ? "warn" : "neutral",
+      highlight: formatPercent(largest.shareOfRevenue),
+    });
+  }
+
+  if (cc.totalOperatingCostToRevenue > 0) {
+    const ratio = cc.totalOperatingCostToRevenue;
+    const overRevenue = ratio > 1;
+    items.push({
+      id: "intensity",
+      title: "Cost intensity",
+      body: overRevenue
+        ? `Total operating expenses equal ${formatPercent(ratio)} of revenue, indicating the business is currently spending ${ratio.toFixed(2)} for every 1.00 of revenue.`
+        : `Total operating expenses equal ${formatPercent(ratio)} of revenue.`,
+      tone: overRevenue ? "warn" : ratio > 0.85 ? "watch" : "good",
+      highlight: formatPercent(ratio),
+    });
+  }
+
+  if (cc.totalVariableShareOfRevenue > 0) {
+    const remaining = 1 - cc.totalVariableShareOfRevenue;
+    items.push({
+      id: "variable-load",
+      title: "Variable cost load",
+      body: `Variable costs consume ${formatPercent(cc.totalVariableShareOfRevenue)} of revenue, leaving ${formatPercent(Math.max(remaining, 0))} before fixed operating costs.`,
+      tone: cc.totalVariableShareOfRevenue >= 0.5 ? "watch" : "neutral",
+      highlight: formatPercent(cc.totalVariableShareOfRevenue),
+    });
+  }
+
+  if (cc.totalFixedShareOfRevenue > 0) {
+    items.push({
+      id: "fixed-pressure",
+      title: "Fixed cost pressure",
+      body: `Fixed operating expenses represent ${formatPercent(cc.totalFixedShareOfRevenue)} of revenue.`,
+      tone: cc.totalFixedShareOfRevenue >= 0.55 ? "warn" : "neutral",
+      highlight: formatPercent(cc.totalFixedShareOfRevenue),
+    });
+  }
+
+  const payrollCat = cc.categories.find((c) => c.key === "payroll");
+  if (payrollCat?.amount > 0) {
+    items.push({
+      id: "payroll",
+      title: "Payroll exposure",
+      body: `Payroll represents ${formatPercent(payrollCat.shareOfRevenue)} of revenue and ${fmt(payrollCat.amount)} per month.`,
+      tone: payrollCat.shareOfRevenue >= 0.25 ? "watch" : "neutral",
+      highlight: formatPercent(payrollCat.shareOfRevenue),
+    });
+  }
+
+  const gm = month1?.grossMargin ?? kpis?.financialPerformance?.grossMarginPercent;
+  const ebitda = month1?.ebitda ?? kpis?.financialPerformance?.ebitda;
+  if (gm != null && ebitda != null && Number(ebitda) < 0) {
+    items.push({
+      id: "margin-structure",
+      title: "Margin structure",
+      body: `Gross margin is ${formatPercent(gm)}, but operating expenses keep EBITDA negative.`,
+      tone: "watch",
+      highlight: formatPercent(gm),
+    });
+  }
+
+  const ratio = cc.totalOperatingCostToRevenue;
+  return {
+    summary: {
+      operatingCostToRevenue: ratio,
+      operatingCostToRevenuePercent: Math.round(ratio * 1000) / 10,
+      spendPerUnitOfRevenue: ratio,
+    },
+    items: items.slice(0, 4),
+  };
+}
+
+/** Slice months for chart display without altering the underlying projection. */
+export function sliceMonthsForChart(months, horizon = CHART_DEFAULT_HORIZON) {
+  return (months || []).slice(0, horizon);
+}
 
 /**
  * @param {{
@@ -56,26 +186,21 @@ export function buildCashMovementInsight(sim) {
     return emptyInsight();
   }
 
-  const totals = categoryTotals(months);
-  const opexTotal = sum(Object.values(totals));
-  const outflowTotal = opexTotal + sum(months.map((m) => Number(m.capex) || 0));
-  const varTotal = sum(CHART_VARIABLE_KEYS.map((k) => totals[k] || 0));
-  const fixTotal = sum(CHART_FIXED_KEYS.map((k) => totals[k] || 0));
-  const varShare = outflowTotal > 0 ? varTotal / outflowTotal : 0;
-  const fixShare = outflowTotal > 0 ? fixTotal / outflowTotal : 0;
-  const varShareOpex = opexTotal > 0 ? varTotal / opexTotal : 0;
-  const fixShareOpex = opexTotal > 0 ? fixTotal / opexTotal : 0;
+  const month1 = months[0];
+  const costContribution = buildCostContribution(month1);
+  const expenseInsights = buildExpenseInsights(month1, sim.kpis, sim);
 
-  const largestEntry = Object.entries(totals).sort((a, b) => b[1] - a[1])[0];
-  const largestKey = largestEntry?.[0];
-  const largestName = CATEGORY_LABELS[largestKey] || "Operating costs";
-  const largestShareOpex = opexTotal > 0 ? largestEntry[1] / opexTotal : 0;
-  const largestAmount = largestEntry?.[1] || 0;
-
-  const avgRevenue = average(months.map((m) => m.revenue));
-  const avgPayroll = average(months.map((m) => m.payroll));
-  const payrollOfRevenue = avgRevenue > 0 ? avgPayroll / avgRevenue : 0;
-  const avgGrossMargin = average(months.map((m) => m.grossMargin));
+  const largestCat = [...costContribution.categories].sort(
+    (a, b) => b.shareOfRevenue - a.shareOfRevenue,
+  )[0];
+  const primaryDriver = largestCat
+    ? {
+        name: largestCat.label,
+        key: largestCat.key,
+        shareOfRevenue: largestCat.shareOfRevenue,
+        amount: largestCat.amount,
+      }
+    : null;
 
   const cmp = sim.kpis?.capexComparison;
   const cumulativeCapex = Number(cmp?.cumulativeCapex ?? sum(months.map((m) => m.capex))) || 0;
@@ -86,36 +211,18 @@ export function buildCashMovementInsight(sim) {
         cmp?.cashOutMonthExcludingCapex != null &&
         cmp.cashOutMonthIncludingCapex !== cmp.cashOutMonthExcludingCapex));
 
-  const primaryDriver = {
-    name: largestName,
-    key: largestKey,
-    shareOfOperatingSpend: largestShareOpex,
-    amount: largestAmount,
-  };
-
-  const costDrivers = buildCostDrivers(totals, opexTotal);
-  const mixBars = [
-    { id: "variable", label: "Variable Costs", share: varShareOpex, color: "#c2410c" },
-    { id: "fixed", label: "Fixed Costs", share: fixShareOpex, color: "#1a3673" },
-  ];
-
   const whatIfs = buildWhatIfSensitivities(sim.inputs);
-  const benchmark = buildBenchmark(sim, avgGrossMargin, months);
+  const benchmark = buildBenchmark(sim, month1);
   const cashOutDetail = buildCashOutDetail(months);
 
   const opportunity = pickOpportunity(sim, {
-    varShare,
-    fixShare,
-    largestKey,
-    largestName,
-    largestShareOpex,
-    largestAmount,
-    payrollOfRevenue,
-    avgGrossMargin,
+    costContribution,
+    primaryDriver,
     capexMaterial,
     cmp,
-    primaryDriver,
-    months,
+    cumulativeCapex,
+    whatIfs,
+    month1,
   });
 
   return {
@@ -123,8 +230,8 @@ export function buildCashMovementInsight(sim) {
     primaryDriver,
     whatIfs,
     benchmark,
-    costDrivers,
-    mixBars,
+    costContribution,
+    expenseInsights,
     cashOutDetail,
   };
 }
@@ -217,33 +324,22 @@ function emptyInsight() {
     primaryDriver: null,
     whatIfs: [],
     benchmark: null,
-    costDrivers: [],
-    mixBars: [],
+    costContribution: buildCostContribution(undefined),
+    expenseInsights: buildExpenseInsights(undefined),
     cashOutDetail: null,
   };
 }
 
 function pickOpportunity(sim, ctx) {
-  const {
-    varShare,
-    fixShare,
-    largestKey,
-    largestName,
-    largestShareOpex,
-    largestAmount,
-    payrollOfRevenue,
-    avgGrossMargin,
-    capexMaterial,
-    cmp,
-    primaryDriver,
-    months,
-  } = ctx;
+  const { costContribution, primaryDriver, capexMaterial, cmp, cumulativeCapex, whatIfs, month1 } =
+    ctx;
+
+  const candidates = [];
 
   if (capexMaterial && sim.inputs) {
     const delta = estimateCapexDelayRunway(sim.inputs, 3);
-    const savings = sum(months.map((m) => Number(m.capex) || 0));
     if (delta != null && delta > 0.05) {
-      return makeOpportunity({
+      candidates.push({
         badge: "AI CFO Recommendation",
         title: "Delay CapEx by 3 months",
         action: "Reschedule capital spend to protect runway",
@@ -252,7 +348,7 @@ function pickOpportunity(sim, ctx) {
           : "Planned CapEx is advancing cash-out.",
         why: {
           headline: "Capital spend is advancing cash exhaustion.",
-          detail: `Planned CapEx totals ${money(savings, sim, { compact: true })} over the forecast. Delaying it by 3 months keeps operating cash available longer and extends runway by approximately ${formatDeltaMonths(delta)}.`,
+          detail: `Planned CapEx totals ${money(cumulativeCapex, sim, { compact: true })} over the forecast. Delaying by 3 months extends runway by approximately ${formatDeltaMonths(delta)}.`,
         },
         tone: "opportunity",
         runwayGainMonths: delta,
@@ -263,115 +359,101 @@ function pickOpportunity(sim, ctx) {
     }
   }
 
-  if (payrollOfRevenue >= 0.3 && sim.inputs) {
-    const delta = estimateFixedCutRunway(sim.inputs, 0.1);
-    const payrollTotal = sum(months.map((m) => m.payroll));
-    const savings = payrollTotal * 0.1;
-    if (delta != null && delta > 0.05) {
-      return makeOpportunity({
-        badge: "AI CFO Recommendation",
-        title: "Reduce hiring pace",
-        action: "Slow payroll growth by ~10%",
-        body: `Payroll is ${Math.round(payrollOfRevenue * 100)}% of revenue.`,
-        why: {
-          headline: "Payroll is your largest controllable fixed commitment.",
-          detail: `A 10% reduction saves about ${money(savings, sim, { compact: true })} over the forecast period and extends runway by approximately ${formatDeltaMonths(delta)}.`,
-        },
-        tone: "alert",
-        runwayGainMonths: delta,
-        difficulty: "Medium",
-        applyId: "fixed-down-10",
-        primaryDriver: { name: "Payroll", key: "payroll", shareOfOperatingSpend: largestShareOpex, amount: payrollTotal },
-      });
+  for (const row of whatIfs || []) {
+    const mapped = mapWhatIfToOpportunity(row, sim, costContribution, primaryDriver, month1);
+    if (mapped && row.runwayDelta != null && row.runwayDelta > 0.05) {
+      candidates.push(mapped);
     }
   }
 
-  if ((avgGrossMargin < 0.5 || largestKey === "cogs" || varShare >= 0.45) && sim.inputs) {
-    const delta = estimateGrossMarginLiftRunway(sim.inputs, 0.05);
-    const cogsTotal = sum(months.map((m) => m.cogs));
-    const savings = sum(months.map((m) => (Number(m.revenue) || 0) * 0.05));
-    if (delta != null && delta > 0.05) {
-      return makeOpportunity({
-        badge: "AI CFO Recommendation",
-        title: "Improve gross margin by 5%",
-        action: "Lift gross margin by 5 percentage points",
-        body: `Gross margin averages ${formatPercent(avgGrossMargin, 0)}.`,
-        why: {
-          headline: "Unit economics are the highest-leverage cash lever.",
-          detail: `COGS totals ${money(cogsTotal, sim, { compact: true })} over the forecast. A 5pp gross-margin lift frees about ${money(savings, sim, { compact: true })} of cash and extends runway by approximately ${formatDeltaMonths(delta)}.`,
-        },
-        tone: "opportunity",
-        runwayGainMonths: delta,
-        difficulty: "High",
-        applyId: "gm-up-5",
-        primaryDriver,
-      });
-    }
+  const best = candidates.sort((a, b) => (b.runwayGainMonths || 0) - (a.runwayGainMonths || 0))[0];
+  if (best) {
+    return makeOpportunity(best);
   }
 
-  if ((fixShare >= 0.45 || largestKey === "payroll" || largestKey === "salesAndMarketing") && sim.inputs) {
-    const delta = estimateFixedCutRunway(sim.inputs, 0.1);
-    const savings = largestAmount * 0.1;
-    if (delta != null && delta > 0.05) {
-      const payrollLed = largestKey === "payroll";
-      return makeOpportunity({
-        badge: "AI CFO Recommendation",
-        title: payrollLed ? "Reduce hiring pace" : "Reduce fixed costs by 10%",
-        action: payrollLed ? "Slow payroll growth by ~10%" : "Cut fixed operating costs by 10%",
-        body: `${largestName} is ${Math.round(largestShareOpex * 100)}% of operating spend.`,
-        why: {
-          headline: `${largestName} is your largest controllable expense.`,
-          detail: `Reducing it by 10% saves about ${money(savings, sim, { compact: true })} over the forecast period and extends runway by approximately ${formatDeltaMonths(delta)}.`,
-        },
-        tone: "opportunity",
-        runwayGainMonths: delta,
-        difficulty: "Medium",
-        applyId: "fixed-down-10",
-        primaryDriver,
-      });
-    }
-  }
-
-  if (sim.inputs) {
-    const delta = estimateCostCutRunway(sim.inputs, 0.05, "variable");
-    const varSpend = sum(CHART_VARIABLE_KEYS.map((k) => sum(months.map((m) => m[k]))));
-    // Engine variable also includes S&M + product — use totalVariable for savings estimate
-    const varAll = sum(months.map((m) => m.totalVariableExpenses));
-    const savings = varAll * 0.05;
-    if (delta != null && delta > 0.05) {
-      return makeOpportunity({
-        badge: "AI CFO Recommendation",
-        title: "Tighten variable spend by 5%",
-        action: "Reduce variable costs by 5%",
-        body: `Variable costs represent ${Math.round(varShare * 100)}% of cash outflows.`,
-        why: {
-          headline: "Variable spend scales with every rupee of revenue.",
-          detail: `A 5% reduction saves about ${money(savings, sim, { compact: true })} over the forecast (vs ~${money(varSpend, sim, { compact: true })} of direct variable lines) and extends runway by approximately ${formatDeltaMonths(delta)}.`,
-        },
-        tone: "opportunity",
-        runwayGainMonths: delta,
-        difficulty: "Medium",
-        applyId: "variable-down-5",
-        primaryDriver,
-      });
-    }
-  }
-
+  const driver = primaryDriver;
   return makeOpportunity({
     badge: "Recommended Next Action",
-    title: `${largestName} is the largest outflow`,
+    title: driver ? `${driver.name} is the largest Month 1 cost driver` : "Review operating costs",
     action: null,
-    body: `${largestName} represents ${Math.round(largestShareOpex * 100)}% of operating spend.`,
+    body: driver
+      ? `${driver.name} represents ${formatPercent(driver.shareOfRevenue)} of Month 1 revenue.`
+      : "Review Month 1 operating costs against revenue.",
     why: {
-      headline: `${largestName} dominates operating spend.`,
-      detail: `At ${Math.round(largestShareOpex * 100)}% of operating costs (${money(largestAmount, sim, { compact: true })} over the forecast), this line is the primary place to look for runway improvement.`,
+      headline: driver ? `${driver.name} dominates Month 1 costs relative to revenue.` : "Operating structure review",
+      detail: driver
+        ? `At ${formatPercent(driver.shareOfRevenue)} of revenue (${money(driver.amount, sim, { compact: true })} in Month 1), this line is the primary place to look for runway improvement.`
+        : "Use the what-if simulations below to test revenue and cost levers.",
     },
     tone: "driver",
     runwayGainMonths: null,
     difficulty: null,
     applyId: null,
-    primaryDriver,
+    primaryDriver: driver,
   });
+}
+
+function mapWhatIfToOpportunity(row, sim, costContribution, primaryDriver, month1) {
+  const delta = row.runwayDelta;
+  if (delta == null) return null;
+
+  if (row.id === "revenue-up-5") {
+    return {
+      badge: "AI CFO Recommendation",
+      title: "Grow revenue by 5%",
+      action: "Increase Month 1 revenue trajectory by 5%",
+      body: `Month 1 revenue is ${money(month1?.revenue, sim, { compact: true })}.`,
+      why: {
+        headline: "Revenue growth directly extends runway when costs lag.",
+        detail: `A 5% revenue lift extends runway by approximately ${formatDeltaMonths(delta)} (from ${formatMonths(row.baseRunway)} to ${formatMonths(row.simulatedRunway)}).`,
+      },
+      tone: "opportunity",
+      runwayGainMonths: delta,
+      difficulty: "Medium",
+      applyId: row.id,
+      primaryDriver,
+    };
+  }
+
+  if (row.id === "fixed-down-10") {
+    const fixedShare = costContribution.totalFixedShareOfRevenue;
+    return {
+      badge: "AI CFO Recommendation",
+      title: "Reduce fixed costs by 10%",
+      action: "Cut fixed operating costs by 10% from Month 2",
+      body: `Fixed costs represent ${formatPercent(fixedShare)} of Month 1 revenue.`,
+      why: {
+        headline: "Fixed cost relief compounds through the forecast.",
+        detail: `A 10% fixed-cost reduction extends runway by approximately ${formatDeltaMonths(delta)} (from ${formatMonths(row.baseRunway)} to ${formatMonths(row.simulatedRunway)}).`,
+      },
+      tone: "opportunity",
+      runwayGainMonths: delta,
+      difficulty: "Medium",
+      applyId: row.id,
+      primaryDriver,
+    };
+  }
+
+  if (row.id === "gm-up-5") {
+    const gm = month1?.grossMargin ?? 0;
+    return {
+      badge: "AI CFO Recommendation",
+      title: "Improve gross margin by 5 points",
+      action: "Lift gross margin by 5 percentage points",
+      body: `Month 1 gross margin is ${formatPercent(gm)}.`,
+      why: {
+        headline: "Unit economics are a high-leverage cash lever.",
+        detail: `A 5-point gross-margin improvement extends runway by approximately ${formatDeltaMonths(delta)} (from ${formatMonths(row.baseRunway)} to ${formatMonths(row.simulatedRunway)}).`,
+      },
+      tone: "opportunity",
+      runwayGainMonths: delta,
+      difficulty: "High",
+      applyId: row.id,
+      primaryDriver,
+    };
+  }
+
+  return null;
 }
 
 function makeOpportunity({
@@ -418,6 +500,7 @@ function confidenceFromGain(delta, difficulty) {
 
 function buildWhatIfSensitivities(inputs) {
   if (!inputs) return [];
+  const baseRunway = runwayOf(inputs);
   const rows = [
     { id: "revenue-up-5", label: "+5% Revenue", delta: estimateRevenueLevelLiftRunway(inputs, 0.05) },
     { id: "fixed-down-10", label: "−10% Fixed Costs", delta: estimateFixedCutRunway(inputs, 0.1) },
@@ -429,67 +512,43 @@ function buildWhatIfSensitivities(inputs) {
       id: r.id,
       label: r.label,
       runwayDelta: round1(r.delta),
+      baseRunway: baseRunway != null ? round1(baseRunway) : null,
+      simulatedRunway:
+        baseRunway != null && r.delta != null ? round1(baseRunway + r.delta) : null,
       display: formatRunwayGain(r.delta),
     }));
 }
 
-function buildBenchmark(sim, avgGrossMargin, months) {
-  const industry = sim.inputs?.industry || "Others";
-  const peerKey = peerKeyForIndustry(industry);
-  const peers = GROSS_MARGIN_PEERS[peerKey] ?? GROSS_MARGIN_PEERS.Other;
-  const burnMultiple = computeBurnMultiple(months);
+function buildBenchmark(sim, month1) {
+  const industry = sim.inputs?.industry || "";
+  const peers = INDUSTRY_GROSS_MARGIN_BENCHMARKS[industry];
 
-  if (peerKey === "SaaS" || peerKey === "FinTech" || avgGrossMargin >= 0.4) {
-    let status = "Within benchmark";
-    let onTarget = true;
-    if (avgGrossMargin < peers.low) {
-      status = "Below benchmark";
-      onTarget = false;
-    } else if (avgGrossMargin >= peers.topQuartile) {
-      status = "Top quartile";
-    } else if (avgGrossMargin > peers.high) {
-      status = "Above range";
-    }
+  if (!peers) {
     return {
-      kind: "grossMargin",
-      title: `Healthy ${industry}`,
-      metricLabel: "Gross Margin",
-      rangeLabel: "Peer range",
-      rangeValue: `${formatPercent(peers.low, 0)}–${formatPercent(peers.high, 0)}`,
-      medianLabel: "Industry median",
-      medianValue: formatPercent(peers.median, 0),
-      topLabel: "Top quartile",
-      topValue: formatPercent(peers.topQuartile, 0),
-      youLabel: "You",
-      youValue: formatPercent(avgGrossMargin, 0),
-      status,
-      onTarget,
+      available: false,
+      industry,
+      message: "Benchmark data not yet available for this industry.",
     };
   }
 
-  if (burnMultiple != null) {
-    const onTarget = burnMultiple <= BURN_MULTIPLE_MEDIAN * 1.15;
-    return {
-      kind: "burnMultiple",
-      title: "Burn multiple vs peers",
-      metricLabel: "Burn Multiple",
-      rangeLabel: "Healthy band",
-      rangeValue: `< ${BURN_MULTIPLE_MEDIAN}`,
-      medianLabel: "Industry median",
-      medianValue: String(BURN_MULTIPLE_MEDIAN),
-      topLabel: "Top quartile",
-      topValue: String(BURN_MULTIPLE_TOP),
-      youLabel: "You",
-      youValue: String(round1(burnMultiple)),
-      status: onTarget ? "Within benchmark" : "Above median",
-      onTarget,
-    };
+  const grossMargin = month1?.grossMargin ?? 0;
+  let status = "Within benchmark";
+  let onTarget = true;
+  if (grossMargin < peers.low) {
+    status = "Below benchmark";
+    onTarget = false;
+  } else if (grossMargin >= peers.topQuartile) {
+    status = "Top quartile";
+  } else if (grossMargin > peers.high) {
+    status = "Above range";
   }
 
   return {
+    available: true,
     kind: "grossMargin",
-    title: `Healthy ${industry}`,
-    metricLabel: "Gross Margin",
+    industry,
+    title: `${industry} benchmark`,
+    metricLabel: "Gross Margin (Month 1)",
     rangeLabel: "Peer range",
     rangeValue: `${formatPercent(peers.low, 0)}–${formatPercent(peers.high, 0)}`,
     medianLabel: "Industry median",
@@ -497,23 +556,10 @@ function buildBenchmark(sim, avgGrossMargin, months) {
     topLabel: "Top quartile",
     topValue: formatPercent(peers.topQuartile, 0),
     youLabel: "You",
-    youValue: formatPercent(avgGrossMargin, 0),
-    status: avgGrossMargin >= peers.low ? "Within benchmark" : "Below benchmark",
-    onTarget: avgGrossMargin >= peers.low,
+    youValue: formatPercent(grossMargin, 0),
+    status,
+    onTarget,
   };
-}
-
-function buildCostDrivers(totals, opexTotal) {
-  return Object.entries(totals)
-    .map(([key, amount]) => ({
-      key,
-      name: CATEGORY_LABELS[key],
-      amount,
-      share: opexTotal > 0 ? amount / opexTotal : 0,
-    }))
-    .filter((d) => d.share >= 0.02)
-    .sort((a, b) => b.share - a.share)
-    .slice(0, 4);
 }
 
 function buildCashOutDetail(months) {
@@ -523,19 +569,6 @@ function buildCashOutDetail(months) {
     monthLabel: hit.monthLabel,
     balance: Number(hit.closingCash) || 0,
   };
-}
-
-function computeBurnMultiple(months) {
-  if (!months?.length || months.length < 2) return null;
-  let burn = 0;
-  let newRev = 0;
-  for (let i = 1; i < months.length; i++) {
-    burn += Math.max(Number(months[i].netBurn) || 0, 0);
-    const delta = (Number(months[i].revenue) || 0) - (Number(months[i - 1].revenue) || 0);
-    newRev += Math.max(delta, 0);
-  }
-  if (newRev <= 0) return null;
-  return burn / newRev;
 }
 
 function estimateCostCutRunway(inputs, reductionRate, target) {
@@ -622,22 +655,6 @@ function round1(n) {
   return Math.round(Number(n) * 10) / 10;
 }
 
-function categoryTotals(months) {
-  return {
-    cogs: sum(months.map((m) => m.cogs)),
-    otherDirectCosts: sum(months.map((m) => m.otherDirectCosts)),
-    salesAndMarketing: sum(months.map((m) => m.salesAndMarketing)),
-    payroll: sum(months.map((m) => m.payroll)),
-    productAndTechnology: sum(months.map((m) => m.productAndTechnology)),
-    otherFixedCosts: sum(months.map((m) => m.otherFixedCosts)),
-  };
-}
-
 function sum(arr) {
   return arr.reduce((a, b) => a + (Number(b) || 0), 0);
-}
-
-function average(arr) {
-  if (!arr.length) return 0;
-  return sum(arr) / arr.length;
 }

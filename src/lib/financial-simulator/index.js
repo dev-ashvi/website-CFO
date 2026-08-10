@@ -25,6 +25,13 @@ export {
   WHATIF_OVERLAYS,
 } from "./dashboardOverlays.js";
 export { ASK_AI_PROMPTS, answerAskAiCfo } from "./askAiCfo.js";
+export {
+  askAiCfo,
+  buildSuggestedPrompts,
+  buildModelContext,
+  parseAiCfoQuestion,
+  runAiCfoAction,
+} from "./aiCfoEngine.js";
 
 import { validateSimulatorInputs } from "./validation.js";
 import { calculateProjection } from "./calculateProjection.js";

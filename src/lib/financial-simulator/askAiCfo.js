@@ -23,8 +23,10 @@ export function answerAskAiCfo(promptId, sim, customQuestion = "") {
   const gm = k.avgGrossMargin;
   const mix = k.expenseMix || {};
   const largest = mix.largestExpenseCategory || "operating costs";
-  const varPct = Math.round((mix.variableExpensePercent || 0) * 100);
-  const fixPct = Math.round((mix.fixedExpensePercent || 0) * 100);
+  const varPct = Math.round(
+    ((mix.variableSharePercent ?? mix.variableExpensePercent) || 0) * 100,
+  );
+  const fixPct = Math.round(((mix.fixedSharePercent ?? mix.fixedExpensePercent) || 0) * 100);
   const payroll = average(months.map((m) => m.payroll));
   const marketing = average(months.map((m) => m.salesAndMarketing));
   const currency = sim?.inputs?.currency;

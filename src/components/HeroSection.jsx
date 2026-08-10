@@ -572,7 +572,7 @@ export default function HeroSection({
                 {pillTagline}
               </motion.div>
               <motion.h1
-                className="mx-auto max-w-4xl text-balance text-3xl font-normal leading-[1.12] tracking-tight text-slate-800 sm:text-4xl md:text-5xl lg:text-6xl"
+                className="mx-auto max-w-4xl text-balance text-5xl md:text-[3.25rem] font-semibold tracking-tight leading-[1.15] text-[#1a3673]"
                 initial={{ opacity: 0, y: 20 }}
                 animate={
                   isChatActive
