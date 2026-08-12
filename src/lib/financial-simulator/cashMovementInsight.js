@@ -8,18 +8,158 @@ import { buildFundingDependencyInsight } from "./plannedFunding.js";
 /** Default visible horizon for Cash Flow Intelligence chart (model still runs 24 months). */
 export const CHART_DEFAULT_HORIZON = 12;
 
+/** Canonical user-facing labels for Cash Flow Intelligence (and AI CFO copy). */
+export const CASH_FLOW_INTELLIGENCE_LABELS = Object.freeze({
+  revenue: "Revenue",
+  cogs: "COGS",
+  otherDirectCosts: "Other direct costs",
+  productAndTechnology: "Fulfillment & other variable costs",
+  salesAndMarketing: "Sales & Marketing costs",
+  payroll: "Salary / Payroll",
+  otherFixedCosts: "Other fixed costs",
+  capex: "CapEx",
+});
+
 function money(amount, sim, opts = {}) {
   return formatMoney(amount, { ...opts, currency: sim?.inputs?.currency });
 }
 
 const COST_CONTRIBUTION_CATEGORIES = [
-  { key: "cogs", label: "COGS", group: "variable" },
-  { key: "otherDirectCosts", label: "Other direct costs", group: "variable" },
-  { key: "salesAndMarketing", label: "Sales & marketing", group: "fixed" },
-  { key: "productAndTechnology", label: "Product & technology", group: "fixed" },
-  { key: "payroll", label: "Payroll", group: "fixed" },
-  { key: "otherFixedCosts", label: "Other fixed costs", group: "fixed" },
+  { key: "cogs", label: CASH_FLOW_INTELLIGENCE_LABELS.cogs, group: "variable" },
+  { key: "otherDirectCosts", label: CASH_FLOW_INTELLIGENCE_LABELS.otherDirectCosts, group: "variable" },
+  {
+    key: "productAndTechnology",
+    label: CASH_FLOW_INTELLIGENCE_LABELS.productAndTechnology,
+    group: "variable",
+  },
+  {
+    key: "salesAndMarketing",
+    label: CASH_FLOW_INTELLIGENCE_LABELS.salesAndMarketing,
+    group: "variable",
+  },
+  { key: "payroll", label: CASH_FLOW_INTELLIGENCE_LABELS.payroll, group: "fixed" },
+  { key: "otherFixedCosts", label: CASH_FLOW_INTELLIGENCE_LABELS.otherFixedCosts, group: "fixed" },
 ];
+
+/**
+ * Legend / tooltip assumption copy from normalized user inputs (not projected shares).
+ * @param {import('./types.js').SimulatorInputs | undefined} inputs
+ * @param {string} [currency]
+ */
+export function buildCashFlowLegendAssumptions(inputs, currency = "INR") {
+  const cur = currency || inputs?.currency || "INR";
+  const labels = CASH_FLOW_INTELLIGENCE_LABELS;
+  const cogsPct = Number(inputs?.cogsPercent) || 0;
+  const otherDirectPct = Number(inputs?.otherDirectCostsPercent) || 0;
+  const fulfillmentPct = Number(inputs?.productTechPercent) || 0;
+  const smPct = Number(inputs?.salesMarketingPercent) || 0;
+  const payroll = Number(inputs?.monthlyPayroll) || 0;
+  const otherFixed = Number(inputs?.otherFixedCosts) || 0;
+  const capexEvents = (inputs?.capexEvents || []).filter((e) => Number(e?.amount) > 0);
+  const totalCapex = capexEvents.reduce((s, e) => s + (Number(e.amount) || 0), 0);
+
+  const pctOfRevenue = (pct) => `${formatPercent(pct, 0)} of revenue`;
+  const pctCompact = (pct) => formatPercent(pct, 0);
+
+  /** @type {Record<string, {
+   *   key: string,
+   *   label: string,
+   *   kind: 'revenue'|'percentOfRevenue'|'fixedMonthly'|'capex',
+   *   legendText: string,
+   *   compactLegendText: string,
+   *   assumptionDetail: string|null,
+   *   inputValue: number,
+   *   totalCapex?: number,
+   *   capexEventCount?: number,
+   * }>} */
+  const out = {
+    revenue: {
+      key: "revenue",
+      label: labels.revenue,
+      kind: "revenue",
+      legendText: labels.revenue,
+      compactLegendText: labels.revenue,
+      assumptionDetail: null,
+      inputValue: Number(inputs?.currentMonthlyRevenue) || 0,
+    },
+    cogs: {
+      key: "cogs",
+      label: labels.cogs,
+      kind: "percentOfRevenue",
+      legendText: `${labels.cogs} · ${pctOfRevenue(cogsPct)}`,
+      compactLegendText: `${labels.cogs} · ${pctCompact(cogsPct)}`,
+      assumptionDetail: pctOfRevenue(cogsPct),
+      inputValue: cogsPct,
+    },
+    otherDirectCosts: {
+      key: "otherDirectCosts",
+      label: labels.otherDirectCosts,
+      kind: "percentOfRevenue",
+      legendText: `${labels.otherDirectCosts} · ${pctOfRevenue(otherDirectPct)}`,
+      compactLegendText: `${labels.otherDirectCosts} · ${pctCompact(otherDirectPct)}`,
+      assumptionDetail: pctOfRevenue(otherDirectPct),
+      inputValue: otherDirectPct,
+    },
+    productAndTechnology: {
+      key: "productAndTechnology",
+      label: labels.productAndTechnology,
+      kind: "percentOfRevenue",
+      legendText: `${labels.productAndTechnology} · ${pctOfRevenue(fulfillmentPct)}`,
+      compactLegendText: `${labels.productAndTechnology} · ${pctCompact(fulfillmentPct)}`,
+      assumptionDetail: pctOfRevenue(fulfillmentPct),
+      inputValue: fulfillmentPct,
+    },
+    salesAndMarketing: {
+      key: "salesAndMarketing",
+      label: labels.salesAndMarketing,
+      kind: "percentOfRevenue",
+      legendText: `${labels.salesAndMarketing} · ${pctOfRevenue(smPct)}`,
+      compactLegendText: `${labels.salesAndMarketing} · ${pctCompact(smPct)}`,
+      assumptionDetail: pctOfRevenue(smPct),
+      inputValue: smPct,
+    },
+    payroll: {
+      key: "payroll",
+      label: labels.payroll,
+      kind: "fixedMonthly",
+      legendText: `${labels.payroll} · ${formatMoney(payroll, { currency: cur })} / month`,
+      compactLegendText: `${labels.payroll} · ${formatMoney(payroll, { currency: cur, compact: true })}/mo`,
+      assumptionDetail: `Starting monthly assumption: ${formatMoney(payroll, { currency: cur })}`,
+      inputValue: payroll,
+    },
+    otherFixedCosts: {
+      key: "otherFixedCosts",
+      label: labels.otherFixedCosts,
+      kind: "fixedMonthly",
+      legendText: `${labels.otherFixedCosts} · ${formatMoney(otherFixed, { currency: cur })} / month`,
+      compactLegendText: `${labels.otherFixedCosts} · ${formatMoney(otherFixed, { currency: cur, compact: true })}/mo`,
+      assumptionDetail: `Starting monthly assumption: ${formatMoney(otherFixed, { currency: cur })}`,
+      inputValue: otherFixed,
+    },
+    capex: {
+      key: "capex",
+      label: labels.capex,
+      kind: "capex",
+      legendText:
+        totalCapex > 0
+          ? `${labels.capex} · ${formatMoney(totalCapex, { currency: cur })} planned`
+          : `${labels.capex} · none planned`,
+      compactLegendText:
+        totalCapex > 0
+          ? `${labels.capex} · ${formatMoney(totalCapex, { currency: cur, compact: true })} planned`
+          : labels.capex,
+      assumptionDetail:
+        totalCapex > 0
+          ? `${formatMoney(totalCapex, { currency: cur })} across ${capexEvents.length} planned event${capexEvents.length === 1 ? "" : "s"}`
+          : "No CapEx events planned",
+      inputValue: totalCapex,
+      totalCapex,
+      capexEventCount: capexEvents.length,
+    },
+  };
+
+  return out;
+}
 
 /** Peer gross-margin ranges keyed by industry label (validated only — do not invent). */
 const INDUSTRY_GROSS_MARGIN_BENCHMARKS = {
@@ -141,7 +281,7 @@ export function buildExpenseInsights(month1, kpis, sim = {}) {
     items.push({
       id: "payroll",
       title: "Payroll exposure",
-      body: `Payroll represents ${formatPercent(payrollCat.shareOfRevenue)} of revenue and ${fmt(payrollCat.amount)} per month.`,
+      body: `${CASH_FLOW_INTELLIGENCE_LABELS.payroll} represents ${formatPercent(payrollCat.shareOfRevenue)} of revenue and ${fmt(payrollCat.amount)} per month.`,
       tone: payrollCat.shareOfRevenue >= 0.25 ? "watch" : "neutral",
       highlight: formatPercent(payrollCat.shareOfRevenue),
     });

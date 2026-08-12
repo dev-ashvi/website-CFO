@@ -15,6 +15,8 @@ import { AiCfoPanel } from "./AiCfoPanel.jsx";
 import {
   buildCashMovementInsight,
   buildOperatingLeverageStats,
+  buildCashFlowLegendAssumptions,
+  CASH_FLOW_INTELLIGENCE_LABELS,
   CHART_DEFAULT_HORIZON,
   sliceMonthsForChart,
 } from "../../lib/financial-simulator/cashMovementInsight.js";
@@ -24,38 +26,62 @@ const TINY_SHARE = 0.02;
 
 /** Hierarchical palette: green inflow · orange variable · blue fixed · purple CapEx */
 const SERIES_META = {
-  revenue: { key: "revenue", label: "Revenue", color: "#16a34a", group: "revenue", stackId: "in" },
-  cogs: { key: "cogs", label: "COGS", color: "#c2410c", group: "variable", stackId: "out" },
+  revenue: {
+    key: "revenue",
+    label: CASH_FLOW_INTELLIGENCE_LABELS.revenue,
+    color: "#16a34a",
+    group: "revenue",
+    stackId: "in",
+  },
+  cogs: {
+    key: "cogs",
+    label: CASH_FLOW_INTELLIGENCE_LABELS.cogs,
+    color: "#c2410c",
+    group: "variable",
+    stackId: "out",
+  },
   otherDirectCosts: {
     key: "otherDirectCosts",
-    label: "Other direct",
+    label: CASH_FLOW_INTELLIGENCE_LABELS.otherDirectCosts,
     color: "#fb923c",
+    group: "variable",
+    stackId: "out",
+  },
+  productAndTechnology: {
+    key: "productAndTechnology",
+    label: CASH_FLOW_INTELLIGENCE_LABELS.productAndTechnology,
+    color: "#ea580c",
     group: "variable",
     stackId: "out",
   },
   salesAndMarketing: {
     key: "salesAndMarketing",
-    label: "Sales & marketing",
-    color: "#1a3673",
-    group: "fixed",
+    label: CASH_FLOW_INTELLIGENCE_LABELS.salesAndMarketing,
+    color: "#f97316",
+    group: "variable",
     stackId: "out",
   },
-  payroll: { key: "payroll", label: "Payroll", color: "#2f4f9a", group: "fixed", stackId: "out" },
-  productAndTechnology: {
-    key: "productAndTechnology",
-    label: "Product & technology",
-    color: "#4c6bb5",
+  payroll: {
+    key: "payroll",
+    label: CASH_FLOW_INTELLIGENCE_LABELS.payroll,
+    color: "#1a3673",
     group: "fixed",
     stackId: "out",
   },
   otherFixedCosts: {
     key: "otherFixedCosts",
-    label: "Other fixed",
-    color: "#93a4c9",
+    label: CASH_FLOW_INTELLIGENCE_LABELS.otherFixedCosts,
+    color: "#4c6bb5",
     group: "fixed",
     stackId: "out",
   },
-  capex: { key: "capex", label: "CapEx", color: "#7c3aed", group: "capex", stackId: "out" },
+  capex: {
+    key: "capex",
+    label: CASH_FLOW_INTELLIGENCE_LABELS.capex,
+    color: "#7c3aed",
+    group: "capex",
+    stackId: "out",
+  },
   other: { key: "other", label: "Other", color: "#94a3b8", group: "other", stackId: "out" },
 };
 
@@ -77,13 +103,13 @@ const GROUP_DEFS = [
     id: "variable",
     label: "Variable Costs",
     color: "#c2410c",
-    children: ["cogs", "otherDirectCosts"],
+    children: ["cogs", "otherDirectCosts", "productAndTechnology", "salesAndMarketing"],
   },
   {
     id: "fixed",
     label: "Fixed Costs",
     color: "#1a3673",
-    children: ["salesAndMarketing", "payroll", "productAndTechnology", "otherFixedCosts"],
+    children: ["payroll", "otherFixedCosts"],
   },
   {
     id: "capex",
@@ -151,14 +177,18 @@ export function CashMovementBreakdown({
   );
 
   const categoryShares = useMemo(() => computeCategoryShares(chartMonths), [chartMonths]);
+  const legendAssumptions = useMemo(
+    () => buildCashFlowLegendAssumptions(inputs, currency),
+    [inputs, currency],
+  );
   const collapsedKeys = useMemo(() => {
     const tiny = new Set();
     for (const key of [
       "cogs",
       "otherDirectCosts",
+      "productAndTechnology",
       "salesAndMarketing",
       "payroll",
-      "productAndTechnology",
       "otherFixedCosts",
     ]) {
       if ((categoryShares[key] || 0) > 0 && (categoryShares[key] || 0) < TINY_SHARE) {
@@ -179,22 +209,14 @@ export function CashMovementBreakdown({
     if (groupOn.revenue && childOn.revenue) keys.push("revenue");
     pushIf("cogs", "variable");
     pushIf("otherDirectCosts", "variable");
-    pushIf("salesAndMarketing", "fixed");
+    pushIf("productAndTechnology", "variable");
+    pushIf("salesAndMarketing", "variable");
     pushIf("payroll", "fixed");
-    pushIf("productAndTechnology", "fixed");
     pushIf("otherFixedCosts", "fixed");
     if (groupOn.capex && childOn.capex) keys.push("capex");
     if (collapsedKeys.size && groupOn.other && childOn.other) keys.push("other");
     return keys.map((k) => SERIES_META[k]);
   }, [groupOn, childOn, collapsedKeys]);
-
-  const legendShares = useMemo(() => {
-    const shares = { ...categoryShares };
-    let otherShare = 0;
-    for (const key of collapsedKeys) otherShare += categoryShares[key] || 0;
-    shares.other = otherShare;
-    return shares;
-  }, [categoryShares, collapsedKeys]);
 
   const data = useMemo(() => {
     const base = buildChartData(chartMonths, timeframe, collapsedKeys);
@@ -402,7 +424,6 @@ export function CashMovementBreakdown({
                 .filter((key) => !collapsedKeys.has(key))
                 .map((key) => {
                   const meta = SERIES_META[key];
-                  const pct = legendShares[key];
                   return (
                     <label
                       key={key}
@@ -421,7 +442,6 @@ export function CashMovementBreakdown({
                       />
                       <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: meta.color }} />
                       {meta.label}
-                      {pct != null ? ` (${Math.round(pct * 100)}%)` : ""}
                     </label>
                   );
                 }),
@@ -476,6 +496,7 @@ export function CashMovementBreakdown({
                   lineLabel={lineMeta.label}
                   showLine={groupOn.line}
                   currency={currency}
+                  legendAssumptions={legendAssumptions}
                 />
               }
             />
@@ -484,9 +505,10 @@ export function CashMovementBreakdown({
               formatter={(value, entry) => {
                 const key = entry?.dataKey;
                 if (key === "lineValue") return `● ${lineMeta.label}`;
-                const pct = legendShares[key];
-                if (pct == null || key === "revenue") return value;
-                return `${value} (${Math.round(pct * 100)}%)`;
+                if (key === "scenarioLineValue") return value;
+                const assumption = legendAssumptions[key];
+                if (assumption?.compactLegendText) return assumption.compactLegendText;
+                return value;
               }}
             />
             <ReferenceLine y={0} stroke="rgba(26,54,115,0.3)" strokeDasharray="3 3" />
@@ -914,19 +936,28 @@ function BenchmarkCard({ benchmark }) {
   );
 }
 
-function MovementTooltip({ active, payload, label, activeSeries, lineLabel, showLine, currency = "INR" }) {
+function MovementTooltip({
+  active,
+  payload,
+  label,
+  activeSeries,
+  lineLabel,
+  showLine,
+  currency = "INR",
+  legendAssumptions = {},
+}) {
   if (!active || !payload?.length) return null;
   const row = payload[0]?.payload;
   if (!row?.abs) return null;
 
   const abs = row.abs;
   const revenue = abs.revenue || 0;
-  const variable = (abs.cogs || 0) + (abs.otherDirectCosts || 0);
-  const fixed =
-    (abs.salesAndMarketing || 0) +
-    (abs.payroll || 0) +
+  const variable =
+    (abs.cogs || 0) +
+    (abs.otherDirectCosts || 0) +
     (abs.productAndTechnology || 0) +
-    (abs.otherFixedCosts || 0);
+    (abs.salesAndMarketing || 0);
+  const fixed = (abs.payroll || 0) + (abs.otherFixedCosts || 0);
   const capex = abs.capex || 0;
   const other = abs.other || 0;
   const totalOutflow = variable + fixed + capex + other;
@@ -940,8 +971,13 @@ function MovementTooltip({ active, payload, label, activeSeries, lineLabel, show
     return base;
   };
 
+  const fmtFull = (v) => {
+    if (v == null || Number.isNaN(Number(v)) || Math.abs(v) < 1) return "—";
+    return formatMoney(v, { currency });
+  };
+
   return (
-    <div className="min-w-[240px] rounded-xl border border-[rgba(26,54,115,0.12)] bg-white px-3 py-2.5 text-[12px] text-[#1a3673] shadow-[0_8px_24px_rgba(26,54,115,0.12)]">
+    <div className="min-w-[260px] max-w-[320px] rounded-xl border border-[rgba(26,54,115,0.12)] bg-white px-3 py-2.5 text-[12px] text-[#1a3673] shadow-[0_8px_24px_rgba(26,54,115,0.12)]">
       <p className="font-semibold">{label}</p>
       <div className="mt-2 space-y-1 text-slate-600">
         <TipRow color="#16a34a" label="Revenue" value={fmt(revenue)} />
@@ -963,12 +999,27 @@ function MovementTooltip({ active, payload, label, activeSeries, lineLabel, show
       {activeSeries?.length > 1 ? (
         <details className="mt-2">
           <summary className="cursor-pointer text-[10px] font-medium text-slate-400">Category detail</summary>
-          <div className="mt-1 space-y-0.5 text-[11px] text-slate-500">
-            {activeSeries
-              .filter((s) => s.key !== "revenue")
-              .map((s) => (
-                <TipRow key={s.key} color={s.color} label={s.label} value={fmt(abs[s.key])} />
-              ))}
+          <div className="mt-1 space-y-1.5 text-[11px] text-slate-500">
+            {activeSeries.map((s) => {
+              const assumption = legendAssumptions[s.key];
+              const projected = abs[s.key];
+              return (
+                <div key={s.key} className="rounded-lg bg-[#f8fafc] px-2 py-1.5">
+                  <p className="flex items-center gap-1.5 font-medium text-[#1a3673]">
+                    <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: s.color }} />
+                    {assumption?.label || s.label}
+                  </p>
+                  {assumption?.assumptionDetail ? (
+                    <p className="mt-0.5 text-[10px] text-slate-500">
+                      Assumption: {assumption.assumptionDetail}
+                    </p>
+                  ) : null}
+                  <p className="mt-0.5 text-[10px] text-slate-500">
+                    Projected {label}: {fmtFull(Math.abs(Number(projected) || 0))}
+                  </p>
+                </div>
+              );
+            })}
           </div>
         </details>
       ) : null}

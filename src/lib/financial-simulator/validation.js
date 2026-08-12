@@ -60,7 +60,7 @@ export function validateSimulatorInputs(inputs) {
   requirePct(inputs.cogsPercent, "COGS % of revenue");
   requirePct(inputs.otherDirectCostsPercent, "Other direct costs % of revenue");
   requirePct(inputs.salesMarketingPercent, "Sales & marketing % of revenue");
-  requirePct(inputs.productTechPercent, "Product & technology % of revenue");
+  requirePct(inputs.productTechPercent, "Fulfillment & other variable costs % of revenue");
 
   requireNumber(inputs.monthlyPayroll, "Monthly payroll", { min: 0 });
   requireGrowth(inputs.payrollGrowth, "Payroll growth");

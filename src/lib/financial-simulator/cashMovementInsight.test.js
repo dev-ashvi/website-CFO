@@ -155,7 +155,7 @@ describe("Expense insights summary", () => {
     });
     const ei = buildExpenseInsights(months[0], kpis);
     const largest = ei.items.find((i) => i.id === "largest");
-    assert.ok(largest?.body.includes("Sales & marketing"));
+    assert.ok(largest?.body.includes("Sales & Marketing costs"));
   });
 });
 

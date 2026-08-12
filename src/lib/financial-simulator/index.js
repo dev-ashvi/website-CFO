@@ -24,7 +24,7 @@ export {
   findFirstNegativeCashMonth,
   getChartTotalExpenses,
 } from "./chartSeries.js";
-export { buildCashMovementInsight, buildOperatingLeverageStats } from "./cashMovementInsight.js";
+export { buildCashMovementInsight, buildOperatingLeverageStats, buildCashFlowLegendAssumptions, CASH_FLOW_INTELLIGENCE_LABELS, CHART_DEFAULT_HORIZON, sliceMonthsForChart, buildCostContribution } from "./cashMovementInsight.js";
 export {
   buildMonth1OperatingExpenseMix,
   getMonth1OperatingExpenseAmounts,
