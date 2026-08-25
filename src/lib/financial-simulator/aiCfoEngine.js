@@ -9,6 +9,7 @@ import { formatMoney, formatMonths, formatPercent } from "./format.js";
 
 /**
  * @param {{ months: object[], kpis: object, inputs: object }} sim
+ * @deprecated Prefer `buildFinancialIntelligenceContext(sim)` for canonical runway + context fields.
  */
 export function buildModelContext(sim) {
   const inputs = sim.inputs || {};

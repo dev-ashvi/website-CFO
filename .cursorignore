@@ -1,0 +1,34 @@
+﻿# Cursor indexing exclusions — keep source searchable; exclude runtime/generated bulk.
+
+# Analytics durable runtime (parquet, uploads, result blobs) — DO NOT INDEX
+**/.wyz-analytics-work/
+services/analytics/.wyz-analytics-work/
+.wyz-analytics-work/
+
+# Benchmark outputs
+**/.benchmark-results/
+.benchmark-results/
+services/analytics/.benchmark-results/
+
+# Dependencies & build artifacts
+node_modules/
+dist/
+build/
+coverage/
+
+# Python caches
+**/__pycache__/
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+.venv/
+venv/
+*.egg-info/
+
+# Large binary / data fixtures that are not app source
+**/*.parquet
+services/analytics/tests/data/beautyco/*.csv
+
+# Lock/OS noise
+**/.DS_Store
+Thumbs.db

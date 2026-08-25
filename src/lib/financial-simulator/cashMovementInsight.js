@@ -672,6 +672,11 @@ function buildWhatIfSensitivities(inputs) {
     }));
 }
 
+/** Gross margin peer benchmark for FinancialIntelligenceContext. */
+export function buildGrossMarginBenchmark(sim, month1) {
+  return buildBenchmark(sim, month1);
+}
+
 function buildBenchmark(sim, month1) {
   const industry = sim.inputs?.industry || "";
   const peers = INDUSTRY_GROSS_MARGIN_BENCHMARKS[industry];

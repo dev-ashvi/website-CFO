@@ -1,0 +1,38 @@
+{
+  "files.watcherExclude": {
+    "**/.git/objects/**": true,
+    "**/.git/subtree-cache/**": true,
+    "**/node_modules/**": true,
+    "**/dist/**": true,
+    "**/build/**": true,
+    "**/coverage/**": true,
+    "**/.wyz-analytics-work/**": true,
+    "**/services/analytics/.wyz-analytics-work/**": true,
+    "**/.benchmark-results/**": true,
+    "**/services/analytics/.benchmark-results/**": true,
+    "**/__pycache__/**": true,
+    "**/.pytest_cache/**": true,
+    "**/.mypy_cache/**": true,
+    "**/*.parquet": true
+  },
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/dist": true,
+    "**/build": true,
+    "**/coverage": true,
+    "**/.wyz-analytics-work": true,
+    "**/services/analytics/.wyz-analytics-work": true,
+    "**/.benchmark-results": true,
+    "**/services/analytics/.benchmark-results": true,
+    "**/__pycache__": true,
+    "**/.pytest_cache": true,
+    "**/*.parquet": true
+  },
+  "files.exclude": {
+    "**/.wyz-analytics-work": true,
+    "**/services/analytics/.wyz-analytics-work": true,
+    "**/.benchmark-results": true,
+    "**/__pycache__": true,
+    "**/.pytest_cache": true
+  }
+}

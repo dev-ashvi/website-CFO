@@ -1,0 +1,12 @@
+.gitignore
+.pytest_cache
+tests
+.wyz-analytics-work
+**/__pycache__
+**/*.pyc
+**/*.pyo
+.venv
+dist
+*.egg-info
+docs
+k8s

@@ -18,6 +18,7 @@ import PlanningModelsPage from "./pages/data/PlanningModelsPage.jsx";
 import PlanningPlansPage from "./pages/data/PlanningPlansPage.jsx";
 import PlanningInsightsPage from "./pages/data/PlanningInsightsPage.jsx";
 import PlanningWorkspacePage from "./pages/PlanningWorkspacePage.jsx";
+import RevenueMarginPage from "./pages/RevenueMarginPage.jsx";
 import EarlyAccessPage from "./pages/EarlyAccessPage.jsx";
 import RunwaySimulatorPage from "./pages/RunwaySimulatorPage.jsx";
 import { PlanningWorkspaceProvider } from "./planning/workspaceGuide/PlanningWorkspaceContext.jsx";
@@ -98,6 +99,7 @@ export default function App() {
                 <Route path="insights" element={<PlanningInsightsPage />} />
               </Route>
             </Route>
+            <Route path="revenue-margin" element={<RevenueMarginPage />} />
             <Route path="artifacts" element={<AppArtifactsPage />} />
           </Route>
         </Routes>

@@ -1,0 +1,19 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+*.egg-info/
+dist/
+build/
+
+# Golden CSVs are large local fixtures; resolve via WYZ_ANALYTICS_GOLDEN_DIR or Downloads.
+tests/data/beautyco/*.csv
+
+# Durable local analytics runtime (datasets, uploads, facts, decisions) — never commit.
+.wyz-analytics-work/
+**/.wyz-analytics-work/
+
+# Local benchmark snapshots
+.benchmark-results/
+**/.benchmark-results/

@@ -7,7 +7,12 @@
     "dev": "vite",
     "build": "node ./node_modules/vite/bin/vite.js build",
     "preview": "vite preview",
-    "test": "node --test src/lib/financial-simulator/**/*.test.js"
+    "test": "node --test src/lib/**/*.test.js src/api/**/*.test.js scripts/**/*.test.js",
+    "analytics:worker": "node scripts/run-analytics-worker.js",
+    "test:financial": "node --test src/lib/financial-simulator/**/*.test.js",
+    "benchmark:ai": "node scripts/run-wyz-ai-benchmark.js",
+    "benchmark:ai:live": "node scripts/run-wyz-ai-benchmark.js --live",
+    "eval:beautyco-ai-cfo": "node scripts/eval-beautyco-ai-cfo.js"
   },
   "dependencies": {
     "framer-motion": "^12.38.0",

@@ -76,6 +76,23 @@ export {
   parseAiCfoQuestion,
   runAiCfoAction,
 } from "./aiCfoEngine.js";
+export {
+  computeContextVersion,
+  isContextVersionStale,
+  FINANCIAL_ENGINE_VERSION,
+} from "./contextVersion.js";
+export { buildDeterministicSignals } from "./deterministicSignals.js";
+export {
+  buildFinancialIntelligenceContext,
+  buildLegacyAssessmentPayload,
+} from "./financialIntelligenceContext.js";
+export {
+  buildCandidateActions,
+  simulateCandidateActions,
+  scoreCandidateResults,
+  shortlistCandidateResults,
+  runCandidatePipeline,
+} from "./candidateActionEngine.js";
 
 import { validateSimulatorInputs } from "./validation.js";
 import { calculateProjection } from "./calculateProjection.js";

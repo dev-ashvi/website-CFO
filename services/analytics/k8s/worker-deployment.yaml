@@ -1,0 +1,75 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: wyz-analytics
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: wyz-analytics-worker
+  namespace: wyz-analytics
+data:
+  WYZ_ANALYTICS_MODE: "remote"
+  WYZ_ANALYTICS_BLOB_BACKEND: "remote"
+  WYZ_ANALYTICS_WORKER_ID: "k8s-worker-1"
+  WYZ_ANALYTICS_POLL_INTERVAL_SEC: "2"
+  WYZ_ANALYTICS_CLAIM_LEASE_SEC: "300"
+  WYZ_ANALYTICS_LOG_LEVEL: "INFO"
+  # Docker Desktop / kind: host machine running the local analytics API
+  WYZ_ANALYTICS_API_BASE_URL: "http://host.docker.internal:8788/api/v1/analytics"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: wyz-analytics-worker
+  namespace: wyz-analytics
+type: Opaque
+stringData:
+  # Must match WYZ_ANALYTICS_WORKER_TOKEN on the analytics API process.
+  WYZ_ANALYTICS_WORKER_TOKEN: "replace-with-long-random-token"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wyz-analytics-worker
+  namespace: wyz-analytics
+  labels:
+    app: wyz-analytics-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: wyz-analytics-worker
+  template:
+    metadata:
+      labels:
+        app: wyz-analytics-worker
+    spec:
+      restartPolicy: Always
+      containers:
+        - name: worker
+          image: wyz-analytics-worker:local
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: wyz-analytics-worker
+            - secretRef:
+                name: wyz-analytics-worker
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          # Polling worker — readiness means the process is alive.
+          livenessProbe:
+            exec:
+              command: ["python", "-c", "import wyz_analytics.workers.runner"]
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            exec:
+              command: ["python", "-c", "import wyz_analytics.workers.runner"]
+            initialDelaySeconds: 5
+            periodSeconds: 15

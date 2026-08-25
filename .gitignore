@@ -1,0 +1,41 @@
+# Root ignores for local/dev stability — do not index or commit runtime/generated data.
+
+# Dependencies & build
+node_modules/
+dist/
+build/
+coverage/
+.vercel/
+
+# Analytics runtime (durable local data — never commit)
+.wyz-analytics-work/
+services/analytics/.wyz-analytics-work/
+**/.wyz-analytics-work/
+
+# Benchmark / eval outputs
+.benchmark-results/
+services/analytics/.benchmark-results/
+**/.benchmark-results/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+.venv/
+venv/
+
+# Env / secrets
+.env
+.env.local
+.env.*.local
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/

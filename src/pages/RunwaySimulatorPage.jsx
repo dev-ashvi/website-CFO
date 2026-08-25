@@ -27,6 +27,8 @@ import {
   runSimulation,
   buildRunwayUiDiagnostic,
   compareScenario1Diagnostic,
+  buildFinancialIntelligenceContext,
+  buildLegacyAssessmentPayload,
   getScenario1FormInputs,
   getScenario2FormInputs,
   getScenario4FormInputs,
@@ -197,66 +199,8 @@ export default function RunwaySimulatorPage() {
     setPhase("calculating");
     window.scrollTo({ top: 0, behavior: "smooth" });
 
-    const payload = {
-      businessContext: {
-        companyName: normalized.companyName || undefined,
-        industry: normalized.industry,
-        businessModel: normalized.businessModel,
-        startupStage: normalized.startupStage,
-        mainPriority: normalized.mainPriority,
-      },
-      metrics: {
-        runwayMonths: sim.kpis.runwayMonths,
-        cashOutMonth: sim.kpis.cashOutMonthLabel,
-        monthlyNetBurn: Math.round(sim.kpis.burnMetrics.monthlyNetBurnExcludingCapex),
-        monthlyGrossBurn: Math.round(sim.kpis.burnMetrics.monthlyGrossBurn),
-        avgMonthlyNetBurn: Math.round(sim.kpis.avgMonthlyNetBurn),
-        avgMonthlyGrossBurn: Math.round(sim.kpis.avgMonthlyGrossBurn),
-        grossMarginPercent: Math.round(sim.kpis.avgGrossMargin * 1000) / 10,
-        monthlyRevenueGrowthPercent:
-          normalized.revenueMode === "simple"
-            ? Math.round(normalized.monthlyRevenueGrowth * 1000) / 10
-            : Math.round(normalized.monthlyVolumeGrowth * 1000) / 10,
-        ebitda: Math.round(sim.kpis.month1Ebitda),
-        sixMonthClosingCash: sim.kpis.sixMonthClosingCash,
-        twelveMonthClosingCash: sim.kpis.twelveMonthClosingCash,
-        healthStatus: sim.kpis.healthStatus,
-      },
-      financialPerformance: {
-        revenue: Math.round(sim.kpis.financialPerformance.revenue),
-        grossProfit: Math.round(sim.kpis.financialPerformance.grossProfit),
-        grossMarginPercent: Math.round(sim.kpis.financialPerformance.grossMarginPercent * 1000) / 10,
-        cm1: Math.round(sim.kpis.financialPerformance.cm1),
-        cm1MarginPercent: Math.round(sim.kpis.financialPerformance.cm1MarginPercent * 1000) / 10,
-        ebitda: Math.round(sim.kpis.financialPerformance.ebitda),
-        ebitdaMarginPercent: Math.round(sim.kpis.financialPerformance.ebitdaMarginPercent * 1000) / 10,
-      },
-      burnMetrics: {
-        monthlyNetBurnExcludingCapex: Math.round(sim.kpis.burnMetrics.monthlyNetBurnExcludingCapex),
-        monthlyNetBurnIncludingCapex: Math.round(sim.kpis.burnMetrics.monthlyNetBurnIncludingCapex),
-        monthlyGrossBurn: Math.round(sim.kpis.burnMetrics.monthlyGrossBurn),
-      },
-      costMix: {
-        payrollPercentOfExpenses: Math.round(sim.kpis.costMix.payrollPercentOfExpenses * 100),
-        marketingPercentOfExpenses: Math.round(sim.kpis.costMix.marketingPercentOfExpenses * 100),
-        technologyPercentOfExpenses: Math.round(sim.kpis.costMix.technologyPercentOfExpenses * 100),
-      },
-      expenseMix: {
-        period: "month1",
-        variableExpenses: Math.round(sim.kpis.expenseMix.variableExpenses),
-        fixedExpenses: Math.round(sim.kpis.expenseMix.fixedExpenses),
-        variableSharePercent: Math.round(sim.kpis.expenseMix.variableSharePercent * 1000) / 10,
-        fixedSharePercent: Math.round(sim.kpis.expenseMix.fixedSharePercent * 1000) / 10,
-        largestExpenseCategoryKey: sim.kpis.expenseMix.largestExpenseCategoryKey,
-        largestExpenseCategoryLabel:
-          sim.kpis.expenseMix.largestExpenseCategoryLabel ??
-          sim.kpis.expenseMix.largestExpenseCategory,
-        largestExpenseCategory: sim.kpis.expenseMix.largestExpenseCategoryLabel ??
-          sim.kpis.expenseMix.largestExpenseCategory,
-        largestExpenseCategoryAmount: Math.round(sim.kpis.expenseMix.largestExpenseCategoryAmount || 0),
-      },
-      currency: normalized.currency,
-    };
+    const financialContext = buildFinancialIntelligenceContext(sim, { includeSimulations: true });
+    const payload = buildLegacyAssessmentPayload(financialContext);
 
     const minDelay = new Promise((resolve) => setTimeout(resolve, 900));
 

@@ -8,6 +8,7 @@ import {
   LayoutList,
   Database,
   Workflow,
+  BarChart3,
 } from "lucide-react";
 import { useAuth } from "../auth/AuthContext.jsx";
 
@@ -35,7 +36,8 @@ export default function AppLayout() {
     location.pathname.startsWith("/app/chat") ||
     location.pathname.startsWith("/app/dashboard") ||
     location.pathname.startsWith("/app/data") ||
-    location.pathname.startsWith("/app/workspace");
+    location.pathname.startsWith("/app/workspace") ||
+    location.pathname.startsWith("/app/revenue-margin");
   const [isNavCollapsed, setIsNavCollapsed] = useState(false);
 
   return (
@@ -151,6 +153,14 @@ export default function AppLayout() {
             >
               <Database className="h-[18px] w-[18px] shrink-0" strokeWidth={2} aria-hidden />
               {!isNavCollapsed && <span>Data</span>}
+            </NavLink>
+            <NavLink
+              to="/app/revenue-margin"
+              title={isNavCollapsed ? "Revenue & Margin" : undefined}
+              className={(props) => buildNavLinkClass(isNavCollapsed, props)}
+            >
+              <BarChart3 className="h-[18px] w-[18px] shrink-0" strokeWidth={2} aria-hidden />
+              {!isNavCollapsed && <span>Revenue & Margin</span>}
             </NavLink>
             <NavLink
               to="/app/artifacts"
