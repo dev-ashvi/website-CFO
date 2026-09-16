@@ -9,6 +9,7 @@ from __future__ import annotations
 import io
 import json
 import os
+import socket
 import time
 from pathlib import Path
 from typing import Any, Protocol
@@ -31,17 +32,29 @@ def atomic_write_json(path: Path, payload: Any) -> None:
     atomic_write_bytes(path, json.dumps(payload, default=str).encode("utf-8"))
 
 
+def _lock_stale_sec(default: float = 20.0) -> float:
+    raw = os.environ.get("WYZ_ANALYTICS_LOCK_STALE_SEC", "").strip()
+    if not raw:
+        return default
+    try:
+        return max(1.0, float(raw))
+    except ValueError:
+        return default
+
+
 class DirLock:
     """Atomic directory lock. Works on local NTFS/ext filesystems.
 
-    On Windows, a killed worker can leave a stale lockdir behind. We record the
-    holder PID inside the lock and reclaim when that process is gone.
+    Holder identity is ``hostname\\npid`` so PID liveness checks are only trusted
+    inside the same hostname/PID namespace. Across Docker Compose containers that
+    share a volume, PIDs are not comparable — reclaim uses lock age instead.
     """
 
-    def __init__(self, path: Path, timeout: float = 15.0):
+    def __init__(self, path: Path, timeout: float = 30.0):
         self.path = path
         self.timeout = timeout
         self._pid_file = path / "holder.pid"
+        self._stale_sec = _lock_stale_sec()
 
     def __enter__(self) -> DirLock:
         deadline = time.time() + self.timeout
@@ -50,7 +63,8 @@ class DirLock:
             try:
                 self.path.mkdir()
                 try:
-                    self._pid_file.write_text(str(os.getpid()), encoding="utf-8")
+                    host = socket.gethostname()
+                    self._pid_file.write_text(f"{host}\n{os.getpid()}", encoding="utf-8")
                 except OSError:
                     pass
                 return self
@@ -78,32 +92,68 @@ class DirLock:
             except OSError:
                 pass
 
+    def _lock_age_sec(self) -> float | None:
+        try:
+            return time.time() - self.path.stat().st_mtime
+        except OSError:
+            return None
+
+    def _parse_holder(self) -> tuple[str | None, int | None]:
+        """Return (hostname, pid). Legacy single-line PID files use hostname=None."""
+        try:
+            raw = self._pid_file.read_text(encoding="utf-8").strip()
+        except OSError:
+            return None, None
+        if not raw:
+            return None, None
+        lines = [ln.strip() for ln in raw.splitlines() if ln.strip()]
+        if len(lines) >= 2:
+            try:
+                return lines[0], int(lines[1])
+            except ValueError:
+                return lines[0], None
+        try:
+            return None, int(lines[0])
+        except (ValueError, IndexError):
+            return None, None
+
     def _try_reclaim_stale(self) -> bool:
         """Return True if a stale lock was removed and the caller should retry mkdir."""
         if not self.path.exists():
             return False
-        holder_pid: int | None = None
-        try:
-            raw = self._pid_file.read_text(encoding="utf-8").strip()
-            holder_pid = int(raw) if raw else None
-        except (OSError, ValueError):
-            holder_pid = None
+
+        host, holder_pid = self._parse_holder()
+        our_host = socket.gethostname()
+        age = self._lock_age_sec()
+
+        if host is not None and host == our_host:
+            # Same hostname → same PID namespace (local Windows/Linux process pair).
+            if holder_pid is not None:
+                if holder_pid == os.getpid() or self._pid_alive(holder_pid):
+                    return False
+                return self._force_remove()
+            if age is None or age < self._stale_sec:
+                return False
+            return self._force_remove()
+
+        if host is not None and host != our_host:
+            # Cross-container / cross-host: never trust PID; age-based only.
+            if age is None or age < self._stale_sec:
+                return False
+            return self._force_remove()
 
         if holder_pid is not None:
-            if holder_pid == os.getpid():
+            # Legacy pid-only file (pre-hostname). Safe for same-machine workers.
+            if holder_pid == os.getpid() or self._pid_alive(holder_pid):
                 return False
-            if self._pid_alive(holder_pid):
-                return False
-        else:
-            # Legacy lockdirs without pid: reclaim only if clearly abandoned
-            # (mtime older than our wait timeout). Avoid racing a live holder.
-            try:
-                age = time.time() - self.path.stat().st_mtime
-            except OSError:
-                return False
-            if age < self.timeout:
-                return False
+            return self._force_remove()
 
+        # No holder metadata: reclaim only when clearly abandoned.
+        if age is None or age < max(self.timeout, self._stale_sec):
+            return False
+        return self._force_remove()
+
+    def _force_remove(self) -> bool:
         try:
             for child in self.path.iterdir():
                 child.unlink(missing_ok=True)

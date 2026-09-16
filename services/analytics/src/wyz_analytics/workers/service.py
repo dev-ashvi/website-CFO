@@ -111,6 +111,9 @@ class AnalyticsWorkspace:
         self.jobs = jobs or FilesystemJobStore(self.root)
         self.datasets = datasets or FilesystemDatasetStore(self.root)
         self.strategic_decisions = FilesystemStrategicDecisionRepository(self.root)
+        from wyz_analytics.observability.feedback.repository import FilesystemAiFeedbackRepository
+
+        self.ai_feedback = FilesystemAiFeedbackRepository(self.root)
         self.executor = JobExecutor(
             self.blobs,
             self.jobs,
@@ -165,7 +168,20 @@ class AnalyticsWorkspace:
             status=CREATED,
             created_at=utc_now(),
         )
-        return self.datasets.put(record)
+        created = self.datasets.put(record)
+        try:
+            from wyz_analytics.observability.emit import emit_event
+
+            emit_event(
+                "dataset_created",
+                component="analytics",
+                category="dataset",
+                dataset_id=created.dataset_id,
+                attributes={"workspace_id": created.workspace_id},
+            )
+        except Exception:
+            logger.exception("observability emit failed for dataset_created")
+        return created
 
     def get_dataset(self, dataset_id: str) -> DatasetRecord:
         record = self.datasets.get(dataset_id)
@@ -497,6 +513,24 @@ class AnalyticsWorkspace:
             client_baseline_values=client_baseline if isinstance(client_baseline, dict) else None,
             activate=True,
         )
+        try:
+            from wyz_analytics.observability.emit import emit_event
+
+            emit_event(
+                "strategic_decision_tracked",
+                component="strategy_decisions",
+                category="decision",
+                dataset_id=dataset_id,
+                decision_id=record.decision_id,
+                scope_hash=record.scope_hash,
+                attributes={
+                    "decision_theme": record.decision_theme,
+                    "selected_action": record.selected_action,
+                    "decision_status": record.status.value if hasattr(record.status, "value") else str(record.status),
+                },
+            )
+        except Exception:
+            logger.exception("observability emit failed for strategic_decision_tracked")
         return {"decision": record.to_dict(), "telemetry": telem}
 
     def evaluate_strategic_decision(self, dataset_id: str, decision_id: str, body: dict[str, Any]) -> dict[str, Any]:
@@ -604,7 +638,21 @@ class AnalyticsWorkspace:
             provider=body.get("provider"), model=body.get("model")
         )
         period = str(body.get("observation_period") or result.get("job_id") or "")
-        return review_strategic_decision(
+        try:
+            from wyz_analytics.observability.emit import emit_event
+
+            emit_event(
+                "strategic_decision_review_started",
+                component="strategy_decisions",
+                category="decision",
+                dataset_id=dataset_id,
+                decision_id=decision_id,
+                scope_hash=str(financial_scope.get("scope_hash") or record.scope_hash),
+                attributes={"decision_theme": record.decision_theme},
+            )
+        except Exception:
+            logger.exception("observability emit failed for review_started")
+        result_payload = review_strategic_decision(
             repository=self.strategic_decisions,
             record=record,
             working_context=context,
@@ -614,6 +662,28 @@ class AnalyticsWorkspace:
             current_period=period,
             message=str(body.get("message") or "Review this tracked strategic decision given current verified evidence."),
         )
+        try:
+            from wyz_analytics.observability.emit import emit_event
+
+            telem = result_payload.get("telemetry") or {}
+            emit_event(
+                "strategic_decision_review_completed",
+                component="strategy_decisions",
+                category="decision",
+                dataset_id=dataset_id,
+                decision_id=decision_id,
+                scope_hash=str(financial_scope.get("scope_hash") or record.scope_hash),
+                attributes={
+                    "decision_theme": record.decision_theme,
+                    "revision_disposition": telem.get("decision_revision_disposition")
+                    or telem.get("revision_disposition"),
+                    "evaluation_status": telem.get("decision_evaluation_status"),
+                    "final_selected_action": telem.get("decision_review_new_action"),
+                },
+            )
+        except Exception:
+            logger.exception("observability emit failed for review_completed")
+        return result_payload
 
     def update_strategic_decision_status(
         self, dataset_id: str, decision_id: str, body: dict[str, Any]
@@ -625,6 +695,24 @@ class AnalyticsWorkspace:
             raise AnalyticsError(INVALID_QUERY, f"Invalid decision status: {status_raw}") from exc
         # Do not auto-resolve; only explicit founder status changes.
         record = self.strategic_decisions.update_status(dataset_id, decision_id, status)
+        if status == DecisionStatus.ARCHIVED:
+            try:
+                from wyz_analytics.observability.emit import emit_event
+
+                emit_event(
+                    "strategic_decision_archived",
+                    component="strategy_decisions",
+                    category="decision",
+                    dataset_id=dataset_id,
+                    decision_id=decision_id,
+                    scope_hash=record.scope_hash,
+                    attributes={
+                        "decision_theme": record.decision_theme,
+                        "decision_status": status.value,
+                    },
+                )
+            except Exception:
+                logger.exception("observability emit failed for archived")
         return {"decision": record.to_dict(), "telemetry": decision_status_telemetry(record)}
 
     def ask_ai_cfo(self, dataset_id: str, body: dict[str, Any]) -> dict[str, Any]:
@@ -638,6 +726,9 @@ class AnalyticsWorkspace:
             "engine_version": result.get("engine_version"),
             "job_id": result.get("job_id"),
         }
+        from wyz_analytics.observability.context import get_request_id
+        from wyz_analytics.ai_cfo.conversation import previous_turns_from_client_payload
+
         return run_ai_cfo_turn(
             facts,
             lineage=lineage,
@@ -649,16 +740,95 @@ class AnalyticsWorkspace:
             history=body.get("history") if isinstance(body.get("history"), list) else None,
             conversation_id=body.get("conversation_id")
             or ((body.get("conversation") or {}).get("conversation_id") if isinstance(body.get("conversation"), dict) else None),
-            previous_turns=(
-                body.get("previous_turns")
-                if isinstance(body.get("previous_turns"), list)
-                else (
-                    (body.get("conversation") or {}).get("previous_turns")
-                    if isinstance(body.get("conversation"), dict)
-                    else None
-                )
-            ),
+            previous_turns=previous_turns_from_client_payload(body),
             signal_context=body.get("signal_context") if isinstance(body.get("signal_context"), dict) else None,
             reconciliation=result.get("reconciliation"),
             methodology=result.get("methodology") if isinstance(result.get("methodology"), dict) else None,
+            request_id=body.get("request_id") or get_request_id(),
         )
+
+    def submit_ai_feedback(self, dataset_id: str, body: dict[str, Any]) -> dict[str, Any]:
+        """Persist lean AI answer feedback. Client cannot inject trusted financial metadata."""
+        from wyz_analytics.observability.context import get_request_id
+        from wyz_analytics.observability.emit import emit_event
+        from wyz_analytics.observability.feedback import build_feedback_record
+
+        # Ensure dataset exists (authorization/lineage boundary).
+        self.get_dataset(dataset_id)
+        turn_id = str(body.get("turn_id") or "").strip()
+        if not turn_id:
+            raise AnalyticsError(INVALID_QUERY, "turn_id is required")
+        existing = self.ai_feedback.find_by_turn(dataset_id, turn_id)
+        if existing is not None:
+            return {"feedback": existing.to_record(), "duplicate": True}
+        # Trusted metadata: identifiers only. Ignore client provider/model/action claims.
+        try:
+            record = build_feedback_record(
+                dataset_id=dataset_id,
+                turn_id=turn_id,
+                rating=str(body.get("rating") or ""),
+                reason=body.get("reason"),
+                conversation_id=str(body.get("conversation_id")).strip()[:128]
+                if body.get("conversation_id")
+                else None,
+                scope_hash=str(body.get("scope_hash")).strip()[:128] if body.get("scope_hash") else None,
+                request_id=str(body.get("request_id") or get_request_id() or "").strip()[:128] or None,
+                answer_source=None,
+                decision_theme=None,
+                selected_action=None,
+                provider=None,
+                model=None,
+            )
+        except ValueError as exc:
+            raise AnalyticsError(INVALID_QUERY, str(exc)) from exc
+        # Strip any attempt to smuggle free-text / answer bodies / trusted metadata.
+        # body.get("answer_text"|"prompt"|"messages"|"provider"|"model") ignored intentionally
+        saved = self.ai_feedback.put(record)
+        emit_event(
+            "ai_answer_feedback_submitted",
+            component="ai_cfo",
+            category="feedback",
+            dataset_id=dataset_id,
+            conversation_id=saved.conversation_id,
+            turn_id=saved.turn_id,
+            request_id=saved.request_id,
+            scope_hash=saved.scope_hash,
+            attributes={
+                "feedback_id": saved.feedback_id,
+                "rating": saved.rating,
+                "reason": saved.reason,
+                "answer_source": saved.answer_source,
+                "decision_theme": saved.decision_theme,
+                "final_selected_action": saved.selected_action,
+            },
+        )
+        return {"feedback": saved.to_record(), "duplicate": False}
+
+    def list_ai_feedback(self, dataset_id: str) -> dict[str, Any]:
+        self.get_dataset(dataset_id)
+        items = self.ai_feedback.list(dataset_id)
+        return {
+            "dataset_id": dataset_id,
+            "feedback": [item.to_record() for item in items],
+            "count": len(items),
+        }
+
+    def readiness(self) -> dict[str, Any]:
+        """Process dependencies ready — does not call the GPT provider."""
+        work_dir = self.root
+        writable = False
+        try:
+            work_dir.mkdir(parents=True, exist_ok=True)
+            probe = work_dir / ".ready_probe"
+            probe.write_text("ok", encoding="utf-8")
+            probe.unlink(missing_ok=True)
+            writable = True
+        except OSError:
+            writable = False
+        ready = work_dir.exists() and writable
+        return {
+            "ready": ready,
+            "work_dir_exists": work_dir.exists(),
+            "work_dir_writable": writable,
+            "service": "wyz-analytics",
+        }

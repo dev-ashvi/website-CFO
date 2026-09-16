@@ -26,6 +26,8 @@ from wyz_analytics.ai_cfo.signal_context import (
 )
 from wyz_analytics.ai_cfo.tools import AiCfoTools
 from wyz_analytics.facts.models import validate_query
+from wyz_analytics.observability.ai_trace import emit_ai_cfo_turn_trace
+from wyz_analytics.observability.context import get_request_id
 from wyz_analytics.workers.errors import AnalyticsError, INVALID_QUERY
 from wyz_analytics.workers.logging_config import log_event
 
@@ -234,8 +236,10 @@ def run_ai_cfo_turn(
     previous_turns: list[dict[str, Any]] | None = None,
     signal_context: dict[str, Any] | None = None,
     guards_enabled: bool = True,
+    request_id: str | None = None,
 ) -> dict[str, Any]:
     started = time.perf_counter()
+    resolved_request_id = request_id or get_request_id()
     filters = _resolve_filters(analytical)
     dimension = str(analytical.get("dimension") or "channel")
     surface = str(analytical.get("surface") or "overview")
@@ -379,6 +383,7 @@ def run_ai_cfo_turn(
         turn_id=conversation_out["turn_id"],
         dataset_id=lineage.get("dataset_id"),
         scope_hash=financial_scope["scope_hash"],
+        request_id=resolved_request_id,
         capability=((answer.get("telemetry") or {}).get("guard") or {}).get("capability"),
         evidence_plan=((answer.get("telemetry") or {}).get("guard") or {}).get("evidence_plan"),
         forced_tools=",".join(public.get("forced_tools") or []),
@@ -397,6 +402,16 @@ def run_ai_cfo_turn(
         signal_id=public.get("signal_id"),
         signal_type=public.get("signal_type"),
     )
+    # Cross-cutting observability envelope (safe metadata only).
+    emit_ai_cfo_turn_trace(
+        public_telemetry=public,
+        conversation=conversation_out,
+        lineage=lineage,
+        scope_hash=financial_scope["scope_hash"],
+        latency_ms=latency_ms,
+        request_id=resolved_request_id,
+        answer=answer,
+    )
     return {
         "answer": answer,
         "scoring_answer": answer,
@@ -407,4 +422,5 @@ def run_ai_cfo_turn(
         "telemetry": public,
         "conversation": conversation_out,
         "signal_context_resolution": signal_resolution,
+        "request_id": resolved_request_id,
     }

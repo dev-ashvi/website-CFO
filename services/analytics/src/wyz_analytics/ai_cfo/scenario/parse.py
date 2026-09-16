@@ -38,8 +38,8 @@ _UNSUPPORTED_LEVER = re.compile(
     re.I,
 )
 _REVENUE_RESPONSE = re.compile(
-    r"\b(revenue|sales|top[\s-]?line)\b.{0,30}\b(grows?|growth|increases?|rises?|drops?|falls?|up|down)\b"
-    r"|\b(grows?|increases?|rises?|drops?|falls?)\b.{0,30}\b(revenue|sales|top[\s-]?line)\b",
+    r"\b(revenue|sales|top[\s-]?line)\b.{0,40}\b(grows?|growth|increases?|decreases?|reduces?|rises?|drops?|falls?|up|down)\b"
+    r"|\b(grows?|increases?|decreases?|reduces?|rises?|drops?|falls?)\b.{0,40}\b(revenue|sales|top[\s-]?line)\b",
     re.I,
 )
 _PRICE_VOLUME = re.compile(
@@ -68,27 +68,138 @@ _WHAT_IF = re.compile(
     r"\b(what happens if|what if|what will .{0,40} if|simulate|scenario|assume|suppose)\b",
     re.I,
 )
+# Magnitude-only follow-ups that inherit prior lever + sign (baseline-relative).
 _FOLLOWUP_PCT = re.compile(
-    r"^(what about|and|how about)\s+(?P<num>\d+(?:\.\d+)?)\s*%\??$",
+    r"^(?:"
+    r"(?:what about|and|how about)\s+(?:only\s+)?(?P<num>\d+(?:\.\d+)?)\s*%"
+    r"|make that\s+(?P<num2>\d+(?:\.\d+)?)\s*%"
+    r"|what if we (?:do|try)\s+(?P<num3>\d+(?:\.\d+)?)\s*%(?:\s+instead)?"
+    r")\.?\??$",
     re.I,
 )
+# Directional follow-ups that inherit prior lever.
 _FOLLOWUP_DIRECTION = re.compile(
-    r"^(what about|how about)\s+(?P<dir>increasing|raising|decreasing|reducing|cutting)\s+(?:it\s+)?(?P<num>\d+(?:\.\d+)?)\s*%\??$",
+    r"^(?:"
+    r"(?:what about|how about)\s+(?P<dir>increasing|raising|decreasing|reducing|cutting)\s+"
+    r"(?:it\s+)?(?:by\s+)?(?P<num>\d+(?:\.\d+)?)\s*%(?:\s+instead)?"
+    r"|how about\s+(?P<dir2>increasing|raising|decreasing|reducing|cutting)\s+"
+    r"(?:it\s+)?(?:by\s+)?(?P<num2>\d+(?:\.\d+)?)\s*%(?:\s+instead)?"
+    r"|what if(?:\s+instead)?\s+i\s+(?P<dir3>reduce|reduces|reducing|cut|cuts|cutting|decrease|decreases|decreasing|"
+    r"increase|increases|increasing|raise|raises|raising)\s+(?:it\s+)?(?:by\s+)?(?:only\s+)?"
+    r"(?P<num3>\d+(?:\.\d+)?)\s*%"
+    r"|what if(?:\s+we|\s+i)?\s+(?P<dir4>reduce|reduces|reducing|cut|cuts|cutting|decrease|decreases|decreasing|"
+    r"increase|increases|increasing)\s+(?:it\s+)?(?:by\s+)?(?:only\s+)?(?P<num4>\d+(?:\.\d+)?)\s*%(?:\s+instead)?"
+    r")\.?\??$",
+    re.I,
+)
+# Anaphoric "instead / it / that" modification without naming a lever.
+_FOLLOWUP_ANAPHORA = re.compile(
+    r"\b(instead|only\s+\d|make that|reduce it|cut it|increase it|decreasing it|increasing it)\b",
     re.I,
 )
 
 
 def is_scenario_question(message: str) -> bool:
     text = message or ""
+    stripped = text.strip()
     if _WHAT_IF.search(text):
         return True
-    if _FOLLOWUP_PCT.match(text.strip()) or _FOLLOWUP_DIRECTION.match(text.strip()):
+    if _FOLLOWUP_PCT.match(stripped) or _FOLLOWUP_DIRECTION.match(stripped):
+        return True
+    if re.match(r"^make that\s+\d+(?:\.\d+)?\s*%\.?\??$", stripped, re.I):
         return True
     if _MARKETING.search(text) and (_DROP.search(text) or _RISE.search(text)) and _PCT.search(text):
         return True
     if _COGS.search(text) and (_DROP.search(text) or _RISE.search(text) or _IMPROVE.search(text)) and _PCT.search(text):
         return True
     return False
+
+
+def _explicit_lever_in_text(text: str) -> bool:
+    """True when the user names a concrete lever (do not inherit over it)."""
+    return bool(
+        _MARKETING.search(text)
+        or _COGS.search(text)
+        or _CM1_COST.search(text)
+        or re.search(r"\b(revenue|sales|top[\s-]?line)\b", text or "", re.I)
+    )
+
+
+def _unique_prior_lever(prior: dict[str, Any] | None) -> ScenarioLever | None:
+    """Return a single reusable prior lever, or None if missing/ambiguous."""
+    if not isinstance(prior, dict):
+        return None
+    levers: list[str] = []
+    for raw in prior.get("changes") or []:
+        if isinstance(raw, dict) and raw.get("lever"):
+            levers.append(str(raw.get("lever")))
+    if prior.get("lever"):
+        levers.append(str(prior.get("lever")))
+    unique = list(dict.fromkeys(levers))
+    if len(unique) != 1:
+        return None
+    try:
+        return ScenarioLever(unique[0])
+    except ValueError:
+        return None
+
+
+def _prior_signed_template(prior: dict[str, Any], magnitude: float) -> float:
+    """Inherit prior direction for magnitude-only follow-ups (baseline-relative)."""
+    first = (prior.get("changes") or [{}])[0] if isinstance(prior, dict) else {}
+    prior_val = first.get("value") if isinstance(first, dict) else None
+    if prior_val is None and isinstance(prior, dict) and prior.get("direction") == "INCREASE":
+        return magnitude
+    if prior_val is None:
+        return -magnitude
+    return -magnitude if float(prior_val) <= 0 else magnitude
+
+
+def _direction_to_signed(direction: str, magnitude: float) -> float:
+    d = (direction or "").lower()
+    if d.startswith(("increas", "rais", "grow")):
+        return magnitude
+    return -magnitude
+
+
+def _followup_match_groups(match: re.Match[str]) -> tuple[float | None, str | None]:
+    """Extract (magnitude, optional direction token) from flexible follow-up match groups."""
+    num = None
+    for key in ("num", "num2", "num3", "num4"):
+        if match.groupdict().get(key) is not None:
+            num = float(match.group(key))
+            break
+    direction = None
+    for key in ("dir", "dir2", "dir3", "dir4"):
+        if match.groupdict().get(key):
+            direction = str(match.group(key))
+            break
+    return num, direction
+
+
+def _inherited_percent_spec(
+    *,
+    scope_hash: str,
+    dataset_id: str | None,
+    lever: ScenarioLever,
+    signed: float,
+) -> ScenarioSpec:
+    return validate_scenario_spec(
+        ScenarioSpec(
+            scope_hash=scope_hash,
+            dataset_id=dataset_id,
+            changes=[
+                ScenarioChange(
+                    lever=lever,
+                    operation=ScenarioOperation.PERCENT_CHANGE,
+                    value=signed,
+                    unit="PERCENT",
+                )
+            ],
+            assumptions=[HOLD_CONSTANT_ASSUMPTION],
+            parse_source="DETERMINISTIC_FOLLOWUP",
+        )
+    )
 
 
 def is_demand_response_question(message: str) -> bool:
@@ -247,67 +358,69 @@ def parse_scenario_spec(
             refusal_code="UNSUPPORTED_LEVER",
         )
 
-    # Follow-up with explicit direction: "What about increasing it 10%?"
-    followup_dir = _FOLLOWUP_DIRECTION.match(text)
-    if followup_dir and prior and (prior.get("changes") or prior.get("lever")):
-        first = (prior.get("changes") or [{}])[0]
-        lever_raw = first.get("lever") or prior.get("lever")
-        try:
-            lever = ScenarioLever(str(lever_raw))
-        except ValueError:
-            return _failed(scope_hash, dataset_id, "Prior scenario lever is not reusable.", refusal_code="FOLLOWUP_INVALID")
-        magnitude = float(followup_dir.group("num"))
-        direction = followup_dir.group("dir").lower()
-        signed = magnitude if direction in {"increasing", "raising"} else -magnitude
-        return validate_scenario_spec(
-            ScenarioSpec(
-                scope_hash=scope_hash,
-                dataset_id=dataset_id,
-                changes=[
-                    ScenarioChange(
-                        lever=lever,
-                        operation=ScenarioOperation.PERCENT_CHANGE,
-                        value=signed,
-                        unit="PERCENT",
-                    )
-                ],
-                assumptions=[HOLD_CONSTANT_ASSUMPTION],
-                parse_source="DETERMINISTIC",
-            )
-        )
+    # Follow-ups that inherit the prior lever — only when no new explicit lever is named.
+    stripped = text.strip()
+    followup_dir = _FOLLOWUP_DIRECTION.match(stripped)
+    followup_pct = _FOLLOWUP_PCT.match(stripped)
+    looks_like_anaphora = bool(_FOLLOWUP_ANAPHORA.search(stripped)) and not _explicit_lever_in_text(stripped)
 
-    # Follow-up: "What about 30%?" — inherit lever + direction; always from baseline.
-    followup_pct = _FOLLOWUP_PCT.match(text)
-    if followup_pct and prior and (prior.get("changes") or prior.get("lever")):
-        first = (prior.get("changes") or [{}])[0]
-        lever_raw = first.get("lever") or prior.get("lever")
-        try:
-            lever = ScenarioLever(str(lever_raw))
-        except ValueError:
-            return _failed(scope_hash, dataset_id, "Prior scenario lever is not reusable.", refusal_code="FOLLOWUP_INVALID")
-        magnitude = float(followup_pct.group("num"))
-        prior_val = first.get("value")
-        if prior_val is None and prior.get("direction") == "INCREASE":
-            prior_val = magnitude
-        elif prior_val is None:
-            prior_val = -magnitude
-        signed = -magnitude if float(prior_val) <= 0 else magnitude
-        return validate_scenario_spec(
-            ScenarioSpec(
-                scope_hash=scope_hash,
-                dataset_id=dataset_id,
-                changes=[
-                    ScenarioChange(
-                        lever=lever,
-                        operation=ScenarioOperation.PERCENT_CHANGE,
-                        value=signed,
-                        unit="PERCENT",
-                    )
-                ],
-                assumptions=[HOLD_CONSTANT_ASSUMPTION],
-                parse_source="DETERMINISTIC",
+    if (followup_dir or followup_pct or looks_like_anaphora) and not _explicit_lever_in_text(stripped):
+        lever = _unique_prior_lever(prior)
+        if prior and (prior.get("changes") or prior.get("lever")) and lever is None:
+            return _failed(
+                scope_hash,
+                dataset_id,
+                "Prior scenario has multiple levers; say which lever to change (marketing, COGS, or CM1 costs).",
+                refusal_code="FOLLOWUP_AMBIGUOUS",
             )
-        )
+        if lever is None:
+            if followup_dir or followup_pct or looks_like_anaphora:
+                return _failed(
+                    scope_hash,
+                    dataset_id,
+                    "No prior scenario in the current view to continue from. Ask a full what-if question first.",
+                    refusal_code="FOLLOWUP_NO_PRIOR",
+                )
+        else:
+            if followup_dir:
+                magnitude, direction = _followup_match_groups(followup_dir)
+                if magnitude is None or not direction:
+                    return _failed(
+                        scope_hash,
+                        dataset_id,
+                        "Could not parse a numeric percentage for this scenario.",
+                        refusal_code="MALFORMED_PERCENT",
+                    )
+                signed = _direction_to_signed(direction, magnitude)
+                return _inherited_percent_spec(
+                    scope_hash=scope_hash, dataset_id=dataset_id, lever=lever, signed=signed
+                )
+            if followup_pct:
+                magnitude, _ = _followup_match_groups(followup_pct)
+                if magnitude is None:
+                    return _failed(
+                        scope_hash,
+                        dataset_id,
+                        "Could not parse a numeric percentage for this scenario.",
+                        refusal_code="MALFORMED_PERCENT",
+                    )
+                signed = _prior_signed_template(prior or {}, magnitude)
+                return _inherited_percent_spec(
+                    scope_hash=scope_hash, dataset_id=dataset_id, lever=lever, signed=signed
+                )
+            # Generic anaphora with a percent, e.g. "What if instead I reduce it by only 10%?"
+            # already handled by _FOLLOWUP_DIRECTION when matched; otherwise try percent + drop/rise.
+            if looks_like_anaphora and _PCT.search(stripped):
+                magnitude = float(_PCT.search(stripped).group("num"))  # type: ignore[union-attr]
+                if _RISE.search(stripped) and not _DROP.search(stripped):
+                    signed = magnitude
+                elif _DROP.search(stripped):
+                    signed = -magnitude
+                else:
+                    signed = _prior_signed_template(prior or {}, magnitude)
+                return _inherited_percent_spec(
+                    scope_hash=scope_hash, dataset_id=dataset_id, lever=lever, signed=signed
+                )
 
     if followup_pct or followup_dir:
         return _failed(

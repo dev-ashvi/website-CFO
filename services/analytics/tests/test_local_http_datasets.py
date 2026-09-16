@@ -17,7 +17,13 @@ def _run_http_script(script: str) -> subprocess.CompletedProcess[str]:
         **os.environ,
         "PYTHONPATH": str(SRC),
         "WYZ_ANALYTICS_EMBEDDED_WORKER": "false",
+        "WYZ_ENV": "development",
+        "WYZ_WORKSPACE_ID": "local",
+        "WYZ_PILOT_API_TOKEN": "",
+        "WYZ_ALLOWED_ORIGINS": "http://localhost:5173,http://127.0.0.1:5173",
     }
+    # Ensure empty token is truly unset for development auth-off path.
+    env.pop("WYZ_PILOT_API_TOKEN", None)
     return subprocess.run(
         [sys.executable, "-c", textwrap.dedent(script)],
         cwd=SRC.parent,
@@ -42,6 +48,9 @@ def test_local_http_lists_and_creates_datasets_via_http(tmp_path):
     import os
     os.environ["WYZ_ANALYTICS_WORK_DIR"] = r"{work_dir}"
     os.environ["WYZ_ANALYTICS_EMBEDDED_WORKER"] = "false"
+    os.environ["WYZ_ENV"] = "development"
+    os.environ.pop("WYZ_PILOT_API_TOKEN", None)
+    os.environ["WYZ_WORKSPACE_ID"] = "local"
 
     from wyz_analytics.workers.local_http import Handler
 
@@ -117,6 +126,9 @@ def test_local_http_dataset_list_skips_malformed_records(tmp_path):
     import os
     os.environ["WYZ_ANALYTICS_WORK_DIR"] = r"{work_dir}"
     os.environ["WYZ_ANALYTICS_EMBEDDED_WORKER"] = "false"
+    os.environ["WYZ_ENV"] = "development"
+    os.environ.pop("WYZ_PILOT_API_TOKEN", None)
+    os.environ["WYZ_WORKSPACE_ID"] = "local"
 
     from wyz_analytics.workers.local_http import Handler
 
@@ -155,6 +167,9 @@ def test_local_http_returns_json_500_when_single_dataset_payload_is_malformed(tm
     import os
     os.environ["WYZ_ANALYTICS_WORK_DIR"] = r"{work_dir}"
     os.environ["WYZ_ANALYTICS_EMBEDDED_WORKER"] = "false"
+    os.environ["WYZ_ENV"] = "development"
+    os.environ.pop("WYZ_PILOT_API_TOKEN", None)
+    os.environ["WYZ_WORKSPACE_ID"] = "local"
 
     from wyz_analytics.workers.local_http import Handler
 
@@ -171,8 +186,11 @@ def test_local_http_returns_json_500_when_single_dataset_payload_is_malformed(tm
     except urllib.error.HTTPError as exc:
         assert exc.code == 500
         body = json.loads(exc.read().decode("utf-8"))
-        assert body["message"] == "Analytics worker error."
-        assert "Malformed dataset record" in body["detail"]
+        assert "error" in body
+        assert body["error"]["code"] == "INTERNAL_ERROR"
+        assert "request_id" in body
+        # Development verbose mode may include a short safe detail string.
+        assert body["error"]["message"]
 
     server.shutdown()
     print("ok")

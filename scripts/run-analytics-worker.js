@@ -5,6 +5,9 @@ const src = resolve(process.cwd(), "services", "analytics", "src");
 const workDir = resolve(process.cwd(), "services", "analytics", ".wyz-analytics-work");
 const env = {
   ...process.env,
+  // Keep local Windows development on the development security profile unless overridden.
+  WYZ_ENV: process.env.WYZ_ENV || "development",
+  WYZ_WORKSPACE_ID: process.env.WYZ_WORKSPACE_ID || "local",
   PYTHONPATH: src,
   WYZ_ANALYTICS_WORK_DIR: workDir,
   WYZ_ANALYTICS_WORKER_ID: process.env.WYZ_ANALYTICS_WORKER_ID || "local-worker",

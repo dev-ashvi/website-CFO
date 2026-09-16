@@ -1,0 +1,6 @@
+# Deterministic production deps for Docker builds (P2).
+# Keep aligned with versions validated in the Compose image smoke.
+# Install: pip install -r requirements.prod.txt && pip install --no-deps .
+
+polars==1.44.0
+pyarrow==25.0.1

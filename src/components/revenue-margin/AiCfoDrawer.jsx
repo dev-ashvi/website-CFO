@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, Info, MessageSquare, X } from "lucide-react";
-import { askAiCfo, trackStrategicDecision } from "../../api/revenueMargin.js";
+import { askAiCfo, submitAiFeedback, trackStrategicDecision } from "../../api/revenueMargin.js";
+import { normalizeFeedbackRequest, FEEDBACK_REASONS } from "../../lib/revenue-margin/aiFeedback.js";
 import { filtersToQueryFilters, formatScopeViewLabel } from "../../lib/revenue-margin/filters.js";
 import { buildAnalyticalContext, suggestedAiQuestions } from "../../lib/revenue-margin/analyticalContext.js";
 import { activeFilterChips } from "../../lib/revenue-margin/filters.js";
@@ -136,12 +137,105 @@ function Expandable({ label, children, defaultOpen = false }) {
   );
 }
 
-function AssistantTurn({ turn, debug, onTrackDecision, trackPending, trackedDecisionId }) {
+function FeedbackControls({ turn, datasetId, onError }) {
+  const [rating, setRating] = useState(turn.feedbackRating || null);
+  const [reason, setReason] = useState(null);
+  const [busy, setBusy] = useState(false);
+  if (!datasetId || !turn?.conversation?.turn_id) return null;
+
+  async function submit(nextRating, nextReason) {
+    if (busy || rating) return;
+    setBusy(true);
+    try {
+      const body = normalizeFeedbackRequest({
+        turnId: turn.conversation.turn_id,
+        conversationId: turn.conversation.conversation_id,
+        scopeHash: turn.scopeHash || turn.conversation.scope_hash,
+        requestId: turn.requestId,
+        rating: nextRating,
+        reason: nextReason,
+        telemetry: {
+          ...(turn.telemetry || {}),
+          decision_theme: turn.conversation?.strategic?.decision_theme,
+          final_selected_action: turn.conversation?.strategic?.prior_recommendation_action,
+        },
+      });
+      await submitAiFeedback(datasetId, body);
+      setRating(nextRating);
+      if (nextReason) setReason(nextReason);
+    } catch (err) {
+      onError?.(err?.message || "Could not save feedback.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mt-2 border-t border-slate-100 pt-2">
+      {!rating ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[10px] uppercase tracking-wide text-slate-400">Was this useful?</span>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void submit("USEFUL")}
+            className="rounded px-2 py-0.5 text-[10px] font-semibold text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
+          >
+            Useful
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => setReason("pick")}
+            className="rounded px-2 py-0.5 text-[10px] font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-50"
+          >
+            Not useful
+          </button>
+        </div>
+      ) : (
+        <p className="text-[10px] text-slate-400">
+          Thanks — marked {rating === "USEFUL" ? "useful" : "not useful"}
+          {reason && reason !== "pick" ? ` (${reason.replaceAll("_", " ").toLowerCase()})` : ""}.
+        </p>
+      )}
+      {reason === "pick" && !rating && (
+        <div className="mt-1 flex flex-wrap gap-1">
+          {FEEDBACK_REASONS.map((code) => (
+            <button
+              key={code}
+              type="button"
+              disabled={busy}
+              onClick={() => void submit("NOT_USEFUL", code)}
+              className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600 hover:bg-slate-200 disabled:opacity-50"
+            >
+              {code.replaceAll("_", " ").toLowerCase()}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AssistantTurn({
+  turn,
+  debug,
+  onTrackDecision,
+  trackPending,
+  trackedDecisionId,
+  datasetId,
+  onFeedbackError,
+}) {
   const answer = turn.structured;
   if (!answer) {
-    return turn.text.split("\n").map((line, lineIndex) => (
-      <p key={lineIndex} className={lineIndex > 0 ? "mt-1" : ""}>{line}</p>
-    ));
+    return (
+      <div>
+        {turn.text.split("\n").map((line, lineIndex) => (
+          <p key={lineIndex} className={lineIndex > 0 ? "mt-1" : ""}>{line}</p>
+        ))}
+        <FeedbackControls turn={turn} datasetId={datasetId} onError={onFeedbackError} />
+      </div>
+    );
   }
   const trackAction = Array.isArray(answer.cfo_actions)
     ? answer.cfo_actions.find((a) => a?.type === "TRACK_STRATEGIC_DECISION")
@@ -287,6 +381,7 @@ function AssistantTurn({ turn, debug, onTrackDecision, trackPending, trackedDeci
           </pre>
         </Expandable>
       )}
+      <FeedbackControls turn={turn} datasetId={datasetId} onError={onFeedbackError} />
     </div>
   );
 }
@@ -422,6 +517,8 @@ export default function AiCfoDrawer({
           scope: response.scope,
           scopeHash: response.scope_hash,
           conversation: response.conversation,
+          telemetry: response.telemetry,
+          requestId: response.request_id,
           viewing: formatScopeViewLabel(
             { ...filters, ...(response.scope?.filters || {}) },
             periodRange,
@@ -536,6 +633,8 @@ export default function AiCfoDrawer({
                 onTrackDecision={trackDecision}
                 trackPending={trackPending}
                 trackedDecisionId={trackedIds[turn.question]}
+                datasetId={datasetId}
+                onFeedbackError={(msg) => setError(msg)}
               />
             ) : (
               <>

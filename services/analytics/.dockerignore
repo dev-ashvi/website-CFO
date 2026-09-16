@@ -1,12 +1,52 @@
+# Build context: services/analytics
+#
+# Exclude durable/runtime and non-runtime artifacts from the image.
+
+.git
 .gitignore
-.pytest_cache
-tests
+.cursorignore
+.vscode
+.idea
+
+# Local durable analytics data — NEVER bake into image (~GB uploads/facts)
 .wyz-analytics-work
-**/__pycache__
-**/*.pyc
-**/*.pyo
+**/.wyz-analytics-work
+.wyz-observability
+**/.wyz-observability
+
+# Benchmarks / eval outputs
+.benchmark-results
+**/.benchmark-results
+
+# Python caches / venvs
 .venv
+venv
+**/__pycache__
+**/*.py[cod]
+**/*.egg-info
+.pytest_cache
+.mypy_cache
+.ruff_cache
+coverage
+htmlcov
+.coverage
 dist
-*.egg-info
+build
+
+# Secrets / local env
+.env
+.env.*
+!.env.example
+!.env.docker.example
+!.env.pilot.example
+
+# Tests and docs are not required at runtime (keep README for packaging)
+tests
 docs
 k8s
+**/*.md
+!README.md
+
+# Frontend / monorepo noise if build context ever widens
+node_modules
+**/node_modules

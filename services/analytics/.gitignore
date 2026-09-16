@@ -14,6 +14,10 @@ tests/data/beautyco/*.csv
 .wyz-analytics-work/
 **/.wyz-analytics-work/
 
-# Local benchmark snapshots
-.benchmark-results/
-**/.benchmark-results/
+**/.wyz-observability/
+.wyz-observability/
+
+# Docker Compose local env (copy from .env.docker.example)
+.env.docker
+.p2-acceptance-ids.json
+.p3-acceptance-ids.json

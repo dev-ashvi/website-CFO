@@ -163,3 +163,27 @@ None observed in `test_ai_cfo_scenario.py` follow-up suite.
 ### Overall after P6L.1
 
 **CFO PILOT READY = YES** (local live AI blockers from P6L validation cleared; Cloudflare still not configured).
+
+---
+
+## P6L.2 — Direct cross-origin (Vercel → pilot backend)
+
+**Date:** 2026-09-17  
+**Architecture:** No Vercel rewrite/proxy. Frontend at `https://financewyz.ai` calls `https://pilot.financewyz.ai` via `VITE_ANALYTICS_API_BASE_URL`.
+
+| Check | Result |
+|-------|--------|
+| Shared analytics/pilot base (`VITE_ANALYTICS_API_BASE_URL`) | **PASS** |
+| Fail-closed pilot login when base configured | **PASS** (code + unit) |
+| BFF CORS allowlist (`https://financewyz.ai`) | **PASS** |
+| Arbitrary Origin rejected | **PASS** |
+| Caddy API-only (no SPA on pilot / `:8080` root) | **PASS** |
+| Demo token rejected / unauth 401 | **PASS** |
+| Scenario −15% / reconsider −10% | **PASS** |
+| Decision / feedback / persistence / telemetry | **PASS** |
+| Host exposure only `127.0.0.1:8080` | **PASS** |
+| Live NVIDIA factual/strategic | **INTERMITTENT** (provider 90s timeouts; not a plumbing failure) |
+
+`www.financewyz.ai` → 307 to apex; **not** required in CORS allowlist.
+
+**Vercel (manual, not automated):** set Production `VITE_ANALYTICS_API_BASE_URL=https://pilot.financewyz.ai` then redeploy. Do not put server secrets in Vercel.

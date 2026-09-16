@@ -13,6 +13,55 @@ from typing import Any
 MAX_PREVIOUS_TURNS = 4
 
 
+def previous_turns_from_client_payload(body: dict[str, Any] | None) -> list[dict[str, Any]] | None:
+    """Normalize client conversation payload into previous_turns for follow-ups.
+
+    The SPA echoes a conversation shell with `scenario_spec` on the object itself and
+    often without `previous_turns`. Promote that shell into a prior turn so scenario
+    anaphora / strategic context can resolve safely.
+    """
+    if not isinstance(body, dict):
+        return None
+    conv = body.get("conversation") if isinstance(body.get("conversation"), dict) else {}
+    if isinstance(body.get("previous_turns"), list):
+        turns: list[Any] = list(body.get("previous_turns") or [])
+    elif isinstance(conv.get("previous_turns"), list):
+        turns = list(conv.get("previous_turns") or [])
+    else:
+        turns = []
+
+    has_scenario = any(
+        isinstance(t, dict) and isinstance(t.get("scenario_spec"), dict) and t.get("scenario_spec", {}).get("changes")
+        for t in turns
+    )
+    shell_spec = conv.get("scenario_spec")
+    if (
+        not has_scenario
+        and isinstance(shell_spec, dict)
+        and shell_spec.get("changes")
+    ):
+        turns.append(
+            {
+                "question": str(conv.get("question") or "")[:500],
+                "scope_hash": str(conv.get("scope_hash") or shell_spec.get("scope_hash") or ""),
+                "same_scope": True,
+                "intent": conv.get("intent"),
+                "insight_type": conv.get("insight_type"),
+                "driver_stage": conv.get("driver_stage"),
+                "dimension": conv.get("dimension"),
+                "rank_direction": conv.get("rank_direction"),
+                "rank_metric": conv.get("rank_metric"),
+                "selected_entities": conv.get("selected_entities") or [],
+                "selected_evidence_ids": conv.get("selected_evidence_ids") or [],
+                "scenario_spec": shell_spec,
+                "signal_context": conv.get("signal_context"),
+                "strategic": conv.get("strategic"),
+                "strategic_thread": conv.get("strategic_thread"),
+            }
+        )
+    return turns or None
+
+
 def build_conversation_context(
     *,
     current_scope: dict[str, Any],

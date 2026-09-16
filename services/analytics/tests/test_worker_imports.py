@@ -11,7 +11,13 @@ SRC = Path(__file__).resolve().parents[1] / "src"
 
 
 def _run_import(snippet: str) -> subprocess.CompletedProcess[str]:
-    env = {**os.environ, "PYTHONPATH": str(SRC)}
+    env = {
+        **os.environ,
+        "PYTHONPATH": str(SRC),
+        "WYZ_ENV": "development",
+        "WYZ_WORKSPACE_ID": "local",
+    }
+    env.pop("WYZ_PILOT_API_TOKEN", None)
     return subprocess.run(
         [sys.executable, "-c", snippet],
         cwd=SRC.parent,

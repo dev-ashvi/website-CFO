@@ -42,8 +42,13 @@ services/analytics/.env.docker
 
 # Local pilot backups / smoke / regression artifacts (host-visible)
 backups/
+services/analytics/frontend-dist/
 services/analytics/.p6l-smoke-*.json
 services/analytics/.p6l2-regression-report.json
+services/analytics/.p6l*-report.json
+services/analytics/.p6l*-summary.txt
+services/analytics/.p6l*-diagnose.json
+services/analytics/.p6l-live-*
 services/analytics/.p3-acceptance-ids.json
 services/analytics/.p2-acceptance-ids.json
 

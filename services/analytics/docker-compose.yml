@@ -1,0 +1,110 @@
+# WYZ analytics — Docker Compose (local / P2–P3)
+#
+# Start:  docker compose -f services/analytics/docker-compose.yml --env-file services/analytics/.env.docker up --build
+# Stop:   docker compose -f services/analytics/docker-compose.yml down
+# DANGER: docker compose ... down -v   deletes the named volume
+#
+# Oracle pilot: also use docker-compose.pilot.yml — see docs/oracle-pilot-deployment.md
+
+name: wyz-analytics
+
+services:
+  analytics-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: wyz-analytics:${WYZ_RELEASE_SHA:-local}
+    command: ["python", "-m", "wyz_analytics.workers.local_http"]
+    # Local/pilot-dev: loopback only. Oracle pilot override removes host publish entirely.
+    ports:
+      - "${WYZ_ANALYTICS_PUBLISH_BIND:-127.0.0.1}:${WYZ_ANALYTICS_PUBLISH_PORT:-8788}:8788"
+    environment:
+      WYZ_ENV: ${WYZ_ENV:-pilot}
+      WYZ_WORKSPACE_ID: ${WYZ_WORKSPACE_ID:-internal-pilot}
+      WYZ_ALLOWED_ORIGINS: ${WYZ_ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
+      WYZ_PILOT_API_TOKEN: ${WYZ_PILOT_API_TOKEN:-}
+      WYZ_MAX_UPLOAD_MB: ${WYZ_MAX_UPLOAD_MB:-100}
+      WYZ_MAX_REQUEST_BODY_MB: ${WYZ_MAX_REQUEST_BODY_MB:-120}
+      WYZ_MAX_UPLOAD_FILES: ${WYZ_MAX_UPLOAD_FILES:-12}
+      WYZ_ANALYTICS_MODE: local
+      WYZ_ANALYTICS_BLOB_BACKEND: filesystem
+      WYZ_ANALYTICS_EMBEDDED_WORKER: "false"
+      WYZ_ANALYTICS_WORK_DIR: /data/wyz-analytics-work
+      WYZ_ANALYTICS_HOST: 0.0.0.0
+      WYZ_ANALYTICS_PORT: "8788"
+      WYZ_ANALYTICS_WORKER_ID: compose-api
+      WYZ_ANALYTICS_LOG_LEVEL: ${WYZ_LOG_LEVEL:-INFO}
+      WYZ_LOG_LEVEL: ${WYZ_LOG_LEVEL:-INFO}
+      WYZ_LOG_FORMAT: ${WYZ_LOG_FORMAT:-json}
+      WYZ_OBSERVABILITY_ENABLED: ${WYZ_OBSERVABILITY_ENABLED:-true}
+      WYZ_AI_CFO_PROVIDER: ${WYZ_AI_CFO_PROVIDER:-fake}
+      WYZ_AI_CFO_MODEL: ${WYZ_AI_CFO_MODEL:-}
+      WYZ_AI_CFO_API_KEY: ${WYZ_AI_CFO_API_KEY:-}
+      NVIDIA_API_KEY: ${NVIDIA_API_KEY:-}
+      WYZ_AI_CFO_STRATEGY_MODE: ${WYZ_AI_CFO_STRATEGY_MODE:-v2_partner}
+      WYZ_AI_CFO_STRATEGIC_MAX_TOKENS: ${WYZ_AI_CFO_STRATEGIC_MAX_TOKENS:-}
+      WYZ_ANALYTICS_WORKER_TOKEN: ${WYZ_ANALYTICS_WORKER_TOKEN:-}
+      WYZ_RELEASE_SHA: ${WYZ_RELEASE_SHA:-unknown}
+    volumes:
+      - wyz_analytics_data:/data/wyz-analytics-work
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8788/api/v1/analytics/ready', timeout=3)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  analytics-worker:
+    image: wyz-analytics:${WYZ_RELEASE_SHA:-local}
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["python", "-m", "wyz_analytics.workers.runner"]
+    environment:
+      WYZ_ENV: ${WYZ_ENV:-pilot}
+      WYZ_WORKSPACE_ID: ${WYZ_WORKSPACE_ID:-internal-pilot}
+      WYZ_ANALYTICS_MODE: local
+      WYZ_ANALYTICS_BLOB_BACKEND: filesystem
+      WYZ_ANALYTICS_WORK_DIR: /data/wyz-analytics-work
+      WYZ_ANALYTICS_WORKER_ID: compose-worker
+      WYZ_ANALYTICS_POLL_INTERVAL_SEC: ${WYZ_ANALYTICS_POLL_INTERVAL_SEC:-2}
+      WYZ_ANALYTICS_LOG_LEVEL: ${WYZ_LOG_LEVEL:-INFO}
+      WYZ_LOG_LEVEL: ${WYZ_LOG_LEVEL:-INFO}
+      WYZ_LOG_FORMAT: ${WYZ_LOG_FORMAT:-json}
+      WYZ_OBSERVABILITY_ENABLED: ${WYZ_OBSERVABILITY_ENABLED:-true}
+      WYZ_AI_CFO_PROVIDER: ${WYZ_AI_CFO_PROVIDER:-fake}
+      WYZ_AI_CFO_MODEL: ${WYZ_AI_CFO_MODEL:-}
+      WYZ_AI_CFO_API_KEY: ${WYZ_AI_CFO_API_KEY:-}
+      NVIDIA_API_KEY: ${NVIDIA_API_KEY:-}
+      WYZ_RELEASE_SHA: ${WYZ_RELEASE_SHA:-unknown}
+    volumes:
+      - wyz_analytics_data:/data/wyz-analytics-work
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      analytics-api:
+        condition: service_healthy
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+volumes:
+  wyz_analytics_data:
+    name: wyz_analytics_data

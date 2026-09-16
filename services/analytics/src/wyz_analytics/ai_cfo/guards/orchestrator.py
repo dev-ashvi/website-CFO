@@ -867,11 +867,18 @@ def _previous_scenario_spec(conversation: dict[str, Any] | None) -> dict[str, An
     if not isinstance(conversation, dict):
         return None
     for turn in reversed(list(conversation.get("previous_turns") or [])):
-        if not isinstance(turn, dict) or not turn.get("same_scope"):
+        if not isinstance(turn, dict):
+            continue
+        # Prefer same-scope turns when the flag is present; accept when omitted (API shell).
+        if turn.get("same_scope") is False:
             continue
         scenario = turn.get("scenario_spec")
         if isinstance(scenario, dict) and scenario.get("changes"):
             return scenario
+    # Live conversation shell stores the latest lean scenario_spec on the conversation object.
+    direct = conversation.get("scenario_spec")
+    if isinstance(direct, dict) and direct.get("changes"):
+        return direct
     return None
 
 
@@ -963,6 +970,11 @@ def _run_scenario_path(
     answer.setdefault("telemetry", {}).update(_routing_telemetry(resolution, capability))
     answer["telemetry"]["intent_source"] = "scenario"
     answer["telemetry"]["provider_calls"] = 0
+    answer["telemetry"]["scenario_parse_source"] = spec.parse_source
+    if spec.parse_source == "DETERMINISTIC_FOLLOWUP":
+        answer["telemetry"]["scenario_reconsider"] = True
+        answer["telemetry"]["scenario_followup_inherited"] = True
+        guard_telemetry["interventions"].append({"phase": "scenario_reconsider"})
     lean = spec.lean_followup_context()
     answer["scenario_spec"] = lean
     if strategic_thread is not None:

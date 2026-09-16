@@ -36,6 +36,10 @@ npm run dev
 
 Then open `/app/revenue-margin` after login. The SPA never talks to a Downloads folder or to Python in-process. It only uses `/api/v1/analytics`.
 
+## Docker Compose (internal pilot)
+
+See [docs/docker-analytics.md](../../docs/docker-analytics.md). One image, two commands (`analytics-api` + `analytics-worker`), shared volume at `/data/wyz-analytics-work`. Docker is optional for day-to-day Windows development.
+
 ## Durable execution contract
 
 This is the boundary that later Kubernetes workers must implement. There is no second local-only execution path.

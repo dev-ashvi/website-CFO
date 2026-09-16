@@ -1,29 +1,46 @@
-# Local CFO Pilot Readiness (P6L)
+# Local CFO Pilot Readiness (P6L → P6L.2)
 
-**Status:** Local stack implemented and smoke-tested at `http://127.0.0.1:8080`.  
-**STOP:** Do not configure Cloudflare until this local gate is reviewed.
+**Status:** Local Docker pilot stack + Vercel cross-origin frontend path (P6L.2).  
+This document describes the temporary **two-user internal CFO pilot**. It is **not** multi-tenant SaaS auth.
 
-This document describes the temporary **two-user internal CFO pilot** path on Windows Docker Desktop. It is **not** multi-tenant SaaS auth.
-
-## Architecture (actually intended)
+## Current production pilot topology (P6L.2)
 
 ```
-Internet
-   ↓
-Cloudflare Access          ← external identity gate (manual later; not used by app auth)
-   ↓
-Cloudflare Tunnel          ← targets http://127.0.0.1:8080 only
-   ↓
-Caddy (local-pilot)        ← host 127.0.0.1:8080 — SPA + reverse proxy
-   ↓
-WYZ pilot login (BFF)      ← temporary env-driven email/password → wyz-pilot.* session
-   ↓
-BFF                        ← rejects wyz-demo-*; injects X-WYZ-Pilot-Token upstream
-   ↓
-analytics-api (+ worker)   ← Docker network only; named volume /data/wyz-analytics-work
+CFO Browser
+    ↓
+https://financewyz.ai
+(Vercel frontend)
+    ↓  HTTPS + Bearer wyz-pilot.* token
+https://pilot.financewyz.ai
+    ↓
+Cloudflare Tunnel  →  http://127.0.0.1:8080 only
+    ↓
+Caddy (local-pilot)  — API-only reverse proxy (no React SPA)
+    ↓
+BFF  — pilot login + session gate; rejects wyz-demo-*; CORS allowlist
+    ↓
+analytics-api  ↔  analytics-worker
+    ↓
+NVIDIA / OpenAI-compatible AI CFO
 ```
 
-Cloudflare Access headers are **never** used for internal authorization. Misconfigured Access alone must not expose the API: the BFF still requires a non-demo pilot session.
+- Frontend build var (Vercel Production, public): `VITE_ANALYTICS_API_BASE_URL=https://pilot.financewyz.ai`
+- Never put `NVIDIA_API_KEY`, `WYZ_AI_CFO_API_KEY`, `WYZ_PILOT_API_TOKEN`, or `WYZ_PILOT_SESSION_SECRET` in Vercel/`VITE_*`
+- `WYZ_BFF_REJECT_DEMO=true` remains mandatory
+- Cloudflare Access (if enabled) is an **external** gate only — app auth is still Bearer `wyz-pilot.*`
+
+## Local / historical topology
+
+For **API regression on this host** (no Vercel):
+
+```
+http://127.0.0.1:8080/api/...  →  Caddy → BFF / analytics
+```
+
+`pilot.financewyz.ai` and local `:8080` are **backend-only** (P6L.2). Non-API paths return 404.  
+Do **not** expect the React SPA at `http://127.0.0.1:8080/` or on the tunnel hostname.
+
+Earlier P6L docs that described “Caddy serves the SPA” are superseded by this API-only backend host.
 
 ## Host exposure
 
@@ -50,8 +67,11 @@ Configured only via environment (never commit real values):
 - `WYZ_PILOT_SESSION_SECRET` (≥16 chars)
 - Successful login returns Bearer token prefix `wyz-pilot.`
 - `WYZ_BFF_REJECT_DEMO=true` remains mandatory — `wyz-demo-*` / demo credentials stay rejected
+- Allowed browser origins (exact list, never `*`): include `https://financewyz.ai` plus local origins for regression
 
 This login is **TEMPORARY** for the two-user internal CFO pilot only. No registration, reset, OAuth, roles, or DB identity.
+
+When `VITE_ANALYTICS_API_BASE_URL` is set (Vercel → pilot), frontend login **fails closed** — it must not silently fall through to demo auth.
 
 ## AI CFO (unchanged architecture)
 
@@ -62,7 +82,7 @@ Env (already used by the service):
 - `WYZ_AI_CFO_STRATEGY_MODE=v2_partner`
 - Key: `WYZ_AI_CFO_API_KEY` or `NVIDIA_API_KEY` (never commit; never log)
 
-Without a key, non-AI analytics still work; live AI turns return provider unavailable.
+Without a key, non-AI analytics still work; live AI turns return provider unavailable. Deterministic scenario paths do not require the provider.
 
 ## Start (exact)
 
@@ -71,7 +91,7 @@ Without a key, non-AI analytics still work; live AI turns return provider unavai
 ```powershell
 Copy-Item services\analytics\.env.local-pilot.example services\analytics\.env.local-pilot
 # Edit: WYZ_PILOT_USERS, WYZ_PILOT_SESSION_SECRET, WYZ_PILOT_API_TOKEN,
-#       WYZ_ALLOWED_ORIGINS, WYZ_AI_CFO_API_KEY or NVIDIA_API_KEY
+#       WYZ_ALLOWED_ORIGINS (include https://financewyz.ai), NVIDIA_API_KEY or WYZ_AI_CFO_API_KEY
 ```
 
 2. Start:
@@ -80,11 +100,17 @@ Copy-Item services\analytics\.env.local-pilot.example services\analytics\.env.lo
 .\scripts\local-cfo-pilot-up.ps1
 ```
 
-3. Open:
+This builds the SPA into `services/analytics/frontend-dist` (gitignored; mount retained for local tooling) and runs:
+
+`docker compose -f docker-compose.yml -f docker-compose.local-pilot.yml --env-file .env.local-pilot up -d --build`
+
+3. Verify API:
 
 ```
-http://127.0.0.1:8080
+http://127.0.0.1:8080/api/v1/analytics/health
 ```
+
+Production UI: `https://financewyz.ai` (after Vercel env + redeploy).
 
 Optional smoke (golden CSVs in `%USERPROFILE%\Downloads`):
 
@@ -107,36 +133,19 @@ python .\scripts\local-cfo-pilot-smoke.py
 
 Without `-ConfirmRestore`, restore refuses to overwrite active pilot data.
 
-## Cloudflare (next — manual only)
-
-Do **not** automate. After local review:
+## Cloudflare Tunnel (manual)
 
 1. Install `cloudflared` on this Windows host.
-2. Create a Tunnel whose origin is **`http://127.0.0.1:8080`** (HTTP, not Vite, not :8788).
-3. Attach a public hostname; Cloudflare terminates HTTPS.
-4. Put **Cloudflare Access** in front of that hostname for you + CFO (emails configured in Cloudflare dashboard — not in this repo).
-5. Add the public origin (e.g. `https://pilot.example.com`) to `WYZ_ALLOWED_ORIGINS` and recreate Caddy/BFF.
-6. Re-test login + one analysis through the public URL.
+2. Tunnel origin: **`http://127.0.0.1:8080`** only (not Vite, not `:8788`).
+3. Public hostname: `pilot.financewyz.ai` (HTTPS at Cloudflare).
+4. Optional: Cloudflare Access in front of that hostname.
+5. Keep `https://financewyz.ai` in `WYZ_ALLOWED_ORIGINS`; recreate BFF after origin changes.
 
-## Files added/changed (P6L)
+## Key files
 
-**Add**
-
-- `services/analytics/docker-compose.local-pilot.yml`
-- `services/analytics/docker/Caddyfile.local-pilot`
+- `services/analytics/docker-compose.yml` + `docker-compose.local-pilot.yml`
+- `services/analytics/docker/Caddyfile.local-pilot` (API-only)
+- `services/analytics/bff/` (pilot login + CORS allowlist)
 - `services/analytics/.env.local-pilot.example`
-- `scripts/local-cfo-pilot-up.ps1`
-- `scripts/backup-analytics-work.ps1`
-- `scripts/restore-analytics-work.ps1`
-- `scripts/local-cfo-pilot-smoke.py`
-- `docs/LOCAL_CFO_PILOT_READINESS.md`
-- `docs/LOCAL_CFO_PILOT_TEST_REPORT.md`
-- `services/analytics/tests/test_local_cfo_pilot_p6l.py`
-
-**Minimal edit**
-
-- `services/analytics/bff/server.js` — temporary pilot login + session verify; demo rejection kept
-- `src/api/auth.js` / `src/api/devMode.js` — prefer BFF pilot login; `wyz-pilot.` prefix
-- `.gitignore` — ignore `.env.local-pilot`, backups, smoke artifacts
-
-Oracle / P4 files intentionally untouched.
+- `scripts/local-cfo-pilot-up.ps1`, smoke/live validation scripts
+- Frontend: `src/api/auth.js`, `devMode.js`, `revenueMargin.js` — `VITE_ANALYTICS_API_BASE_URL`
