@@ -1,14 +1,16 @@
 /**
  * Analytics API client. Isolated from chat/auth `/api/v1` usage.
  *
- * Local Vite proxies `/api/v1/analytics` to the Python worker on :8788.
- * Production WYZ API can implement the same paths later without UI changes.
+ * Local (unset VITE_ANALYTICS_API_BASE_URL): same-origin `/api/v1/analytics`.
+ * CFO pilot on Vercel: set VITE_ANALYTICS_API_BASE_URL=https://pilot.financewyz.ai
+ *   → https://pilot.financewyz.ai/api/v1/analytics/...
  */
+import { analyticsApiBaseUrl } from "./devMode.js";
+
 const ANALYTICS_PREFIX = "/api/v1/analytics";
 
 function analyticsBase() {
-  const raw = import.meta.env?.VITE_ANALYTICS_API_BASE_URL;
-  return raw ? String(raw).replace(/\/+$/, "") : "";
+  return analyticsApiBaseUrl();
 }
 
 function authToken() {
@@ -44,13 +46,25 @@ async function analyticsRequest(method, path, { json, form } = {}) {
 
   const data = await readBody(response);
   if (!response.ok) {
+    const errObj = data && typeof data === "object" ? data.error : null;
+    const code = errObj && typeof errObj === "object" ? errObj.code : null;
+    const apiMessage =
+      (errObj && errObj.message) ||
+      (data && (data.message || (typeof data.error === "string" ? data.error : null) || data.detail));
+    let message = apiMessage || response.statusText || "Analytics request failed";
+    if (response.status === 401 || response.status === 403) {
+      message = "Your session is not authorized for this workspace.";
+    } else if (response.status === 413 || code === "PAYLOAD_TOO_LARGE") {
+      message = "This upload is too large.";
+    } else if (response.status === 503 || code === "AI_PROVIDER_UNAVAILABLE") {
+      message = "AI CFO is temporarily unavailable.";
+    }
     throw {
       status: response.status,
-      message:
-        (data && (data.message || data.error || data.detail)) ||
-        response.statusText ||
-        "Analytics request failed",
+      message,
       details: data,
+      request_id: data && data.request_id,
+      code,
     };
   }
   return data;
@@ -124,6 +138,18 @@ export async function fetchCfoSignals(datasetId, body) {
 
 export async function askAiCfo(datasetId, body) {
   return analyticsRequest("POST", `/datasets/${encodeURIComponent(datasetId)}/ai-cfo/ask`, { json: body });
+}
+
+export async function submitAiFeedback(datasetId, body) {
+  return analyticsRequest("POST", `/datasets/${encodeURIComponent(datasetId)}/ai-feedback`, { json: body });
+}
+
+export async function listAiFeedback(datasetId) {
+  return analyticsRequest("GET", `/datasets/${encodeURIComponent(datasetId)}/ai-feedback`);
+}
+
+export async function reportClientError(body) {
+  return analyticsRequest("POST", "/client-errors", { json: body });
 }
 
 export async function trackStrategicDecision(datasetId, body) {

@@ -1,0 +1,87 @@
+# Local CFO pilot (Windows Docker Desktop + Cloudflare Tunnel later)
+#
+#   docker compose -f docker-compose.yml -f docker-compose.local-pilot.yml --env-file .env.local-pilot up -d --build
+#
+# ONLY host publish: 127.0.0.1:8080
+# Tunnel target: http://127.0.0.1:8080
+#
+# DANGER: docker compose ... down -v  destroys named volume wyz_analytics_data
+
+name: wyz-analytics
+
+services:
+  analytics-api:
+    ports: !reset []
+    environment:
+      WYZ_RELEASE_SHA: ${WYZ_RELEASE_SHA:-local-pilot}
+      WYZ_ALLOWED_ORIGINS: ${WYZ_ALLOWED_ORIGINS}
+      WYZ_AI_CFO_PROVIDER: ${WYZ_AI_CFO_PROVIDER:-openai_compatible}
+      WYZ_AI_CFO_MODEL: ${WYZ_AI_CFO_MODEL:-openai/gpt-oss-20b}
+      WYZ_AI_CFO_STRATEGY_MODE: ${WYZ_AI_CFO_STRATEGY_MODE:-v2_partner}
+    # Keep named volume from base compose (survives down without -v).
+    volumes:
+      - wyz_analytics_data:/data/wyz-analytics-work
+
+  analytics-worker:
+    environment:
+      WYZ_RELEASE_SHA: ${WYZ_RELEASE_SHA:-local-pilot}
+      WYZ_AI_CFO_PROVIDER: ${WYZ_AI_CFO_PROVIDER:-openai_compatible}
+      WYZ_AI_CFO_MODEL: ${WYZ_AI_CFO_MODEL:-openai/gpt-oss-20b}
+    volumes:
+      - wyz_analytics_data:/data/wyz-analytics-work
+
+  bff:
+    build:
+      context: ./bff
+      dockerfile: Dockerfile
+    image: wyz-analytics-bff:${WYZ_RELEASE_SHA:-local-pilot}
+    environment:
+      ANALYTICS_UPSTREAM: http://analytics-api:8788
+      WYZ_PILOT_API_TOKEN: ${WYZ_PILOT_API_TOKEN}
+      WYZ_PILOT_SESSION_SECRET: ${WYZ_PILOT_SESSION_SECRET}
+      WYZ_PILOT_USERS: ${WYZ_PILOT_USERS}
+      WYZ_ALLOWED_ORIGINS: ${WYZ_ALLOWED_ORIGINS}
+      WYZ_BFF_REQUIRE_BEARER: ${WYZ_BFF_REQUIRE_BEARER:-true}
+      WYZ_BFF_REJECT_DEMO: ${WYZ_BFF_REJECT_DEMO:-true}
+      WYZ_MAX_REQUEST_BODY_MB: ${WYZ_MAX_REQUEST_BODY_MB:-120}
+      WYZ_BFF_PROXY_TIMEOUT_MS: ${WYZ_BFF_PROXY_TIMEOUT_MS:-600000}
+      WYZ_RELEASE_SHA: ${WYZ_RELEASE_SHA:-local-pilot}
+    # Internal only — do not publish to host.
+    expose:
+      - "8080"
+    depends_on:
+      analytics-api:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2.8-alpine
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      WYZ_PROXY_MAX_BODY: ${WYZ_PROXY_MAX_BODY:-120MB}
+    volumes:
+      - ./docker/Caddyfile.local-pilot:/etc/caddy/Caddyfile:ro
+      - ${WYZ_FRONTEND_DIST:-./frontend-dist}:/srv/frontend:ro
+    depends_on:
+      - bff
+      - analytics-api
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
+    restart: unless-stopped
+
+volumes:
+  wyz_analytics_data:
+    name: wyz_analytics_data

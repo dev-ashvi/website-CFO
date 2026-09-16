@@ -12,6 +12,10 @@ coverage/
 services/analytics/.wyz-analytics-work/
 **/.wyz-analytics-work/
 
+# Observability JSONL (if enabled)
+**/.wyz-observability/
+.wyz-observability/
+
 # Benchmark / eval outputs
 .benchmark-results/
 services/analytics/.benchmark-results/
@@ -32,6 +36,16 @@ venv/
 .env
 .env.local
 .env.*.local
+services/analytics/.env.local-pilot
+services/analytics/.env.pilot
+services/analytics/.env.docker
+
+# Local pilot backups / smoke / regression artifacts (host-visible)
+backups/
+services/analytics/.p6l-smoke-*.json
+services/analytics/.p6l2-regression-report.json
+services/analytics/.p3-acceptance-ids.json
+services/analytics/.p2-acceptance-ids.json
 
 # Editor / OS
 .DS_Store

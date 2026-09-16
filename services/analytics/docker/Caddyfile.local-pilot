@@ -1,0 +1,51 @@
+# Local CFO pilot — HTTP only (Cloudflare Tunnel supplies external HTTPS).
+# Listen on container :8080; host publish must be 127.0.0.1:8080:8080.
+#
+# Public tunnel host (pilot.financewyz.ai) is BACKEND-ONLY:
+#   /api/v1/pilot-auth/* and /api/v1/analytics/* → BFF / analytics
+# Non-API paths return 404 (do not serve the React SPA here).
+# CFO UI remains https://financewyz.ai (Vercel).
+
+:8080 {
+	encode gzip zstd
+
+	header {
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+		-Server
+	}
+
+	# Temporary pilot login (BFF) — independent of Cloudflare Access headers.
+	handle /api/v1/pilot-auth/* {
+		reverse_proxy bff:8080
+	}
+
+	# Public liveness only.
+	handle /api/v1/analytics/health {
+		reverse_proxy analytics-api:8788
+	}
+
+	# All other analytics through BFF (session gate + pilot token inject).
+	handle /api/v1/analytics/* {
+		reverse_proxy bff:8080 {
+			transport http {
+				read_timeout 600s
+				write_timeout 600s
+			}
+		}
+	}
+
+	# API-only host: no SPA / no second WYZ website.
+	handle {
+		respond "WYZ pilot API only. Use https://financewyz.ai for the application." 404
+	}
+
+	request_body {
+		max_size {$WYZ_PROXY_MAX_BODY:120MB}
+	}
+
+	log {
+		output stdout
+		format json
+	}
+}

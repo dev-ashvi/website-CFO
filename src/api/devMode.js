@@ -9,6 +9,9 @@ export const DEMO_LOGIN = {
 
 export const DEMO_TOKEN_PREFIX = "wyz-demo-";
 
+/** Temporary internal CFO pilot session tokens issued by the BFF (never demo). */
+export const PILOT_TOKEN_PREFIX = "wyz-pilot.";
+
 export function isDevDemoMode() {
   const v = import.meta.env.VITE_DEV_DEMO_MODE;
   if (v !== "true" && v !== "1") return false;
@@ -23,6 +26,12 @@ export function isDemoSession() {
   return Boolean(token && token.startsWith(DEMO_TOKEN_PREFIX));
 }
 
+export function isPilotSession() {
+  if (typeof window === "undefined") return false;
+  const token = window.localStorage.getItem("wyz_token");
+  return Boolean(token && token.startsWith(PILOT_TOKEN_PREFIX));
+}
+
 export function matchesDemoLogin({ tenantSlug, email, password }) {
   return (
     String(tenantSlug ?? "").trim().toLowerCase() === DEMO_LOGIN.tenantSlug &&
@@ -32,15 +41,32 @@ export function matchesDemoLogin({ tenantSlug, email, password }) {
 }
 
 /**
- * API base should be origin only, e.g. http://localhost:3001.
- * Strips trailing slashes and a mistaken `/api/v1` suffix (paths already include `/api/v1/...`).
+ * API base should be origin only, e.g. http://localhost:3001 or https://pilot.financewyz.ai.
+ * Strips trailing slashes and a mistaken `/api/v1` or `/api/v1/analytics` suffix
+ * (paths already include `/api/v1/...`).
  */
 export function normalizeApiBaseUrl(raw) {
   let s = String(raw ?? "").trim();
   if (!s) return "";
   s = s.replace(/\/+$/, "");
-  if (s.endsWith("/api/v1")) {
+  if (s.endsWith("/api/v1/analytics")) {
+    s = s.slice(0, -"/api/v1/analytics".length);
+  } else if (s.endsWith("/api/v1")) {
     s = s.slice(0, -"/api/v1".length);
   }
   return s.replace(/\/+$/, "");
+}
+
+/**
+ * Backend origin for analytics + pilot-auth.
+ * Empty => same-origin relative paths (local Caddy / Vite proxy).
+ * Never include /api/v1/analytics in the env value.
+ */
+export function analyticsApiBaseUrl() {
+  return normalizeApiBaseUrl(import.meta.env?.VITE_ANALYTICS_API_BASE_URL);
+}
+
+/** True when the SPA is configured to call a remote pilot backend (cross-origin). */
+export function isConfiguredPilotAnalytics() {
+  return Boolean(analyticsApiBaseUrl());
 }
