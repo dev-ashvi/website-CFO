@@ -11,8 +11,12 @@ import {
   clearDetectAcknowledged,
   clearStepReviewed,
   detectSourceCards,
+  detectCoverageSummary,
+  financialModelNodes,
   hasDetectedSources,
   mappingGroupsByRole,
+  mappingSummaryCounts,
+  analyseContextFacts,
   needsMapPresentation,
   onboardingBackTarget,
   onboardingStepperModel,
@@ -391,10 +395,34 @@ describe("P7.1 onboarding journey presentation reviews", () => {
 
   it("validate executive summary derives counts from dataset only", () => {
     const chips = validateExecutiveSummary(READY_WITH_MAPPINGS);
+    assert.deepEqual(chips, [
+      { key: "sources", label: "Data sources", value: "2" },
+      { key: "mapped", label: "Mapped fields", value: "2" },
+      { key: "join-order_lines.sku_id→sku_master.sku_id", label: "Product joins", value: "100%" },
+      { key: "join-order_lines.order_id→settlements.order_id", label: "Settlement joins", value: "100%" },
+    ]);
+  });
+
+  it("financial model nodes and coverage use existing roles only", () => {
+    const coverage = detectCoverageSummary(READY_WITH_MAPPINGS);
+    assert.equal(coverage.sourceCount, 2);
+    assert.ok(coverage.facts.some((f) => f.label.includes("data source")));
+    assert.ok(coverage.facts.some((f) => f.label.includes("rows")));
+
+    const nodes = financialModelNodes(READY_WITH_MAPPINGS, "map");
     assert.deepEqual(
-      chips.map((c) => c.label),
-      ["2 Data sources", "2 Mapped", "100% Product joins", "100% Settlement joins"],
+      nodes.map((n) => n.title),
+      ["Orders", "Products / COGS"],
     );
+    assert.ok(nodes.every((n) => n.state === "mapped" || n.state === "detected"));
+
+    const counts = mappingSummaryCounts(READY_WITH_MAPPINGS);
+    assert.equal(counts.mapped, 2);
+    assert.equal(counts.needsReview, 0);
+
+    const analyseFacts = analyseContextFacts(READY_WITH_MAPPINGS);
+    assert.ok(analyseFacts.some((f) => f.key === "sources"));
+    assert.ok(analyseFacts.some((f) => f.key === "mapped"));
   });
 });
 
@@ -451,11 +479,15 @@ describe("P7.1 Pass 1 page wiring", () => {
     assert.match(stepper, /bg-\[#fc7d25\]/);
     assert.match(stepper, /bg-emerald-600/);
     assert.match(stepper, /h-6 w-6/);
-    assert.match(shell, /max-w-\[880px\]/);
+    assert.match(shell, /max-w-\[920px\]/);
     assert.match(shell, /OnboardingBackButton/);
-    assert.match(page, /max-w-\[880px\]/);
+    assert.match(page, /max-w-\[920px\]/);
     assert.match(page, /Confirm mappings/);
     assert.match(page, /Analyse my business/);
+    assert.match(page, /Building your financial workspace/);
+    assert.match(panels, /FinancialModelStatus/);
+    assert.match(panels, /needs confirmation/);
+    assert.match(panels, /Financial model ready/);
     assert.match(panels, /UploadStepPanel/);
     assert.match(panels, /DetectStepPanel/);
     assert.match(panels, /MappingStepPanel/);

@@ -408,20 +408,20 @@ export function validateReadinessHighlights(readiness) {
 }
 
 /**
- * Executive readiness chips derived only from existing dataset fields.
+ * Executive readiness facts derived only from existing dataset fields.
  */
 export function validateExecutiveSummary(dataset) {
   if (!dataset) return [];
   const chips = [];
   const sourceCount = (dataset.files || []).length;
   if (sourceCount > 0) {
-    chips.push({ key: "sources", label: `${sourceCount} Data source${sourceCount === 1 ? "" : "s"}` });
+    chips.push({ key: "sources", label: "Data sources", value: String(sourceCount) });
   }
 
   const mappings = dataset.mappings || [];
   const mappedCount = mappings.filter((row) => row.canonical_field).length;
   if (mappedCount > 0) {
-    chips.push({ key: "mapped", label: `${mappedCount} Mapped` });
+    chips.push({ key: "mapped", label: "Mapped fields", value: String(mappedCount) });
   }
 
   for (const join of dataset.readiness?.joins || []) {
@@ -430,11 +430,133 @@ export function validateExecutiveSummary(dataset) {
     if (!Number.isFinite(pct)) continue;
     const name = String(join.name || "");
     if (name.includes("sku_master")) {
-      chips.push({ key: `join-${name}`, label: `${pct}% Product joins` });
+      chips.push({ key: `join-${name}`, label: "Product joins", value: `${pct}%` });
     } else if (name.includes("settlements")) {
-      chips.push({ key: `join-${name}`, label: `${pct}% Settlement joins` });
+      chips.push({ key: `join-${name}`, label: "Settlement joins", value: `${pct}%` });
     }
   }
 
   return chips;
+}
+
+/**
+ * Detect-step coverage facts — only values that can be derived safely.
+ */
+export function detectCoverageSummary(dataset) {
+  const files = dataset?.files || [];
+  if (!files.length) return null;
+
+  const facts = [{ key: "sources", label: `${files.length} data source${files.length === 1 ? "" : "s"}` }];
+
+  const rowCounts = files.map((f) => f.row_count).filter((n) => n != null && Number.isFinite(Number(n)));
+  if (rowCounts.length > 0) {
+    const total = rowCounts.reduce((sum, n) => sum + Number(n), 0);
+    facts.push({ key: "rows", label: `${total.toLocaleString("en-IN")} rows` });
+  }
+
+  const dateMins = files.map((f) => f.date_min).filter(Boolean);
+  const dateMaxes = files.map((f) => f.date_max || f.date_min).filter(Boolean);
+  if (dateMins.length > 0 && dateMaxes.length > 0) {
+    const min = [...dateMins].sort()[0];
+    const max = [...dateMaxes].sort()[dateMaxes.length - 1];
+    if (min && max) facts.push({ key: "dates", label: `${min} → ${max}` });
+  }
+
+  return { sourceCount: files.length, facts };
+}
+
+/**
+ * Map-step counts from existing mapping rows only.
+ */
+export function mappingSummaryCounts(dataset) {
+  const mappings = dataset?.mappings || [];
+  const attention = mappingRowsNeedingAttention(mappings);
+  const mapped = mappings.filter((row) => row.canonical_field).length;
+  return {
+    total: mappings.length,
+    mapped,
+    needsReview: attention.length,
+    accepted: Math.max(0, mappings.length - attention.length),
+  };
+}
+
+/**
+ * Compact financial-model nodes from detected roles / mappings / readiness.
+ * Does not invent roles or relationships that are not present in the dataset.
+ */
+export function financialModelNodes(dataset, stage = "detect") {
+  if (!dataset) return [];
+
+  const files = dataset.files || [];
+  const mappings = dataset.mappings || [];
+  const rolesSeen = new Set();
+
+  for (const file of files) {
+    if (file.file_role) rolesSeen.add(file.file_role);
+  }
+  for (const row of mappings) {
+    if (row.file_role) rolesSeen.add(row.file_role);
+  }
+
+  const ordered = ROLE_DISPLAY_ORDER.filter((role) => rolesSeen.has(role)).concat(
+    [...rolesSeen].filter((role) => !ROLE_DISPLAY_ORDER.includes(role)),
+  );
+
+  const ready = dataset.readiness?.ready_for_engine === true;
+  const okJoins = dataset.readiness?.joins || [];
+
+  return ordered.map((role) => {
+    const file = files.find((f) => f.file_role === role);
+    const roleMappings = mappings.filter(
+      (row) => row.file_role === role || (!row.file_role && row.source_file && file?.filename === row.source_file),
+    );
+    const mappedCount = roleMappings.filter((row) => row.canonical_field).length;
+    const attentionCount = mappingRowsNeedingAttention(roleMappings).length;
+
+    let state = "pending";
+    if (file || roleMappings.length > 0) state = "detected";
+    if (mappedCount > 0) state = "mapped";
+
+    if (stage === "validate" || stage === "analyse") {
+      if (ready && mappedCount > 0) {
+        state = "connected";
+      } else if (role === "SKU_MASTER" && okJoins.some((j) => j.ok && String(j.name || "").includes("sku_master"))) {
+        state = "connected";
+      } else if (
+        role === "CHANNEL_SETTLEMENTS" &&
+        okJoins.some((j) => j.ok && String(j.name || "").includes("settlements"))
+      ) {
+        state = "connected";
+      } else if (ready && (file || roleMappings.length > 0)) {
+        state = "connected";
+      }
+    }
+
+    return {
+      role,
+      title: DETECT_ROLE_LABELS[role] || role,
+      state,
+      filename: file?.filename || roleMappings[0]?.source_file || null,
+      mappedCount,
+      attentionCount,
+    };
+  });
+}
+
+/**
+ * Neutral facts for Analyse transition — existing dataset values only.
+ */
+export function analyseContextFacts(dataset) {
+  if (!dataset) return [];
+  const facts = [];
+  if (dataset.name) facts.push({ key: "name", label: dataset.name });
+  const sourceCount = (dataset.files || []).length;
+  if (sourceCount > 0) {
+    facts.push({ key: "sources", label: `${sourceCount} source${sourceCount === 1 ? "" : "s"}` });
+  }
+  const mapped = (dataset.mappings || []).filter((row) => row.canonical_field).length;
+  if (mapped > 0) {
+    facts.push({ key: "mapped", label: `${mapped} mapped field${mapped === 1 ? "" : "s"}` });
+  }
+  return facts;
 }

@@ -70,7 +70,7 @@ function onboardingCopy(stage, dataset) {
     case "detect":
       return {
         title: sourceCount > 0 ? `We found ${sourceCount} data source${sourceCount === 1 ? "" : "s"}` : "We found your business data",
-        subtitle: "WYZ identifies what each data source represents. Review before continuing.",
+        subtitle: "WYZ has identified the structure of your business data.",
       };
     case "map":
       return {
@@ -80,15 +80,16 @@ function onboardingCopy(stage, dataset) {
       };
     case "validate":
       return {
-        title: canStartAnalysis(dataset) ? "Your data is ready" : "Data readiness",
+        title: canStartAnalysis(dataset) ? "Validate your financial model" : "Data readiness",
         subtitle: canStartAnalysis(dataset)
-          ? "WYZ verifies that the data can produce reliable financial analysis."
+          ? "Confirm that connected data can produce reliable financial analysis."
           : "Resolve any outstanding checks before running analysis.",
       };
     case "analyse":
       return {
-        title: "Analysing your business",
-        subtitle: "WYZ builds the financial workspace from the validated dataset.",
+        title: "Building your financial workspace",
+        subtitle:
+          "WYZ is turning your validated data into revenue, margin and profitability intelligence.",
       };
     default:
       return { title: "Set up your dataset", subtitle: null };
@@ -599,8 +600,8 @@ export default function RevenueMarginPage() {
           <AnalysisWorkspace key={dataset?.dataset_id || result.dataset_id || "workspace"} result={result} datasetId={dataset?.dataset_id} dataset={dataset} />
         </div>
       ) : (
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5">
-          <div className="mx-auto max-w-[880px]">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-5 sm:px-6 sm:py-6 lg:px-8">
+          <div className="mx-auto max-w-[920px]">
             {error && (
               <div className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-[13px] text-rose-800">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />

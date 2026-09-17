@@ -7,24 +7,25 @@ import {
 } from "lucide-react";
 import { readinessDisplayItems } from "../../lib/revenue-margin/dataQuality.js";
 import {
+  analyseContextFacts,
+  detectCoverageSummary,
   detectSourceCards,
   mappingGroupsByRole,
+  mappingSummaryCounts,
   validateExecutiveSummary,
-  validateReadinessHighlights,
 } from "../../lib/revenue-margin/onboarding.js";
 import {
   canStartAnalysis,
   isIngestBusy,
   mappingRowsNeedingAttention,
 } from "../../lib/revenue-margin/workflow.js";
+import FinancialModelStatus from "./FinancialModelStatus.jsx";
 
 export function ReadinessList({ readiness }) {
   const items = readinessDisplayItems(readiness);
   if (!items.length) {
     return (
-      <p className="mt-1 text-[13px] text-emerald-700">
-        No blocking data-quality issues reported.
-      </p>
+      <p className="mt-1 text-[13px] text-slate-600">No blocking data-quality issues reported.</p>
     );
   }
   return (
@@ -62,10 +63,11 @@ export function UploadStepPanel({
   busy,
 }) {
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       {!dataset ? (
         <div className="space-y-2">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">Create dataset</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">Dataset name</p>
+          <p className="text-[12px] text-slate-500">Setup metadata for this analysis.</p>
           <form onSubmit={onCreate} className="flex flex-col gap-3 sm:flex-row">
             <input
               value={name}
@@ -84,15 +86,26 @@ export function UploadStepPanel({
           </form>
         </div>
       ) : (
-        <p className="text-[12px] text-slate-500">
-          Dataset ready: <span className="font-medium text-[#1a3673]">{dataset.name}</span>
-        </p>
+        <div className="rounded-xl border border-emerald-100 bg-emerald-50/40 px-4 py-3">
+          <p className="inline-flex items-center gap-2 text-[12px] font-semibold text-emerald-800">
+            <CheckCircle2 className="h-4 w-4" />
+            Dataset created
+          </p>
+          <p className="mt-1 text-[14px] font-semibold text-[#1a3673]">{dataset.name}</p>
+        </div>
       )}
 
-      <div className={dataset ? "space-y-2" : "space-y-2 opacity-80"}>
-        {dataset ? (
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#fc7d25]">Next step</p>
-        ) : null}
+      <div className="space-y-2">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+          {dataset ? "Upload business files" : "Upload business files"}
+        </p>
+        {!dataset ? (
+          <p className="text-[12px] text-slate-400">Available after the dataset is created.</p>
+        ) : (
+          <p className="text-[12px] text-slate-500">
+            Orders, products/COGS, settlements, and marketing spend — CSV or Excel.
+          </p>
+        )}
         <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
           <button
             type="button"
@@ -102,7 +115,7 @@ export function UploadStepPanel({
               "inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-[13px] font-semibold disabled:opacity-50",
               dataset
                 ? "bg-[#1a3673] text-white hover:bg-[#142a5c]"
-                : "border border-dashed border-[#1a3673]/30 bg-[#1a3673]/5 text-[#1a3673]",
+                : "border border-dashed border-slate-200 bg-slate-50 text-slate-400",
             ].join(" ")}
           >
             <Upload className="h-4 w-4" />
@@ -122,9 +135,6 @@ export function UploadStepPanel({
               Profiling your files…
             </span>
           )}
-          {dataset && !isIngestBusy(dataset?.status) ? (
-            <p className="text-[12px] text-slate-500">CSV or Excel — orders, products, settlements, marketing.</p>
-          ) : null}
         </div>
       </div>
     </div>
@@ -134,9 +144,18 @@ export function UploadStepPanel({
 export function DetectStepPanel({ dataset }) {
   const cards = detectSourceCards(dataset);
   const stillWorking = isIngestBusy(dataset?.status);
+  const coverage = detectCoverageSummary(dataset);
 
   return (
     <div className="space-y-4">
+      <FinancialModelStatus dataset={dataset} stage="detect" />
+
+      {coverage?.facts?.length ? (
+        <p className="text-[12px] text-slate-500">
+          {coverage.facts.map((fact) => fact.label).join(" · ")}
+        </p>
+      ) : null}
+
       {stillWorking && (
         <p className="inline-flex items-center gap-2 text-[12px] text-slate-500">
           <Loader2 className="h-4 w-4 animate-spin" />
@@ -148,9 +167,9 @@ export function DetectStepPanel({ dataset }) {
       ) : (
         <ul className="grid gap-3 sm:grid-cols-2">
           {cards.map((card) => (
-            <li key={card.key} className="rounded-xl border border-gray-100 bg-[#f8fafc] p-3">
+            <li key={card.key} className="rounded-xl border border-gray-100 bg-[#f8fafc] p-3.5">
               <div className="flex items-start gap-2">
-                <FileSpreadsheet className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+                <FileSpreadsheet className="mt-0.5 h-4 w-4 shrink-0 text-[#1a3673]" />
                 <div className="min-w-0">
                   <p className="text-[13px] font-semibold text-[#1a3673]">{card.title}</p>
                   {card.filename ? <p className="truncate text-[12px] text-slate-500">{card.filename}</p> : null}
@@ -177,21 +196,34 @@ export function MappingStepPanel({
 }) {
   const allMappings = dataset?.mappings || [];
   const attentionRows = mappingRowsNeedingAttention(allMappings);
-  const autoAcceptedCount = Math.max(0, allMappings.length - attentionRows.length);
+  const counts = mappingSummaryCounts(dataset);
   const groups = mappingGroupsByRole(dataset);
   const fieldOptions = (role) => dataset?.canonical_fields?.[role] || [];
   const attentionKeys = new Set(attentionRows.map((row) => `${row.source_file}:${row.source_column}`));
+  const needsReviewCopy =
+    counts.needsReview === 1
+      ? "1 field needs confirmation"
+      : `${counts.needsReview} fields need confirmation`;
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-[12px] text-slate-500">
-          {attentionRows.length > 0
-            ? `${attentionRows.length} field${attentionRows.length === 1 ? "" : "s"} need confirmation. Accepted mappings stay collapsed.`
-            : autoAcceptedCount > 0
-              ? `${autoAcceptedCount} field${autoAcceptedCount === 1 ? "" : "s"} accepted. Review how WYZ interpreted your data before confirming.`
-              : "Review how source fields map to the financial model."}
-        </p>
+      <FinancialModelStatus dataset={dataset} stage="map" />
+
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="flex flex-wrap gap-4">
+          {counts.mapped > 0 ? (
+            <div>
+              <p className="text-[1.5rem] font-semibold tabular-nums tracking-tight text-[#1a3673]">{counts.mapped}</p>
+              <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">Mapped</p>
+            </div>
+          ) : null}
+          {counts.needsReview > 0 ? (
+            <div>
+              <p className="text-[1.5rem] font-semibold tabular-nums tracking-tight text-[#fc7d25]">{counts.needsReview}</p>
+              <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">Needs review</p>
+            </div>
+          ) : null}
+        </div>
         {allMappings.length > 0 && attentionRows.length > 0 && (
           <button
             type="button"
@@ -200,10 +232,18 @@ export function MappingStepPanel({
           >
             {showAllMappings
               ? "Show only fields needing review"
-              : `View all mappings${autoAcceptedCount > 0 ? ` (${autoAcceptedCount} accepted)` : ""}`}
+              : `View all mappings${counts.accepted > 0 ? ` (${counts.accepted} accepted)` : ""}`}
           </button>
         )}
       </div>
+
+      <p className="text-[12px] text-slate-500">
+        {attentionRows.length > 0
+          ? `${needsReviewCopy}. Accepted mappings stay collapsed.`
+          : counts.accepted > 0
+            ? `${counts.accepted} field${counts.accepted === 1 ? "" : "s"} accepted. Review how WYZ interpreted your data before confirming.`
+            : "Review how source fields map to the financial model."}
+      </p>
 
       {groups.length === 0 ? (
         <p className="text-[13px] text-slate-500">Waiting for mappings…</p>
@@ -219,7 +259,7 @@ export function MappingStepPanel({
               return (
                 <div key={group.role} className="rounded-xl border border-gray-100 bg-[#f8fafc] px-3 py-2.5">
                   <div className="flex flex-wrap items-baseline justify-between gap-2">
-                    <p className="text-[13px] font-semibold text-[#1a3673]">{group.title}</p>
+                    <p className="text-[13px] font-medium text-slate-600">{group.title}</p>
                     <p className="text-[11px] text-slate-400">
                       {group.rows.length} accepted
                       {group.filename ? ` · ${group.filename}` : ""}
@@ -229,8 +269,17 @@ export function MappingStepPanel({
               );
             }
 
+            const hasAttention = group.rows.some((row) => attentionKeys.has(row.key));
             return (
-              <div key={group.role} className="rounded-xl border border-gray-100 bg-[#f8fafc] p-3">
+              <div
+                key={group.role}
+                className={[
+                  "rounded-xl border p-3",
+                  hasAttention && attentionRows.length > 0
+                    ? "border-[#fc7d25]/35 bg-[#fff8f3]"
+                    : "border-gray-100 bg-[#f8fafc]",
+                ].join(" ")}
+              >
                 <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
                   <p className="text-[13px] font-semibold text-[#1a3673]">{group.title}</p>
                   {group.filename ? <p className="truncate text-[11px] text-slate-400">{group.filename}</p> : null}
@@ -242,7 +291,10 @@ export function MappingStepPanel({
                     return (
                       <li
                         key={row.key}
-                        className="grid gap-2 rounded-lg border border-white/80 bg-white px-3 py-2 sm:grid-cols-[1fr_1fr_auto]"
+                        className={[
+                          "grid gap-2 rounded-lg border bg-white px-3 py-2 sm:grid-cols-[1fr_1fr_auto]",
+                          editable ? "border-[#fc7d25]/30" : "border-gray-100",
+                        ].join(" ")}
                       >
                         <div className="min-w-0">
                           <p className="text-[12px] font-medium text-slate-700">{row.sourceColumn || "—"}</p>
@@ -277,7 +329,14 @@ export function MappingStepPanel({
                           <p className="text-[11px] text-slate-400">Financial field</p>
                         </div>
                         <div className="text-left sm:text-right">
-                          <p className="text-[11px] font-medium text-slate-600">{row.reviewLabel}</p>
+                          <p
+                            className={[
+                              "text-[11px] font-medium",
+                              editable ? "text-[#fc7d25]" : "text-slate-600",
+                            ].join(" ")}
+                          >
+                            {row.reviewLabel}
+                          </p>
                           {row.confidence != null ? (
                             <p className="text-[11px] tabular-nums text-slate-400">
                               Confidence {Number(row.confidence).toFixed(2)}
@@ -302,39 +361,28 @@ export function ValidateStepPanel({ dataset }) {
   const blocked = dataset?.readiness && dataset.readiness.ready_for_engine === false;
   const items = readinessDisplayItems(dataset?.readiness || {});
   const failing = items.filter((item) => !item.ok);
-  const highlights = ready ? validateReadinessHighlights(dataset?.readiness) : [];
-  const summary = ready ? validateExecutiveSummary(dataset) : [];
+  const summary = validateExecutiveSummary(dataset);
 
   return (
     <div className="space-y-4">
-      {ready ? (
-        <p className="text-[13px] font-medium text-emerald-800">
-          WYZ has enough connected financial data to analyse the business.
-        </p>
-      ) : null}
+      <FinancialModelStatus dataset={dataset} stage="validate" />
 
-      {summary.length > 0 ? (
-        <div className="flex flex-wrap gap-2">
-          {summary.map((chip) => (
-            <span
-              key={chip.key}
-              className="rounded-lg border border-emerald-100 bg-emerald-50/80 px-2.5 py-1 text-[12px] font-semibold text-emerald-800"
-            >
-              {chip.label}
-            </span>
-          ))}
+      {ready ? (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 px-4 py-3">
+          <p className="text-[15px] font-semibold text-[#1a3673]">Financial model ready</p>
+          <p className="mt-0.5 text-[12px] text-slate-500">Ready for analysis</p>
         </div>
       ) : null}
 
-      {ready && highlights.length > 0 ? (
-        <ul className="space-y-1.5">
-          {highlights.map((item) => (
-            <li key={item.key} className="flex items-center gap-2 text-[13px] text-emerald-800">
-              <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
-              {item.label}
-            </li>
+      {summary.length > 0 ? (
+        <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {summary.map((chip) => (
+            <div key={chip.key} className="rounded-xl border border-gray-100 bg-[#f8fafc] px-3 py-2.5">
+              <dt className="text-[11px] text-slate-400">{chip.label}</dt>
+              <dd className="mt-0.5 text-[15px] font-semibold tabular-nums text-[#1a3673]">{chip.value}</dd>
+            </div>
           ))}
-        </ul>
+        </dl>
       ) : null}
 
       {blocked ? (
@@ -388,9 +436,12 @@ export function AnalyseStepPanel({ job, dataset }) {
   const progressNum = Number(job?.progress);
   const hasMeaningfulProgress = Number.isFinite(progressNum) && progressNum > 0;
   const progressPct = hasMeaningfulProgress ? Math.min(100, Math.max(0, progressNum)) : null;
+  const contextFacts = analyseContextFacts(dataset);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
+      <FinancialModelStatus dataset={dataset} stage="analyse" />
+
       {failed ? (
         <p className="inline-flex items-start gap-2 text-[13px] text-rose-700">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -400,11 +451,12 @@ export function AnalyseStepPanel({ job, dataset }) {
         <>
           <div className="flex items-start gap-3">
             <Loader2 className="mt-0.5 h-5 w-5 shrink-0 animate-spin text-[#1a3673]" />
-            <div>
+            <div className="min-w-0">
               <p className="text-[14px] font-medium text-[#1a3673]">{message}</p>
               <p className="mt-1 text-[12px] text-slate-500">This usually completes in a few moments.</p>
             </div>
           </div>
+
           <div className="space-y-1.5">
             <div
               className="relative h-1.5 overflow-hidden rounded-full bg-slate-100"
@@ -442,6 +494,10 @@ export function AnalyseStepPanel({ job, dataset }) {
               <p className="text-[11px] text-slate-400">In progress</p>
             )}
           </div>
+
+          {contextFacts.length > 0 ? (
+            <p className="text-[12px] text-slate-500">{contextFacts.map((fact) => fact.label).join(" · ")}</p>
+          ) : null}
         </>
       )}
     </div>
