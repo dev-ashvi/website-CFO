@@ -78,7 +78,7 @@ function onboardingCopy(stage, dataset) {
       return {
         title: canStartAnalysis(dataset) ? "Your data is ready" : "Data readiness",
         subtitle: canStartAnalysis(dataset)
-          ? "Everything needed for analysis looks good. Review any details, then analyse your business."
+          ? "A verified readiness check confirms you can analyse your business."
           : "Resolve any outstanding checks before running analysis.",
       };
     case "analyse":
@@ -497,11 +497,11 @@ export default function RevenueMarginPage() {
 
   const headerSubtitle = isWorkspace
     ? "Understand revenue, profitability and the decisions driving performance."
-    : "Set up your dataset, then open the financial workspace.";
+    : "Turn your business data into financial intelligence.";
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <header className="shrink-0 border-b border-gray-200/80 bg-white/90 px-4 py-4 sm:px-6">
+      <header className="shrink-0 border-b border-gray-200/80 bg-white/90 px-4 py-3.5 sm:px-6">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[rgba(26,54,115,0.55)]">
@@ -510,7 +510,7 @@ export default function RevenueMarginPage() {
             <h1 className="mt-1 text-lg font-semibold text-[#1a3673] sm:text-xl">Revenue & Margin</h1>
             <p className="mt-0.5 max-w-2xl text-[12px] text-slate-500">{headerSubtitle}</p>
           </div>
-          <div className="flex flex-wrap items-start gap-3">
+          <div className="flex flex-wrap items-start gap-2 sm:gap-3">
             <DatasetLibrarySwitcher
               activeDatasetId={dataset?.dataset_id || urlDatasetParam || null}
               activeDatasetName={dataset?.name}
@@ -519,7 +519,14 @@ export default function RevenueMarginPage() {
               onNewAnalysis={startNewAnalysis}
             />
             {dataset?.status && (
-              <span className={`rounded-full px-3 py-1 text-[11px] font-semibold ${statusTone(dataset.status)}`}>
+              <span
+                className={
+                  isWorkspace
+                    ? `rounded-full px-3 py-1 text-[11px] font-semibold ${statusTone(dataset.status)}`
+                    : "rounded-md px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-500 bg-slate-100/90"
+                }
+                title={dataset.status}
+              >
                 {dataset.status}
               </span>
             )}
@@ -538,8 +545,8 @@ export default function RevenueMarginPage() {
           <AnalysisWorkspace key={dataset?.dataset_id || result.dataset_id || "workspace"} result={result} datasetId={dataset?.dataset_id} dataset={dataset} />
         </div>
       ) : (
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-6 sm:px-6">
-          <div className="mx-auto max-w-3xl space-y-4">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5">
+          <div className="mx-auto max-w-[880px]">
             {error && (
               <div className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-[13px] text-rose-800">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />

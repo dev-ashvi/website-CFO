@@ -15,6 +15,7 @@ import {
   readDetectAcknowledged,
   writeDetectAcknowledged,
   clearDetectAcknowledged,
+  validateReadinessHighlights,
 } from "./onboarding.js";
 import { DATASET_STATUSES } from "./workflow.js";
 
@@ -179,12 +180,29 @@ describe("P7.1 Pass 1 onboarding mode routing", () => {
     assert.equal(readDetectAcknowledged("ds_abcdef123456", storage), false);
   });
 
-  it("detect cards use business role labels", () => {
+  it("detect cards prefer role labels without redundant detected suffix", () => {
     assert.equal(DETECT_ROLE_LABELS.ORDER_LINES, "Orders");
+    assert.equal(DETECT_ROLE_LABELS.MARKETING_SPEND, "Marketing spend");
     const cards = detectSourceCards({
-      files: [{ filename: "o.csv", file_role: "ORDER_LINES", row_count: 12, date_min: "2024-01-01", date_max: "2024-06-01" }],
+      files: [
+        {
+          filename: "o.csv",
+          file_role: "ORDER_LINES",
+          label: "Orders detected",
+          row_count: 12,
+          date_min: "2024-01-01",
+          date_max: "2024-06-01",
+        },
+        {
+          filename: "m.csv",
+          file_role: "MARKETING_SPEND",
+          label: "Marketing spend detected",
+          row_count: 4,
+        },
+      ],
     });
     assert.equal(cards[0].title, "Orders");
+    assert.equal(cards[1].title, "Marketing spend");
     assert.equal(cards[0].rowCount, 12);
     assert.equal(hasDetectedSources({ files: [] }), false);
     assert.equal(hasDetectedSources({ files: [{ filename: "x.csv", file_role: "SKU_MASTER" }] }), true);
@@ -204,6 +222,8 @@ describe("P7.1 Pass 1 page wiring", () => {
     assert.match(page, /ValidateStepPanel/);
     assert.match(page, /isWorkspace/);
     assert.match(page, /PRESENTATION_MODE\.WORKSPACE/);
+    assert.match(page, /Turn your business data into financial intelligence/);
+    assert.match(page, /Understand revenue, profitability and the decisions driving performance/);
     assert.doesNotMatch(page, /Run financial engine/);
     // Dataset create form only in UploadStepPanel path, not stacked above workspace
     assert.doesNotMatch(page, /1\. Dataset/);
@@ -213,7 +233,16 @@ describe("P7.1 Pass 1 page wiring", () => {
 
     const panels = readFileSync(join(root, "../../components/revenue-margin/OnboardingPanels.jsx"), "utf8");
     assert.match(panels, /Analyse my business/);
+    assert.match(panels, /validateReadinessHighlights/);
+    assert.match(panels, /Technical details/);
+    assert.match(panels, /This usually completes in a few moments/);
+    assert.doesNotMatch(panels, /Progress: \{/);
     assert.doesNotMatch(panels, /Run financial engine/);
+    // Analyse CTA uses WYZ navy, not orange
+    const analyseIdx = panels.indexOf("Analyse my business");
+    const analyseWindow = panels.slice(Math.max(0, analyseIdx - 280), analyseIdx + 40);
+    assert.match(analyseWindow, /bg-\[#1a3673\]/);
+    assert.doesNotMatch(analyseWindow, /bg-\[#fc7d25\]/);
   });
 
   it("page imports canStartAnalysis and onboarding helpers", () => {
@@ -225,17 +254,44 @@ describe("P7.1 Pass 1 page wiring", () => {
     assert.match(pageSrc, /AnalysisWorkspace[^>]*result=\{result\}[^>]*datasetId=\{dataset\?\.dataset_id\}/);
   });
 
-  it("new onboarding components exist", () => {
+  it("onboarding presentation polish: density, stepper, navy CTAs", () => {
     const root = dirname(fileURLToPath(import.meta.url));
     const stepper = readFileSync(join(root, "../../components/revenue-margin/OnboardingStepper.jsx"), "utf8");
     const shell = readFileSync(join(root, "../../components/revenue-margin/OnboardingShell.jsx"), "utf8");
     const panels = readFileSync(join(root, "../../components/revenue-margin/OnboardingPanels.jsx"), "utf8");
+    const page = readFileSync(join(root, "../../pages/RevenueMarginPage.jsx"), "utf8");
     assert.match(stepper, /OnboardingStepper/);
-    assert.match(shell, /OnboardingShell/);
+    assert.match(stepper, /bg-\[#fc7d25\]/);
+    assert.match(stepper, /bg-emerald-600/);
+    assert.match(shell, /max-w-\[880px\]/);
+    assert.match(page, /max-w-\[880px\]/);
     assert.match(panels, /UploadStepPanel/);
     assert.match(panels, /DetectStepPanel/);
     assert.match(panels, /MappingStepPanel/);
     assert.match(panels, /ValidateStepPanel/);
     assert.match(panels, /AnalyseStepPanel/);
+    assert.match(panels, /Confirm mappings/);
+    const analyseIdx = panels.indexOf("Analyse my business");
+    assert.match(panels.slice(Math.max(0, analyseIdx - 280), analyseIdx + 40), /bg-\[#1a3673\]/);
+  });
+
+  it("validate highlights only use verified readiness facts", () => {
+    assert.deepEqual(validateReadinessHighlights(null), []);
+    assert.deepEqual(validateReadinessHighlights({ ready_for_engine: false, joins: [] }), []);
+    assert.deepEqual(
+      validateReadinessHighlights({
+        ready_for_engine: true,
+        joins: [
+          { name: "order_lines.sku_id→sku_master.sku_id", ok: true, match_pct: 1 },
+          { name: "order_lines.order_id→settlements.order_id", ok: true, match_pct: 1 },
+          { name: "order_lines.sku_id→sku_master.sku_id-bad", ok: false, match_pct: 0.5 },
+        ],
+      }),
+      [
+        { key: "required", label: "Required data is available" },
+        { key: "order_lines.sku_id→sku_master.sku_id", label: "Product join coverage: 100%" },
+        { key: "order_lines.order_id→settlements.order_id", label: "Settlement join coverage: 100%" },
+      ],
+    );
   });
 });

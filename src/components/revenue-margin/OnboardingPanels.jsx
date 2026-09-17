@@ -7,11 +7,10 @@ import {
   Upload,
 } from "lucide-react";
 import { readinessDisplayItems } from "../../lib/revenue-margin/dataQuality.js";
-import { detectSourceCards } from "../../lib/revenue-margin/onboarding.js";
+import { detectSourceCards, validateReadinessHighlights } from "../../lib/revenue-margin/onboarding.js";
 import {
   canStartAnalysis,
   isIngestBusy,
-  isJobBusy,
   mappingRowsNeedingAttention,
 } from "../../lib/revenue-margin/workflow.js";
 
@@ -59,54 +58,70 @@ export function UploadStepPanel({
   busy,
 }) {
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       {!dataset ? (
-        <form onSubmit={onCreate} className="flex flex-col gap-3 sm:flex-row">
-          <input
-            value={name}
-            onChange={(e) => onNameChange(e.target.value)}
-            className="flex-1 rounded-xl border border-[rgba(26,54,115,0.16)] px-3 py-2.5 text-sm text-[#1a3673] outline-none focus:border-[#1a3673]"
-            placeholder="Dataset name"
-            aria-label="Dataset name"
-          />
-          <button
-            type="submit"
-            disabled={busy}
-            className="rounded-xl bg-[#1a3673] px-4 py-2.5 text-[13px] font-semibold text-white hover:bg-[#142a5c] disabled:opacity-60"
-          >
-            Create dataset
-          </button>
-        </form>
+        <div className="space-y-2">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">Create dataset</p>
+          <form onSubmit={onCreate} className="flex flex-col gap-3 sm:flex-row">
+            <input
+              value={name}
+              onChange={(e) => onNameChange(e.target.value)}
+              className="flex-1 rounded-xl border border-[rgba(26,54,115,0.16)] px-3 py-2.5 text-sm text-[#1a3673] outline-none focus:border-[#1a3673]"
+              placeholder="Dataset name"
+              aria-label="Dataset name"
+            />
+            <button
+              type="submit"
+              disabled={busy}
+              className="rounded-xl bg-[#1a3673] px-4 py-2.5 text-[13px] font-semibold text-white hover:bg-[#142a5c] disabled:opacity-60"
+            >
+              Create dataset
+            </button>
+          </form>
+        </div>
       ) : (
         <p className="text-[12px] text-slate-500">
-          Dataset: <span className="font-medium text-[#1a3673]">{dataset.name}</span>
+          Dataset ready: <span className="font-medium text-[#1a3673]">{dataset.name}</span>
         </p>
       )}
 
-      <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
-        <button
-          type="button"
-          disabled={!dataset || busy}
-          onClick={onUploadClick}
-          className="inline-flex items-center gap-2 rounded-xl border border-dashed border-[#1a3673]/30 bg-[#1a3673]/5 px-4 py-3 text-[13px] font-semibold text-[#1a3673] hover:bg-[#1a3673]/10 disabled:opacity-50"
-        >
-          <Upload className="h-4 w-4" />
-          Upload files
-        </button>
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          accept=".csv,.xlsx,.xls"
-          className="hidden"
-          onChange={onUploadChange}
-        />
-        {isIngestBusy(dataset?.status) && (
-          <span className="inline-flex items-center gap-2 text-[12px] text-slate-500">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Profiling your files…
-          </span>
-        )}
+      <div className={dataset ? "space-y-2" : "space-y-2 opacity-80"}>
+        {dataset ? (
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#fc7d25]">Next step</p>
+        ) : null}
+        <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
+          <button
+            type="button"
+            disabled={!dataset || busy}
+            onClick={onUploadClick}
+            className={[
+              "inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-[13px] font-semibold disabled:opacity-50",
+              dataset
+                ? "bg-[#1a3673] text-white hover:bg-[#142a5c]"
+                : "border border-dashed border-[#1a3673]/30 bg-[#1a3673]/5 text-[#1a3673]",
+            ].join(" ")}
+          >
+            <Upload className="h-4 w-4" />
+            Upload files
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept=".csv,.xlsx,.xls"
+            className="hidden"
+            onChange={onUploadChange}
+          />
+          {isIngestBusy(dataset?.status) && (
+            <span className="inline-flex items-center gap-2 text-[12px] text-slate-500">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Profiling your files…
+            </span>
+          )}
+          {dataset && !isIngestBusy(dataset?.status) ? (
+            <p className="text-[12px] text-slate-500">CSV or Excel — orders, products, settlements, marketing.</p>
+          ) : null}
+        </div>
       </div>
     </div>
   );
@@ -264,13 +279,23 @@ export function ValidateStepPanel({ dataset, onAnalyse, busy }) {
   const blocked = dataset?.readiness && dataset.readiness.ready_for_engine === false;
   const items = readinessDisplayItems(dataset?.readiness || {});
   const failing = items.filter((item) => !item.ok);
+  const highlights = ready ? validateReadinessHighlights(dataset?.readiness) : [];
 
   return (
     <div className="space-y-4">
-      {ready ? (
+      {ready && highlights.length > 0 ? (
+        <ul className="space-y-1.5 rounded-xl border border-emerald-100 bg-emerald-50/60 px-4 py-3">
+          {highlights.map((item) => (
+            <li key={item.key} className="flex items-center gap-2 text-[13px] font-medium text-emerald-800">
+              <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+              {item.label}
+            </li>
+          ))}
+        </ul>
+      ) : ready ? (
         <p className="inline-flex items-center gap-2 text-[13px] font-medium text-emerald-700">
           <CheckCircle2 className="h-4 w-4" />
-          Your data is ready for analysis
+          Verified and ready for analysis
         </p>
       ) : null}
 
@@ -302,8 +327,8 @@ export function ValidateStepPanel({ dataset, onAnalyse, busy }) {
 
       {dataset?.readiness ? (
         <details className="rounded-xl border border-gray-100 bg-[#f8fafc] px-3 py-2" open={Boolean(blocked)}>
-          <summary className="cursor-pointer text-[12px] font-medium text-[#1a3673]">
-            {blocked ? "What needs attention" : "Technical details"}
+          <summary className="cursor-pointer text-[12px] font-medium text-slate-500">
+            {blocked ? "What needs attention ▾" : "Technical details ▾"}
           </summary>
           <div className="mt-2">
             <ReadinessList readiness={dataset.readiness} />
@@ -317,7 +342,7 @@ export function ValidateStepPanel({ dataset, onAnalyse, busy }) {
         type="button"
         disabled={busy || !canStartAnalysis(dataset)}
         onClick={onAnalyse}
-        className="inline-flex items-center gap-2 rounded-xl bg-[#fc7d25] px-4 py-2.5 text-[13px] font-semibold text-white hover:bg-[#e86f16] disabled:opacity-50"
+        className="inline-flex items-center gap-2 rounded-xl bg-[#1a3673] px-4 py-2.5 text-[13px] font-semibold text-white hover:bg-[#142a5c] disabled:opacity-50"
       >
         <BarChart3 className="h-4 w-4" />
         Analyse my business
@@ -332,23 +357,50 @@ export function AnalyseStepPanel({ job, dataset }) {
     job?.stage ||
     (dataset?.status === "ANALYSING" ? "Analysis in progress…" : "Preparing financial model…");
   const failed = job?.status === "FAILED" || dataset?.status === "FAILED";
+  const progressNum = Number(job?.progress);
+  const hasMeaningfulProgress = Number.isFinite(progressNum) && progressNum > 0;
+  const progressPct = hasMeaningfulProgress ? Math.min(100, Math.max(0, progressNum)) : null;
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {failed ? (
         <p className="inline-flex items-start gap-2 text-[13px] text-rose-700">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           Analysis did not complete. You can retry from Validate once the dataset is READY again.
         </p>
       ) : (
-        <p className="inline-flex items-center gap-2 text-[13px] text-slate-600">
-          <Loader2 className="h-4 w-4 animate-spin text-[#1a3673]" />
-          {message}
-        </p>
+        <>
+          <div className="flex items-start gap-3">
+            <Loader2 className="mt-0.5 h-5 w-5 shrink-0 animate-spin text-[#1a3673]" />
+            <div>
+              <p className="text-[14px] font-medium text-[#1a3673]">{message}</p>
+              <p className="mt-1 text-[12px] text-slate-500">This usually completes in a few moments.</p>
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <div
+              className="h-1.5 overflow-hidden rounded-full bg-slate-100"
+              role="progressbar"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={progressPct != null ? progressPct : undefined}
+              aria-label="Analysis progress"
+            >
+              {progressPct != null ? (
+                <div
+                  className="h-full rounded-full bg-[#1a3673] transition-[width] duration-500 ease-out"
+                  style={{ width: `${progressPct}%` }}
+                />
+              ) : (
+                <div className="h-full w-1/3 animate-pulse rounded-full bg-[#1a3673]/45" />
+              )}
+            </div>
+            {progressPct != null ? (
+              <p className="text-[11px] tabular-nums text-slate-400">{Math.round(progressPct)}% complete</p>
+            ) : null}
+          </div>
+        </>
       )}
-      {job?.progress != null && !failed ? (
-        <p className="text-[12px] tabular-nums text-slate-400">Progress: {job.progress}</p>
-      ) : null}
     </div>
   );
 }

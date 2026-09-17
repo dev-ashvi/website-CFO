@@ -37,8 +37,8 @@ export const ONBOARDING_STAGE_LABELS = Object.freeze({
 export const DETECT_ROLE_LABELS = Object.freeze({
   ORDER_LINES: "Orders",
   SKU_MASTER: "Products / COGS",
-  CHANNEL_SETTLEMENTS: "Channel Settlements",
-  MARKETING_SPEND: "Marketing Spend",
+  CHANNEL_SETTLEMENTS: "Channel settlements",
+  MARKETING_SPEND: "Marketing spend",
   UNKNOWN: "Unrecognised file",
 });
 
@@ -225,17 +225,45 @@ export function onboardingStepperModel(currentStage) {
 
 export function detectSourceCards(dataset) {
   const files = dataset?.files || [];
-  return files.map((file) => ({
-    key: file.filename || file.file_id || file.label,
-    title:
-      file.label ||
-      DETECT_ROLE_LABELS[file.file_role] ||
-      file.file_role ||
-      "Data source",
-    filename: file.filename || null,
-    rowCount: file.row_count ?? null,
-    dateMin: file.date_min || null,
-    dateMax: file.date_max || file.date_min || null,
-    role: file.file_role || null,
-  }));
+  return files.map((file) => {
+    const roleLabel = file.file_role ? DETECT_ROLE_LABELS[file.file_role] : null;
+    const rawLabel = file.label || file.file_role || "Data source";
+    const title = roleLabel || String(rawLabel).replace(/\s+detected$/i, "");
+    return {
+      key: file.filename || file.file_id || file.label,
+      title,
+      filename: file.filename || null,
+      rowCount: file.row_count ?? null,
+      dateMin: file.date_min || null,
+      dateMax: file.date_max || file.date_min || null,
+      role: file.file_role || null,
+    };
+  });
+}
+
+/**
+ * Compact Validate-step success facts from verified readiness only.
+ * Does not invent checks — only surfaces ready_for_engine + ok joins.
+ */
+export function validateReadinessHighlights(readiness) {
+  if (!readiness) return [];
+  const highlights = [];
+
+  if (readiness.ready_for_engine === true) {
+    highlights.push({ key: "required", label: "Required data is available" });
+  }
+
+  for (const join of readiness.joins || []) {
+    if (!join?.ok) continue;
+    const pct = Math.round(Number(join.match_pct || 0) * 100);
+    if (!Number.isFinite(pct)) continue;
+    const name = String(join.name || "");
+    if (name.includes("sku_master")) {
+      highlights.push({ key: name, label: `Product join coverage: ${pct}%` });
+    } else if (name.includes("settlements")) {
+      highlights.push({ key: name, label: `Settlement join coverage: ${pct}%` });
+    }
+  }
+
+  return highlights;
 }
