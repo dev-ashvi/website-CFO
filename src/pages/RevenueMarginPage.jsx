@@ -535,7 +535,7 @@ export default function RevenueMarginPage() {
               <p>{error}</p>
             </div>
           )}
-          <AnalysisWorkspace key={dataset?.dataset_id || result.dataset_id || "workspace"} result={result} datasetId={dataset?.dataset_id} />
+          <AnalysisWorkspace key={dataset?.dataset_id || result.dataset_id || "workspace"} result={result} datasetId={dataset?.dataset_id} dataset={dataset} />
         </div>
       ) : (
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-6 sm:px-6">

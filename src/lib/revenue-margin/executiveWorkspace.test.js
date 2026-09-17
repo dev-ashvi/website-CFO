@@ -163,8 +163,7 @@ describe("P7.1 Pass 2 workspace wiring", () => {
     assert.match(src, /Understand revenue, profitability and the decisions driving performance/);
     assert.doesNotMatch(src, /deterministic WYZ engine/);
     assert.doesNotMatch(src, /Dynamic financial query/);
-    // Engine version not prominent on Overview — only under Data Quality details
-    assert.match(src, /Technical details/);
+    assert.match(src, /DataQualityWorkspace/);
   });
 
   it("completed page still routes Mode B without onboarding stack", () => {

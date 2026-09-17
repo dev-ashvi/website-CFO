@@ -70,12 +70,12 @@ function SignalRow({ signal, onInvestigate, onAskWyz }) {
             </div>
           )}
           {(investigate || askWyz) && (
-            <div className="mt-2 flex flex-wrap gap-3">
+            <div className="mt-2 flex flex-wrap gap-2">
               {investigate && onInvestigate && (
                 <button
                   type="button"
                   onClick={() => onInvestigate(signal)}
-                  className="text-[11px] font-semibold text-[#1a3673] hover:underline"
+                  className="rounded-md border border-[rgba(26,54,115,0.18)] bg-white px-2 py-1 text-[11px] font-semibold text-[#1a3673] hover:bg-[#1a3673]/5"
                 >
                   Investigate
                 </button>
@@ -84,9 +84,9 @@ function SignalRow({ signal, onInvestigate, onAskWyz }) {
                 <button
                   type="button"
                   onClick={() => onAskWyz(signal)}
-                  className="text-[11px] font-semibold text-[#1a3673] hover:underline"
+                  className="rounded-md bg-[#1a3673] px-2 py-1 text-[11px] font-semibold text-white hover:bg-[#142a5c]"
                 >
-                  Ask WYZ
+                  Ask WYZ about this
                 </button>
               )}
             </div>

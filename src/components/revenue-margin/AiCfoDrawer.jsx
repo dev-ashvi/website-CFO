@@ -261,22 +261,35 @@ function AssistantTurn({
       ? methodologyRaw
       : null;
   return (
-    <div className="space-y-2">
-      {turn.viewing && (
-        <p className="text-[10px] uppercase tracking-wide text-slate-400">Viewing: {turn.viewing}</p>
-      )}
+    <div className="space-y-2.5">
       {scenario && (
         <span className="inline-block rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600">
-          What-if
+          Scenario
         </span>
       )}
-      {answer.headline && <p className="font-semibold leading-snug text-[#1a3673]">{answer.headline}</p>}
+      {answer.headline && (
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Finding</p>
+          <p className="mt-0.5 font-semibold leading-snug text-[#1a3673]">{answer.headline}</p>
+        </div>
+      )}
       {showScenarioEvidence ? (
-        <ScenarioEvidenceBlock answer={answer} evidence={evidence} />
+        <div>
+          <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Scenario impact</p>
+          <ScenarioEvidenceBlock answer={answer} evidence={evidence} />
+        </div>
       ) : temporal ? (
-        <TemporalEvidenceBlock answer={answer} evidence={evidence} />
+        <div>
+          <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Evidence</p>
+          <TemporalEvidenceBlock answer={answer} evidence={evidence} />
+        </div>
       ) : (
-        evidence.length > 0 && <EvidenceRows evidence={evidence} debug={debug} />
+        evidence.length > 0 && (
+          <div>
+            <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Evidence</p>
+            <EvidenceRows evidence={evidence} debug={debug} />
+          </div>
+        )
       )}
       {answer.strategic ? (
         <div className="space-y-2 text-[12px] leading-relaxed text-slate-700">
@@ -320,7 +333,7 @@ function AssistantTurn({
           )}
           {answer.strategic.next_step && (
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">What I&apos;d do next</p>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Recommendation</p>
               <p>{answer.strategic.next_step}</p>
             </div>
           )}
@@ -345,23 +358,31 @@ function AssistantTurn({
               </ul>
             </div>
           )}
-          {canTrack && (
-            <button
-              type="button"
-              disabled={trackPending}
-              onClick={() => onTrackDecision(turn)}
-              className="mt-1 text-[11px] font-semibold text-[#1a3673] hover:underline disabled:opacity-50"
-            >
-              {trackPending ? "Tracking…" : "Track this decision"}
-            </button>
-          )}
-          {trackedDecisionId && (
-            <p className="text-[11px] text-emerald-700">Decision tracked.</p>
+          {(canTrack || trackedDecisionId) && (
+            <div className="rounded-lg border border-[rgba(26,54,115,0.12)] bg-white px-2.5 py-2">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Decision action</p>
+              {canTrack && (
+                <button
+                  type="button"
+                  disabled={trackPending}
+                  onClick={() => onTrackDecision(turn)}
+                  className="mt-1 rounded-lg bg-[#1a3673] px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-[#142a5c] disabled:opacity-50"
+                >
+                  {trackPending ? "Tracking…" : "Track this decision"}
+                </button>
+              )}
+              {trackedDecisionId && (
+                <p className="mt-1 text-[11px] font-medium text-emerald-700">Decision tracked — review it in Tracked Decisions.</p>
+              )}
+            </div>
           )}
         </div>
       ) : (
         answer.interpretation && (
-          <p className="text-[12px] leading-relaxed text-slate-700">{answer.interpretation}</p>
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Assessment</p>
+            <p className="mt-0.5 text-[12px] leading-relaxed text-slate-700">{answer.interpretation}</p>
+          </div>
         )
       )}
       {scenario && assumptions.length > 0 && (
@@ -593,37 +614,37 @@ export default function AiCfoDrawer({
     : null;
 
   return (
-    <aside className="flex h-full min-h-[520px] w-full flex-col rounded-2xl border border-gray-100 bg-white shadow-sm lg:sticky lg:top-4 lg:max-h-[calc(100vh-6rem)] lg:w-[300px] lg:shrink-0 xl:w-[320px]">
-      <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
-        <div>
+    <aside className="flex h-full min-h-[520px] w-full flex-col rounded-2xl border border-gray-100 bg-white shadow-sm lg:sticky lg:top-4 lg:max-h-[calc(100vh-6rem)] lg:w-[340px] lg:shrink-0 xl:w-[360px]">
+      <div className="flex items-start justify-between gap-2 border-b border-gray-100 px-4 py-3">
+        <div className="min-w-0">
           <h3 className="text-sm font-semibold text-[#1a3673]">WYZ AI CFO</h3>
-          <p className="text-[11px] text-slate-500">Read-only interpretation of the active view</p>
+          <p className="mt-0.5 truncate text-[11px] text-slate-500" title={viewingLabel}>
+            {viewingLabel}
+          </p>
+          {topicBanner && (
+            <p className="mt-1.5 rounded-md border border-[#1a3673]/15 bg-[#1a3673]/[0.04] px-2 py-1 text-[11px] text-[#1a3673]">
+              Investigating signal: <span className="font-semibold">{topicBanner}</span>
+            </p>
+          )}
+          {signalTopic?._stale && (
+            <p className="mt-1 text-[11px] text-slate-400">Prior signal topic is historical (view changed).</p>
+          )}
+          {!dynamicEnabled && (
+            <p className="mt-1 text-[11px] text-slate-500">Re-run analysis to enable AI CFO on this dataset.</p>
+          )}
         </div>
-        <button type="button" onClick={() => setOpen(false)} className="text-slate-400 hover:text-slate-700">
+        <button type="button" onClick={() => setOpen(false)} className="shrink-0 text-slate-400 hover:text-slate-700">
           <X className="h-4 w-4" />
         </button>
       </div>
-      <div className="border-b border-gray-100 px-4 py-3">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Current view</p>
-        <p className="mt-1 text-[12px] text-slate-700">{viewingLabel}</p>
-        <div className="mt-2 flex flex-wrap gap-1">
+      {scopeChips.filter((chip) => chip.kind === "dimension").length > 0 && (
+        <div className="flex flex-wrap gap-1 border-b border-gray-100 px-4 py-2">
           {scopeChips.filter((chip) => chip.kind === "dimension").map((chip) => (
             <span key={chip.id} className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600">{chip.label}</span>
           ))}
         </div>
-        {topicBanner && (
-          <p className="mt-2 text-[11px] text-slate-500">
-            From signal: <span className="font-medium text-slate-700">{topicBanner}</span>
-          </p>
-        )}
-        {signalTopic?._stale && (
-          <p className="mt-2 text-[11px] text-slate-400">Prior signal topic is historical (view changed).</p>
-        )}
-        {!dynamicEnabled && (
-          <p className="mt-2 text-[11px] text-slate-500">Re-run analysis to enable AI CFO on dynamic facts.</p>
-        )}
-      </div>
-      <div className="flex-1 space-y-3 overflow-y-auto px-4 py-3">
+      )}
+      <div className="flex-1 space-y-2.5 overflow-y-auto px-4 py-3">
         {turns.map((turn, index) => (
           <div key={`${turn.role}-${index}`} className={`rounded-lg px-3 py-2 text-[12px] ${turn.role === "user" ? "bg-slate-100 text-slate-700" : "bg-[#f8fafc] text-slate-800"}`}>
             {turn.role === "assistant" ? (
@@ -638,9 +659,10 @@ export default function AiCfoDrawer({
               />
             ) : (
               <>
-                {turn.viewing && <p className="mb-1 text-[10px] uppercase tracking-wide text-slate-400">Viewing: {turn.viewing}</p>}
                 {turn.fromSignal && (
-                  <p className="mb-1 text-[10px] uppercase tracking-wide text-slate-400">From signal: {turn.fromSignal}</p>
+                  <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-[#1a3673]/70">
+                    About signal · {turn.fromSignal}
+                  </p>
                 )}
                 <p>{turn.text}</p>
               </>
@@ -650,22 +672,26 @@ export default function AiCfoDrawer({
         {error && <p className="text-[12px] text-amber-800">{error}</p>}
       </div>
       <div className="border-t border-gray-100 px-4 py-3">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Suggested</p>
-        <div className="mt-2 flex flex-wrap gap-1">
-          {suggestions.map((item) => (
-            <button
-              key={item}
-              type="button"
-              disabled={!dynamicEnabled || pending}
-              onClick={() => submit(item)}
-              className="rounded-full bg-slate-100 px-2 py-1 text-[10px] text-slate-700 hover:bg-slate-200 disabled:opacity-50"
-            >
-              {item}
-            </button>
-          ))}
-        </div>
+        {suggestions.length > 0 && (
+          <>
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Suggested</p>
+            <div className="mt-1.5 flex flex-wrap gap-1">
+              {suggestions.map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  disabled={!dynamicEnabled || pending}
+                  onClick={() => submit(item)}
+                  className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] text-slate-700 hover:border-[#1a3673]/30 hover:bg-[#1a3673]/5 disabled:opacity-50"
+                >
+                  {item}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
         <form
-          className="mt-3 flex gap-2"
+          className="mt-2.5 flex gap-2"
           onSubmit={(event) => {
             event.preventDefault();
             submit(message);
@@ -674,7 +700,7 @@ export default function AiCfoDrawer({
           <input
             value={message}
             onChange={(e) => setMessage(e.target.value)}
-            placeholder="Ask about this view…"
+            placeholder="Ask WYZ about this view…"
             disabled={!dynamicEnabled || pending}
             className="flex-1 rounded-lg border px-2 py-1.5 text-[12px]"
           />

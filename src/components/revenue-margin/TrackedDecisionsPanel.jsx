@@ -163,7 +163,7 @@ export default function TrackedDecisionsPanel({
         <p className="mt-2 text-[12px] text-slate-500">Loading tracked decisions…</p>
       )}
       {decisions.length > 0 && (
-        <ul className="mt-3 space-y-3">
+        <ul className="mt-3 space-y-2.5">
           {decisions.map((decision) => {
             const subject = subjectLabel(decision.subject);
             const scopeMatches = activeScopeHash && decision.scope_hash === activeScopeHash;
@@ -172,76 +172,74 @@ export default function TrackedDecisionsPanel({
             const reviewLabel = revisionSummaryLabel(decision.latest_revision);
             return (
               <li key={decision.decision_id} className="rounded-lg border border-slate-200 bg-white px-3 py-2.5">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div className="min-w-0">
                     <p className="text-[13px] font-semibold text-[#1a3673]">
                       {themeLabel(decision.decision_theme)}
                       {subject ? ` · ${subject}` : ""}
                     </p>
-                    <p className="mt-0.5 text-[11px] uppercase tracking-wide text-slate-500">
-                      {lifecycleLabel(decision.status)}
+                    <p className="mt-1 text-[12px] text-slate-700">
+                      Current recommendation:{" "}
+                      <span className="font-medium capitalize">{actionLabel(decision.selected_action)}</span>
+                      {decision.recommendation_strength
+                        ? ` · ${String(decision.recommendation_strength).toLowerCase()}`
+                        : ""}
                     </p>
                   </div>
+                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600">
+                    {lifecycleLabel(decision.status)}
+                  </span>
                 </div>
-                <p className="mt-2 text-[12px] text-slate-700">
-                  Current recommendation:{" "}
-                  <span className="font-medium capitalize">{actionLabel(decision.selected_action)}</span>
-                  {decision.recommendation_strength
-                    ? ` · ${String(decision.recommendation_strength).toLowerCase()}`
-                    : ""}
-                </p>
-                <p className="mt-1 text-[11px] text-slate-600">
-                  Evidence status: <span className="font-medium">{evidenceLabel}</span>
-                </p>
-                {reviewLabel && (
-                  <p className="mt-1 text-[11px] text-slate-600">
-                    Last review: <span className="font-medium">{reviewLabel}</span>
+                {decision.original_question && (
+                  <p className="mt-2 text-[11px] text-slate-500 line-clamp-2">
+                    <span className="font-medium text-slate-600">Context: </span>
+                    {decision.original_question}
                   </p>
                 )}
+                <div className="mt-2 grid gap-1 text-[11px] text-slate-600 sm:grid-cols-2">
+                  <p>
+                    Evidence status: <span className="font-medium text-slate-800">{evidenceLabel}</span>
+                  </p>
+                  {reviewLabel && (
+                    <p>
+                      Last review: <span className="font-medium text-slate-800">{reviewLabel}</span>
+                    </p>
+                  )}
+                  <p>
+                    Scope:{" "}
+                    {scopeMatches && activeViewLabel
+                      ? activeViewLabel
+                      : decision.scope_hash
+                        ? `hash ${String(decision.scope_hash).slice(0, 16)}…`
+                        : "—"}
+                    {!scopeMatches && decision.scope_hash && activeScopeHash ? " (differs from current view)" : ""}
+                  </p>
+                  {trackedAt && <p>Tracked: {trackedAt}</p>}
+                </div>
                 {decision.original_selected_action &&
                   decision.original_selected_action !== decision.selected_action && (
                     <p className="mt-1 text-[11px] text-slate-500">
-                      Originally tracked:{" "}
+                      Originally:{" "}
                       <span className="capitalize">{actionLabel(decision.original_selected_action)}</span>
                       {decision.original_recommendation_strength
                         ? ` · ${String(decision.original_recommendation_strength).toLowerCase()}`
                         : ""}
                     </p>
                   )}
-                {decision.original_question && (
-                  <p className="mt-1 text-[11px] text-slate-500 line-clamp-2">{decision.original_question}</p>
-                )}
-                <p className="mt-1 text-[11px] text-slate-500">
-                  Scope:{" "}
-                  {scopeMatches && activeViewLabel
-                    ? activeViewLabel
-                    : decision.scope_hash
-                      ? `hash ${String(decision.scope_hash).slice(0, 16)}…`
-                      : "—"}
-                  {!scopeMatches && decision.scope_hash && activeScopeHash ? " (differs from current view)" : ""}
-                </p>
-                {trackedAt && (
-                  <p className="mt-1 text-[11px] text-slate-500">Tracked: {trackedAt}</p>
-                )}
-                {decision.last_evaluated_at && (
-                  <p className="mt-1 text-[11px] text-slate-500">
-                    Last evaluated: {String(decision.last_evaluated_at).slice(0, 10)}
-                  </p>
-                )}
-                <div className="mt-2 flex flex-wrap gap-3">
+                <div className="mt-2.5 flex flex-wrap gap-2">
                   <button
                     type="button"
                     disabled={busyId === decision.decision_id}
                     onClick={() => handleReview(decision)}
-                    className="text-[11px] font-semibold text-[#1a3673] hover:underline disabled:opacity-50"
+                    className="rounded-md bg-[#1a3673] px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-[#142a5c] disabled:opacity-50"
                   >
-                    Review
+                    Review decision
                   </button>
                   <button
                     type="button"
                     disabled={busyId === decision.decision_id}
                     onClick={() => handleArchive(decision)}
-                    className="text-[11px] font-semibold text-slate-500 hover:underline disabled:opacity-50"
+                    className="rounded-md border border-slate-200 px-2.5 py-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50"
                   >
                     Archive
                   </button>

@@ -118,3 +118,47 @@ export function analysisDataQualityItems(result) {
   }
   return items;
 }
+
+/**
+ * Compact Data Quality status from existing validation/readiness only.
+ * Never invents numeric scores.
+ */
+export function dataQualityStatusSummary({ result, dataset } = {}) {
+  const analysisItems = analysisDataQualityItems(result);
+  const readinessItems = readinessDisplayItems(dataset?.readiness || {});
+  const failing = [...analysisItems, ...readinessItems].filter((item) => !item.ok);
+  const reconciled = result?.reconciled === true || result?.reconciliation?.ok === true;
+  const engineBlocked = dataset?.readiness && dataset.readiness.ready_for_engine === false;
+
+  if (failing.length > 0 || engineBlocked || reconciled === false) {
+    return {
+      label: "Needs attention",
+      tone: "attention",
+      failingCount: failing.length,
+    };
+  }
+  return {
+    label: "Healthy",
+    tone: "healthy",
+    failingCount: 0,
+  };
+}
+
+export function mappingProvenanceSummary(mappings = []) {
+  const rows = Array.isArray(mappings) ? mappings : [];
+  const attention = rows.filter(
+    (row) => row.needs_attention || ["review_recommended", "user_confirmation_required", "rejected"].includes(row.status),
+  );
+  const confirmed = rows.filter(
+    (row) => row.origin === "user_confirmed" || row.status === "confirmed",
+  );
+  const autoAccepted = Math.max(0, rows.length - attention.length);
+  return {
+    total: rows.length,
+    autoAccepted,
+    needingAttention: attention.length,
+    userConfirmed: confirmed.length,
+    attentionRows: attention,
+    allRows: rows,
+  };
+}

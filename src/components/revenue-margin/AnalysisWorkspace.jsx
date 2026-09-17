@@ -16,13 +16,13 @@ import {
 } from "recharts";
 import { formatAxisInr, formatInrCompact } from "../../planning/scenarioDisplayFormat.js";
 import { formatExplorerValue, formatGrowthPct } from "../../lib/revenue-margin/format.js";
-import { analysisDataQualityItems } from "../../lib/revenue-margin/dataQuality.js";
 import AnalysisFilters, { QuerySummaryFromResponse } from "./AnalysisFilters.jsx";
 import CfoSignalsPanel from "./CfoSignalsPanel.jsx";
 import AiCfoDrawer from "./AiCfoDrawer.jsx";
 import TrackedDecisionsPanel from "./TrackedDecisionsPanel.jsx";
 import PrimaryKpiRow from "./PrimaryKpiRow.jsx";
 import FinancialWaterfall from "./FinancialWaterfall.jsx";
+import DataQualityWorkspace from "./DataQualityWorkspace.jsx";
 import { normalizeTrackedDecisionCard } from "../../lib/revenue-margin/trackedDecisions.js";
 import {
   ANALYSIS_VIEWS,
@@ -33,7 +33,6 @@ import {
   TREND_METRICS,
   canDrillRow,
   compareGrowthDisplay,
-  dataQualityItems,
   dimensionRows,
   drillGapForDimension,
   explorerPayload,
@@ -92,16 +91,17 @@ const TABS = [
 ];
 
 function MetricGrid({ title, items }) {
+  if (!items?.length) return null;
   return (
     <div>
-      <h3 className="text-[12px] font-semibold uppercase tracking-wide text-slate-500">{title}</h3>
-      <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <h3 className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{title}</h3>
+      <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
         {items.map((item) => {
           const formatted = formatExplorerValue(item.value, item.kind);
           return (
-            <div key={item.key} className="rounded-xl bg-[#f8fafc] px-3 py-3">
-              <p className="text-[11px] font-medium text-slate-500">{item.label}</p>
-              <p className={`mt-1 text-lg font-semibold tabular-nums ${formatted.supported ? "text-[#1a3673]" : "text-slate-400"}`}>
+            <div key={item.key} className="rounded-lg bg-[#f8fafc] px-2.5 py-2">
+              <p className="text-[10px] font-medium text-slate-500">{item.label}</p>
+              <p className={`mt-0.5 text-[15px] font-semibold tabular-nums ${formatted.supported ? "text-[#1a3673]" : "text-slate-400"}`}>
                 {formatted.supported ? formatted.text : "Unavailable"}
               </p>
             </div>
@@ -517,47 +517,9 @@ function CostBreakdownPanel({
   );
 }
 
-function DataQualityPanel({ result }) {
-  const dq = dataQualityItems(result);
-  const items = analysisDataQualityItems(result);
-  return (
-    <div className="space-y-4">
-      <div className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-semibold ${dq.reconciled ? "bg-emerald-50 text-emerald-800" : "bg-amber-50 text-amber-800"}`}>
-        {dq.reconciled ? <CheckCircle2 className="h-3.5 w-3.5" /> : <AlertTriangle className="h-3.5 w-3.5" />}
-        {dq.reconciled ? "Financial model reconciled" : "Reconciliation warnings present"}
-      </div>
-      {dq.gaps.length > 0 && (
-        <p className="text-[12px] text-slate-500">Analytics gaps: {dq.gaps.join(", ")}</p>
-      )}
-      {items.length === 0 ? (
-        <p className="text-[13px] text-emerald-700">No data-quality issues reported for this analysis.</p>
-      ) : (
-        <ul className="space-y-2 text-[13px] text-slate-600">
-          {items.map((item) => (
-            <li key={`${item.label}-${item.detail}`} className="flex items-start gap-2">
-              {item.ok ? (
-                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
-              ) : (
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
-              )}
-              <div>
-                <p>{item.label}</p>
-                {item.detail && (
-                  <details className="mt-1 text-[11px] text-slate-400">
-                    <summary className="cursor-pointer">Technical detail</summary>
-                    <p className="mt-1">{item.detail}</p>
-                  </details>
-                )}
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
 
-export default function AnalysisWorkspace({ result, datasetId }) {
+
+export default function AnalysisWorkspace({ result, datasetId, dataset = null }) {
   const dynamicEnabled = hasFactsUri(result) && Boolean(datasetId);
   const [view, setView] = useState(ANALYSIS_VIEWS.OVERVIEW);
   const [revenueDimension, setRevenueDimension] = useState("channel");
@@ -819,7 +781,7 @@ export default function AnalysisWorkspace({ result, datasetId }) {
       </nav>
 
       {view === ANALYSIS_VIEWS.OVERVIEW && (
-        <div className="mt-4 space-y-5">
+          <div className="mt-4 space-y-4">
           {overviewQuery.loading && dynamicEnabled && (
             <p className="text-[12px] text-slate-500">Loading overview…</p>
           )}
@@ -854,7 +816,7 @@ export default function AnalysisWorkspace({ result, datasetId }) {
 
           <FinancialWaterfall steps={waterfall} />
 
-          <div className="space-y-5 border-t border-gray-100 pt-5">
+          <div className="space-y-4 border-t border-gray-100 pt-4">
             <h3 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
               Business metrics
             </h3>
@@ -968,18 +930,8 @@ export default function AnalysisWorkspace({ result, datasetId }) {
       )}
 
       {view === ANALYSIS_VIEWS.DATA_QUALITY && (
-        <div className="mt-4 space-y-3">
-          <DataQualityPanel result={result} />
-          {(result.engine_version || result.mapping_version || result.dataset_version != null) && (
-            <details className="rounded-lg border border-gray-100 bg-[#f8fafc] px-3 py-2 text-[11px] text-slate-500">
-              <summary className="cursor-pointer font-medium text-slate-600">Technical details</summary>
-              <p className="mt-2">
-                {result.engine_version ? `Engine ${result.engine_version}` : null}
-                {result.mapping_version ? ` · mapping ${result.mapping_version}` : ""}
-                {result.dataset_version != null ? ` · dataset v${result.dataset_version}` : ""}
-              </p>
-            </details>
-          )}
+        <div className="mt-4">
+          <DataQualityWorkspace result={result} dataset={dataset} />
         </div>
       )}
 
