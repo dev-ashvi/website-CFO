@@ -70,26 +70,24 @@ function onboardingCopy(stage, dataset) {
     case "detect":
       return {
         title: sourceCount > 0 ? `We found ${sourceCount} data source${sourceCount === 1 ? "" : "s"}` : "We found your business data",
-        subtitle: "WYZ has identified the structure of your business data.",
+        subtitle: "WYZ identified your business data.",
       };
     case "map":
       return {
         title: "Map your financial data",
-        subtitle:
-          "WYZ has mapped your files to the financial model. Review how your data will be interpreted.",
+        subtitle: "WYZ mapped your data to the financial model.",
       };
     case "validate":
       return {
         title: canStartAnalysis(dataset) ? "Validate your financial model" : "Data readiness",
         subtitle: canStartAnalysis(dataset)
-          ? "Confirm that connected data can produce reliable financial analysis."
+          ? "WYZ verified the connected financial model."
           : "Resolve any outstanding checks before running analysis.",
       };
     case "analyse":
       return {
         title: "Building your financial workspace",
-        subtitle:
-          "WYZ is turning your validated data into revenue, margin and profitability intelligence.",
+        subtitle: "WYZ is building your financial workspace.",
       };
     default:
       return { title: "Set up your dataset", subtitle: null };

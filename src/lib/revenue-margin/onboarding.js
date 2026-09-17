@@ -482,7 +482,8 @@ export function mappingSummaryCounts(dataset) {
 
 /**
  * Compact financial-model nodes from detected roles / mappings / readiness.
- * Does not invent roles or relationships that are not present in the dataset.
+ * Presentation semantics follow the user's current stage — Detect never claims Mapped
+ * merely because backend auto-mapping already ran.
  */
 export function financialModelNodes(dataset, stage = "detect") {
   if (!dataset) return [];
@@ -512,24 +513,67 @@ export function financialModelNodes(dataset, stage = "detect") {
     );
     const mappedCount = roleMappings.filter((row) => row.canonical_field).length;
     const attentionCount = mappingRowsNeedingAttention(roleMappings).length;
+    const present = Boolean(file || roleMappings.length > 0);
 
     let state = "pending";
-    if (file || roleMappings.length > 0) state = "detected";
-    if (mappedCount > 0) state = "mapped";
+    if (present) state = "detected";
 
+    // Detect stage: identified sources only — never advance to mapped/connected.
+    if (stage === "detect") {
+      return {
+        role,
+        title: DETECT_ROLE_LABELS[role] || role,
+        state: present ? "detected" : "pending",
+        filename: file?.filename || roleMappings[0]?.source_file || null,
+        mappedCount,
+        attentionCount,
+      };
+    }
+
+    if (stage === "map") {
+      if (mappedCount > 0) state = "mapped";
+      else if (present) state = "detected";
+      return {
+        role,
+        title: DETECT_ROLE_LABELS[role] || role,
+        state,
+        filename: file?.filename || roleMappings[0]?.source_file || null,
+        mappedCount,
+        attentionCount,
+      };
+    }
+
+    // Validate / Analyse: Connected only when readiness/join data supports it.
     if (stage === "validate" || stage === "analyse") {
+      const productJoinOk = okJoins.some((j) => j.ok && String(j.name || "").includes("sku_master"));
+      const settlementJoinOk = okJoins.some((j) => j.ok && String(j.name || "").includes("settlements"));
+
+      if (role === "SKU_MASTER" && productJoinOk) {
+        state = "connected";
+      } else if (role === "CHANNEL_SETTLEMENTS" && settlementJoinOk) {
+        state = "connected";
+      } else if (role === "ORDER_LINES" && (productJoinOk || settlementJoinOk)) {
+        // Orders participate in verified join coverage.
+        state = "connected";
+      } else if (mappedCount > 0) {
+        state = "mapped";
+      } else if (present) {
+        state = "detected";
+      }
+
+      // When the engine is fully ready, mapped sources in the accepted model are connected.
       if (ready && mappedCount > 0) {
         state = "connected";
-      } else if (role === "SKU_MASTER" && okJoins.some((j) => j.ok && String(j.name || "").includes("sku_master"))) {
-        state = "connected";
-      } else if (
-        role === "CHANNEL_SETTLEMENTS" &&
-        okJoins.some((j) => j.ok && String(j.name || "").includes("settlements"))
-      ) {
-        state = "connected";
-      } else if (ready && (file || roleMappings.length > 0)) {
-        state = "connected";
       }
+
+      return {
+        role,
+        title: DETECT_ROLE_LABELS[role] || role,
+        state,
+        filename: file?.filename || roleMappings[0]?.source_file || null,
+        mappedCount,
+        attentionCount,
+      };
     }
 
     return {

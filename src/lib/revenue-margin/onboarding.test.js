@@ -409,12 +409,18 @@ describe("P7.1 onboarding journey presentation reviews", () => {
     assert.ok(coverage.facts.some((f) => f.label.includes("data source")));
     assert.ok(coverage.facts.some((f) => f.label.includes("rows")));
 
-    const nodes = financialModelNodes(READY_WITH_MAPPINGS, "map");
+    const detectNodes = financialModelNodes(READY_WITH_MAPPINGS, "detect");
+    assert.ok(detectNodes.every((n) => n.state === "detected"), "Detect never claims mapped from auto-mapping");
+
+    const mapNodes = financialModelNodes(READY_WITH_MAPPINGS, "map");
     assert.deepEqual(
-      nodes.map((n) => n.title),
+      mapNodes.map((n) => n.title),
       ["Orders", "Products / COGS"],
     );
-    assert.ok(nodes.every((n) => n.state === "mapped" || n.state === "detected"));
+    assert.ok(mapNodes.every((n) => n.state === "mapped"));
+
+    const validateNodes = financialModelNodes(READY_WITH_MAPPINGS, "validate");
+    assert.ok(validateNodes.every((n) => n.state === "connected"));
 
     const counts = mappingSummaryCounts(READY_WITH_MAPPINGS);
     assert.equal(counts.mapped, 2);
@@ -485,6 +491,10 @@ describe("P7.1 Pass 1 page wiring", () => {
     assert.match(page, /Confirm mappings/);
     assert.match(page, /Analyse my business/);
     assert.match(page, /Building your financial workspace/);
+    assert.match(page, /WYZ identified your business data/);
+    assert.match(page, /WYZ mapped your data to the financial model/);
+    assert.match(page, /WYZ verified the connected financial model/);
+    assert.match(page, /WYZ is building your financial workspace/);
     assert.match(panels, /FinancialModelStatus/);
     assert.match(panels, /needs confirmation/);
     assert.match(panels, /Financial model ready/);
