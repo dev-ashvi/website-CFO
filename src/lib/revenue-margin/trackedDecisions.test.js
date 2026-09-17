@@ -65,7 +65,7 @@ describe("tracked decisions UI helpers", () => {
   it("TrackedDecisionsPanel stays visible when list is empty", () => {
     const root = dirname(fileURLToPath(import.meta.url));
     const src = readFileSync(join(root, "../../components/revenue-margin/TrackedDecisionsPanel.jsx"), "utf8");
-    assert.match(src, /No tracked decisions yet/);
+    assert.match(src, /None yet/);
     assert.match(src, /data-testid="tracked-decisions-panel"/);
     assert.doesNotMatch(src, /if \(!dynamicEnabled \|\| decisions\.length === 0\)/);
   });

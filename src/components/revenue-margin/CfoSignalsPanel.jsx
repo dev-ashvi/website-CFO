@@ -108,6 +108,8 @@ export default function CfoSignalsPanel({
   onInvestigate,
   onAskWyz,
   onSignalsScopeChange,
+  title = "What Needs Your Attention",
+  renderPanel = true,
 }) {
   const [state, setState] = useState({ loading: false, signals: [], error: null, scopeHash: null });
   const [expanded, setExpanded] = useState(false);
@@ -164,16 +166,20 @@ export default function CfoSignalsPanel({
   const shown = expanded ? ranked.all : ranked.visible;
 
   if (!dynamicEnabled) return null;
-  if (state.loading) return <p className="mt-3 text-[12px] text-slate-500">Loading financial signals…</p>;
-  if (state.error) return <p className="mt-3 text-[12px] text-amber-800">{state.error}</p>;
+
+  // Keep mounted (hooks above still fetch) so AI CFO retains signal context off Overview.
+  if (!renderPanel) return null;
+
+  if (state.loading) return <p className="text-[12px] text-slate-500">Loading financial signals…</p>;
+  if (state.error) return <p className="text-[12px] text-amber-800">{state.error}</p>;
   if (!state.signals.length) return null;
 
   return (
-    <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
-      <h3 className="text-[12px] font-semibold uppercase tracking-wide text-slate-600">
-        Key Financial Signals
+    <div className="rounded-xl border border-slate-200 bg-white p-4">
+      <h3 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+        {title}
       </h3>
-      <ul className="mt-3 space-y-3">
+      <ul className="mt-3 space-y-2.5">
         {shown.map((signal) => (
           <SignalRow
             key={`${signal.signal_type}-${signal.entity}`}

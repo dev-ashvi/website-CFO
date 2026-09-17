@@ -593,7 +593,7 @@ export default function AiCfoDrawer({
     : null;
 
   return (
-    <aside className="flex h-full min-h-[520px] w-full flex-col rounded-2xl border border-gray-100 bg-white shadow-sm lg:sticky lg:top-4 lg:max-h-[calc(100vh-6rem)] lg:w-[320px] lg:shrink-0">
+    <aside className="flex h-full min-h-[520px] w-full flex-col rounded-2xl border border-gray-100 bg-white shadow-sm lg:sticky lg:top-4 lg:max-h-[calc(100vh-6rem)] lg:w-[300px] lg:shrink-0 xl:w-[320px]">
       <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
         <div>
           <h3 className="text-sm font-semibold text-[#1a3673]">WYZ AI CFO</h3>

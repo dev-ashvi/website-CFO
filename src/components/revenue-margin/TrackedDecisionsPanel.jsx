@@ -134,25 +134,33 @@ export default function TrackedDecisionsPanel({
     return null;
   }
 
+  const empty = !loading && decisions.length === 0;
+
   return (
     <section
       ref={sectionRef}
-      className="mt-4 rounded-xl border border-slate-200 bg-slate-50/80 p-4"
+      className={
+        empty
+          ? "mt-4 rounded-lg border border-dashed border-slate-200 bg-transparent px-3 py-2"
+          : "mt-4 rounded-xl border border-slate-200 bg-slate-50/80 p-4"
+      }
       data-testid="tracked-decisions-panel"
     >
-      <h3 className="text-[12px] font-semibold uppercase tracking-wide text-slate-500">Tracked Decisions</h3>
-      <p className="mt-1 text-[11px] text-slate-500">
-        Recommendations you chose to track from WYZ AI CFO. Evidence is re-checked on the server — not client estimates.
-      </p>
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h3 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+          Tracked Decisions
+        </h3>
+        {empty ? (
+          <p className="text-[11px] text-slate-500">None yet — track from AI CFO when ready.</p>
+        ) : (
+          <p className="text-[11px] text-slate-500">
+            Recommendations you chose to track. Evidence is re-checked on the server.
+          </p>
+        )}
+      </div>
       {error && <p className="mt-2 text-[12px] text-amber-800">{error}</p>}
       {loading && decisions.length === 0 && (
-        <p className="mt-3 text-[12px] text-slate-500">Loading tracked decisions…</p>
-      )}
-      {!loading && decisions.length === 0 && (
-        <p className="mt-3 text-[12px] text-slate-600">
-          No tracked decisions yet. After a strategic recommendation, click{" "}
-          <span className="font-semibold">Track this decision</span> in the AI CFO drawer.
-        </p>
+        <p className="mt-2 text-[12px] text-slate-500">Loading tracked decisions…</p>
       )}
       {decisions.length > 0 && (
         <ul className="mt-3 space-y-3">

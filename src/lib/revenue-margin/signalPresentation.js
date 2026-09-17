@@ -62,25 +62,25 @@ export function signalToneClasses(category) {
   switch (category) {
     case "pressure":
       return {
-        row: "border-rose-100 bg-rose-50/40",
+        row: "border-slate-200 border-l-2 border-l-rose-500 bg-white",
         icon: "text-rose-600",
         arrow: "↓",
       };
     case "positive":
       return {
-        row: "border-emerald-100 bg-emerald-50/40",
+        row: "border-slate-200 border-l-2 border-l-emerald-500 bg-white",
         icon: "text-emerald-600",
         arrow: "↑",
       };
     case "watch":
       return {
-        row: "border-amber-100 bg-amber-50/40",
+        row: "border-slate-200 border-l-2 border-l-amber-500 bg-white",
         icon: "text-amber-700",
         arrow: "•",
       };
     default:
       return {
-        row: "border-slate-100 bg-slate-50/60",
+        row: "border-slate-200 bg-white",
         icon: "text-slate-500",
         arrow: "•",
       };

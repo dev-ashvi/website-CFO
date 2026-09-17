@@ -141,3 +141,75 @@ export function reconciliationLabel(result) {
     label: failed.length ? `Reconciliation warnings: ${failed.join(", ")}` : "Financial model not fully reconciled",
   };
 }
+
+/** Executive primary KPIs — values come only from existing overview section data. */
+export const PRIMARY_KPI_KEYS = Object.freeze([
+  "net_revenue",
+  "gross_margin_pct",
+  "cm1",
+  "cm2",
+]);
+
+export const PRIMARY_KPI_SPECS = Object.freeze([
+  { key: "net_revenue", label: "Net Revenue", kind: "currency" },
+  { key: "gross_margin_pct", label: "Gross Margin %", kind: "pct" },
+  { key: "cm1", label: "CM1", kind: "currency" },
+  { key: "cm2", label: "CM2", kind: "currency" },
+]);
+
+const WATERFALL_RESULT_KEYS = new Set(["net_revenue", "gross_margin", "cm1", "cm2"]);
+const WATERFALL_DEDUCTION_KEYS = new Set([
+  "discounts",
+  "returns_rto_cancellations",
+  "product_cogs",
+  "cm1_costs",
+  "marketing_spend",
+]);
+
+/**
+ * Pull primary executive KPIs from overview section payloads (query or legacy).
+ * Does not invent values or comparisons.
+ */
+export function selectPrimaryKpis(sections) {
+  if (!sections || typeof sections !== "object") {
+    return PRIMARY_KPI_SPECS.map((spec) => ({ ...spec, value: null }));
+  }
+  const pool = [
+    ...(sections.revenue || []),
+    ...(sections.profitability || []),
+    ...(sections.quality || []),
+  ];
+  const byKey = new Map(pool.map((item) => [item.key, item]));
+  return PRIMARY_KPI_SPECS.map((spec) => {
+    const found = byKey.get(spec.key);
+    return {
+      key: spec.key,
+      label: spec.label,
+      kind: found?.kind || spec.kind,
+      value: found?.value ?? null,
+    };
+  });
+}
+
+/**
+ * Secondary overview grids with primary KPI keys removed to avoid duplication.
+ */
+export function secondaryOverviewSections(sections) {
+  if (!sections || typeof sections !== "object") {
+    return { revenue: [], profitability: [], quality: [] };
+  }
+  const drop = new Set(PRIMARY_KPI_KEYS);
+  const filterItems = (items = []) => items.filter((item) => !drop.has(item.key));
+  return {
+    revenue: filterItems(sections.revenue),
+    profitability: filterItems(sections.profitability),
+    quality: filterItems(sections.quality),
+  };
+}
+
+export function waterfallRowTone(step) {
+  if (!step) return "default";
+  if (WATERFALL_RESULT_KEYS.has(step.key)) return "result";
+  if (step.leakage || WATERFALL_DEDUCTION_KEYS.has(step.key)) return "deduction";
+  return "default";
+}

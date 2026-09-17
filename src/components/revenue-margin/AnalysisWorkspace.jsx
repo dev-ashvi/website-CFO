@@ -21,6 +21,8 @@ import AnalysisFilters, { QuerySummaryFromResponse } from "./AnalysisFilters.jsx
 import CfoSignalsPanel from "./CfoSignalsPanel.jsx";
 import AiCfoDrawer from "./AiCfoDrawer.jsx";
 import TrackedDecisionsPanel from "./TrackedDecisionsPanel.jsx";
+import PrimaryKpiRow from "./PrimaryKpiRow.jsx";
+import FinancialWaterfall from "./FinancialWaterfall.jsx";
 import { normalizeTrackedDecisionCard } from "../../lib/revenue-margin/trackedDecisions.js";
 import {
   ANALYSIS_VIEWS,
@@ -47,7 +49,6 @@ import {
   createDefaultFilters,
   formatPeriodLabel,
   formatScopeViewLabel,
-  hasActiveFilters,
 } from "../../lib/revenue-margin/filters.js";
 import {
   ASK_WYZ_STARTER_QUESTION,
@@ -75,6 +76,8 @@ import {
 import {
   overviewSectionsFromQuerySummary,
   reconciliationLabel,
+  secondaryOverviewSections,
+  selectPrimaryKpis,
   selectWaterfall,
   waterfallFromQuerySummary,
 } from "../../lib/revenue-margin/summary.js";
@@ -134,9 +137,11 @@ function TrendPanel({ dynamicEnabled, filters, datasetId, result, legacyResult }
     : monthlyTrendSeries(legacyResult, metricId);
   const chartData = series.filter((row) => row.value != null);
   return (
-    <div className="mt-6 rounded-xl border border-gray-100 bg-[#f8fafc] p-4">
+    <div className="rounded-xl border border-gray-100 bg-[#f8fafc] p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-sm font-semibold text-[#1a3673]">Executive trend</h3>
+        <h3 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+          Executive trend
+        </h3>
         <select
           value={metricId}
           onChange={(e) => setMetricId(e.target.value)}
@@ -156,7 +161,7 @@ function TrendPanel({ dynamicEnabled, filters, datasetId, result, legacyResult }
       {!trendQuery.loading && chartData.length < 2 ? (
         <p className="mt-3 text-[12px] text-slate-500">Insufficient monthly history for trend comparison.</p>
       ) : (
-        <div className="mt-4 h-56">
+        <div className="mt-3 h-44 sm:h-48">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
@@ -675,7 +680,6 @@ export default function AnalysisWorkspace({ result, datasetId }) {
   const revenueMetricSpec = REVENUE_METRICS.find((item) => item.id === revenueMetric) || REVENUE_METRICS[0];
   const marginMetricSpec = MARGIN_METRICS.find((item) => item.id === marginMetric) || MARGIN_METRICS[0];
   const periodLabel = formatPeriodLabel(filters, periodRange);
-  const filtersActive = hasActiveFilters(filters, periodRange);
   const surface = view === ANALYSIS_VIEWS.REVENUE
     ? "revenue"
     : view === ANALYSIS_VIEWS.MARGIN
@@ -743,21 +747,44 @@ export default function AnalysisWorkspace({ result, datasetId }) {
     });
   }
 
+  const primaryKpis = useMemo(
+    () => selectPrimaryKpis(overviewSectionsData),
+    [overviewSectionsData],
+  );
+  const secondarySections = useMemo(
+    () => secondaryOverviewSections(overviewSectionsData),
+    [overviewSectionsData],
+  );
+
+  const companyLabel =
+    (typeof result?.company?.name === "string" && result.company.name) ||
+    (typeof result?.company_name === "string" && result.company_name) ||
+    null;
+
   if (!result) return null;
 
   return (
     <div className="flex flex-col gap-4 xl:flex-row xl:items-start">
       <section className="min-w-0 flex-1 rounded-2xl border border-gray-100 bg-white p-5 shadow-sm sm:p-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-sm font-semibold text-[#1a3673]">Analysis</h2>
-          <p className="mt-0.5 text-[12px] text-slate-500">
-            {dynamicEnabled ? "Dynamic financial query · filters applied server-side" : "Engine-produced outputs · legacy aggregate mode"}
+          <h2 className="text-base font-semibold text-[#1a3673]">Financial workspace</h2>
+          <p className="mt-0.5 max-w-2xl text-[12px] text-slate-500">
+            Understand revenue, profitability and the decisions driving performance.
           </p>
+          {(companyLabel || periodLabel) && (
+            <p className="mt-1 text-[12px] text-slate-600">
+              {companyLabel ? <span className="font-medium text-[#1a3673]">{companyLabel}</span> : null}
+              {companyLabel && periodLabel ? " · " : null}
+              {periodLabel && periodLabel !== "Period unavailable" ? (
+                <span className="tabular-nums">{periodLabel}</span>
+              ) : null}
+            </p>
+          )}
         </div>
         <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-semibold ${recon.ok ? "bg-emerald-50 text-emerald-800" : "bg-amber-50 text-amber-800"}`}>
           {recon.ok ? <CheckCircle2 className="h-3.5 w-3.5" /> : <AlertTriangle className="h-3.5 w-3.5" />}
-          {recon.label}
+          {recon.ok ? "Model reconciled" : "Review reconciliation"}
         </span>
       </div>
 
@@ -778,43 +805,6 @@ export default function AnalysisWorkspace({ result, datasetId }) {
         dynamicEnabled={dynamicEnabled}
       />
 
-      <CfoSignalsPanel
-        datasetId={datasetId}
-        result={result}
-        filters={filters}
-        surface={surface}
-        dimension={activeDimension}
-        dynamicEnabled={queryReady}
-        onSignalsChange={setCfoSignals}
-        onSignalsScopeChange={setSignalsScopeHash}
-        onInvestigate={handleInvestigate}
-        onAskWyz={handleAskWyz}
-      />
-
-      <TrackedDecisionsPanel
-        datasetId={datasetId}
-        result={result}
-        filters={filters}
-        surface={surface}
-        dimension={activeDimension}
-        dynamicEnabled={queryReady}
-        refreshKey={trackedRefreshKey}
-        seedDecision={
-          trackedSeed && (!trackedSeed.dataset_id || trackedSeed.dataset_id === datasetId)
-            ? trackedSeed
-            : null
-        }
-        activeScopeHash={signalsScopeHash}
-        activeViewLabel={formatScopeViewLabel(filters, periodRange)}
-        onReviewComplete={(response) => {
-          const card = normalizeTrackedDecisionCard(response?.decision);
-          if (card && (!card.dataset_id || card.dataset_id === datasetId)) {
-            setTrackedSeed(card);
-          }
-          setTrackedRefreshKey((k) => k + 1);
-        }}
-      />
-
       <nav className="mt-4 flex flex-wrap gap-2 border-b border-gray-100 pb-3">
         {TABS.map((tab) => (
           <button
@@ -828,34 +818,32 @@ export default function AnalysisWorkspace({ result, datasetId }) {
         ))}
       </nav>
 
-      {filtersActive && dynamicEnabled && (
-        <p className="mt-3 text-[12px] text-slate-600">Active slice: {periodLabel}</p>
-      )}
-
       {view === ANALYSIS_VIEWS.OVERVIEW && (
-        <div className="mt-4 space-y-6">
+        <div className="mt-4 space-y-5">
           {overviewQuery.loading && dynamicEnabled && (
             <p className="text-[12px] text-slate-500">Loading overview…</p>
           )}
           {overviewQuery.error && dynamicEnabled && (
             <p className="rounded-lg bg-amber-50 px-3 py-2 text-[12px] text-amber-900">{overviewQuery.error}</p>
           )}
-          <MetricGrid title="Revenue" items={overviewSectionsData.revenue} />
-          <MetricGrid title="Profitability" items={overviewSectionsData.profitability} />
-          <MetricGrid title="Revenue quality" items={overviewSectionsData.quality} />
-          <div>
-            <h3 className="text-[12px] font-semibold uppercase tracking-wide text-slate-500">Financial waterfall</h3>
-            <ol className="mt-3 space-y-2">
-              {waterfall.map((step, index) => (
-                <li key={step.key} className="flex items-center justify-between gap-3 text-[13px]">
-                  <span className={step.leakage ? "text-slate-500" : "font-medium text-[#1a3673]"}>
-                    {index > 0 ? "→ " : ""}{step.label}
-                  </span>
-                  <span className="tabular-nums text-slate-700">{formatExplorerValue(step.value, "currency").text}</span>
-                </li>
-              ))}
-            </ol>
-          </div>
+
+          <PrimaryKpiRow items={primaryKpis} loading={dynamicEnabled && overviewQuery.loading} />
+
+          <CfoSignalsPanel
+            datasetId={datasetId}
+            result={result}
+            filters={filters}
+            surface={surface}
+            dimension={activeDimension}
+            dynamicEnabled={queryReady}
+            renderPanel
+            title="What Needs Your Attention"
+            onSignalsChange={setCfoSignals}
+            onSignalsScopeChange={setSignalsScopeHash}
+            onInvestigate={handleInvestigate}
+            onAskWyz={handleAskWyz}
+          />
+
           <TrendPanel
             dynamicEnabled={queryReady}
             filters={filters}
@@ -863,7 +851,34 @@ export default function AnalysisWorkspace({ result, datasetId }) {
             result={result}
             legacyResult={result}
           />
+
+          <FinancialWaterfall steps={waterfall} />
+
+          <div className="space-y-5 border-t border-gray-100 pt-5">
+            <h3 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+              Business metrics
+            </h3>
+            <MetricGrid title="Revenue & operating" items={secondarySections.revenue} />
+            <MetricGrid title="Profitability detail" items={secondarySections.profitability} />
+            <MetricGrid title="Revenue quality" items={secondarySections.quality} />
+          </div>
         </div>
+      )}
+
+      {view !== ANALYSIS_VIEWS.OVERVIEW && (
+        <CfoSignalsPanel
+          datasetId={datasetId}
+          result={result}
+          filters={filters}
+          surface={surface}
+          dimension={activeDimension}
+          dynamicEnabled={queryReady}
+          renderPanel={false}
+          onSignalsChange={setCfoSignals}
+          onSignalsScopeChange={setSignalsScopeHash}
+          onInvestigate={handleInvestigate}
+          onAskWyz={handleAskWyz}
+        />
       )}
 
       {view === ANALYSIS_VIEWS.REVENUE && (
@@ -953,18 +968,44 @@ export default function AnalysisWorkspace({ result, datasetId }) {
       )}
 
       {view === ANALYSIS_VIEWS.DATA_QUALITY && (
-        <div className="mt-4">
+        <div className="mt-4 space-y-3">
           <DataQualityPanel result={result} />
+          {(result.engine_version || result.mapping_version || result.dataset_version != null) && (
+            <details className="rounded-lg border border-gray-100 bg-[#f8fafc] px-3 py-2 text-[11px] text-slate-500">
+              <summary className="cursor-pointer font-medium text-slate-600">Technical details</summary>
+              <p className="mt-2">
+                {result.engine_version ? `Engine ${result.engine_version}` : null}
+                {result.mapping_version ? ` · mapping ${result.mapping_version}` : ""}
+                {result.dataset_version != null ? ` · dataset v${result.dataset_version}` : ""}
+              </p>
+            </details>
+          )}
         </div>
       )}
 
-      {result.engine_version && (
-        <p className="mt-6 text-[11px] text-slate-400">
-          Engine {result.engine_version}
-          {result.mapping_version ? ` · mapping ${result.mapping_version}` : ""}
-          {result.dataset_version != null ? ` · dataset v${result.dataset_version}` : ""}
-        </p>
-      )}
+      <TrackedDecisionsPanel
+        datasetId={datasetId}
+        result={result}
+        filters={filters}
+        surface={surface}
+        dimension={activeDimension}
+        dynamicEnabled={queryReady}
+        refreshKey={trackedRefreshKey}
+        seedDecision={
+          trackedSeed && (!trackedSeed.dataset_id || trackedSeed.dataset_id === datasetId)
+            ? trackedSeed
+            : null
+        }
+        activeScopeHash={signalsScopeHash}
+        activeViewLabel={formatScopeViewLabel(filters, periodRange)}
+        onReviewComplete={(response) => {
+          const card = normalizeTrackedDecisionCard(response?.decision);
+          if (card && (!card.dataset_id || card.dataset_id === datasetId)) {
+            setTrackedSeed(card);
+          }
+          setTrackedRefreshKey((k) => k + 1);
+        }}
+      />
       </section>
       <AiCfoDrawer
         key={datasetId || "ai-cfo"}
