@@ -130,6 +130,16 @@ describe("P7.1 Pass 2 workspace wiring", () => {
     assert.match(src, /label: "Data Quality"/);
   });
 
+  it("Margin CostBreakdownPanel keeps hasActiveFilters in scope", () => {
+    const src = readFileSync(join(root, "../../components/revenue-margin/AnalysisWorkspace.jsx"), "utf8");
+    assert.match(src, /CostBreakdownPanel/);
+    assert.match(src, /hasActiveFilters\(filters, periodRange\)/);
+    assert.match(
+      src,
+      /import \{[\s\S]*hasActiveFilters[\s\S]*\} from "\.\.\/\.\.\/lib\/revenue-margin\/filters\.js"/,
+    );
+  });
+
   it("J. Ask WYZ / Investigate wiring unchanged", () => {
     const src = readFileSync(join(root, "../../components/revenue-margin/AnalysisWorkspace.jsx"), "utf8");
     assert.match(src, /onInvestigate=\{handleInvestigate\}/);

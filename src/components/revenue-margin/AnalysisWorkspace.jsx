@@ -48,6 +48,7 @@ import {
   createDefaultFilters,
   formatPeriodLabel,
   formatScopeViewLabel,
+  hasActiveFilters,
 } from "../../lib/revenue-margin/filters.js";
 import {
   ASK_WYZ_STARTER_QUESTION,
