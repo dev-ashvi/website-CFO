@@ -1,13 +1,17 @@
 import {
   AlertTriangle,
-  BarChart3,
   CheckCircle2,
   FileSpreadsheet,
   Loader2,
   Upload,
 } from "lucide-react";
 import { readinessDisplayItems } from "../../lib/revenue-margin/dataQuality.js";
-import { detectSourceCards, validateReadinessHighlights } from "../../lib/revenue-margin/onboarding.js";
+import {
+  detectSourceCards,
+  mappingGroupsByRole,
+  validateExecutiveSummary,
+  validateReadinessHighlights,
+} from "../../lib/revenue-margin/onboarding.js";
 import {
   canStartAnalysis,
   isIngestBusy,
@@ -170,133 +174,167 @@ export function MappingStepPanel({
   setDraftConfirms,
   showAllMappings,
   setShowAllMappings,
-  onConfirm,
-  busy,
 }) {
   const allMappings = dataset?.mappings || [];
   const attentionRows = mappingRowsNeedingAttention(allMappings);
   const autoAcceptedCount = Math.max(0, allMappings.length - attentionRows.length);
-  const visibleRows = showAllMappings ? allMappings : attentionRows;
+  const groups = mappingGroupsByRole(dataset);
   const fieldOptions = (role) => dataset?.canonical_fields?.[role] || [];
+  const attentionKeys = new Set(attentionRows.map((row) => `${row.source_file}:${row.source_column}`));
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-[12px] text-slate-500">
           {attentionRows.length > 0
-            ? `${attentionRows.length} field(s) need confirmation. High-confidence mappings stay collapsed.`
-            : "High-confidence mappings are accepted automatically. Expand to inspect the full mapping table."}
+            ? `${attentionRows.length} field${attentionRows.length === 1 ? "" : "s"} need confirmation. Accepted mappings stay collapsed.`
+            : autoAcceptedCount > 0
+              ? `${autoAcceptedCount} field${autoAcceptedCount === 1 ? "" : "s"} accepted. Review how WYZ interpreted your data before confirming.`
+              : "Review how source fields map to the financial model."}
         </p>
-        {allMappings.length > 0 && (
+        {allMappings.length > 0 && attentionRows.length > 0 && (
           <button
             type="button"
             className="text-[12px] font-medium text-[#1a3673] underline-offset-2 hover:underline"
             onClick={() => setShowAllMappings((value) => !value)}
           >
             {showAllMappings
-              ? "Show only fields requiring attention"
-              : `View all mappings${autoAcceptedCount > 0 ? ` (${autoAcceptedCount} auto-accepted)` : ""}`}
+              ? "Show only fields needing review"
+              : `View all mappings${autoAcceptedCount > 0 ? ` (${autoAcceptedCount} accepted)` : ""}`}
           </button>
         )}
       </div>
-      {!showAllMappings && autoAcceptedCount > 0 && (
-        <p className="text-[12px] text-slate-500">
-          {autoAcceptedCount} auto-accepted mapping{autoAcceptedCount === 1 ? "" : "s"} collapsed.
-        </p>
-      )}
-      {visibleRows.length === 0 ? (
-        <p className="text-[13px] text-emerald-700">No uncertain mappings need attention.</p>
+
+      {groups.length === 0 ? (
+        <p className="text-[13px] text-slate-500">Waiting for mappings…</p>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-left text-[12px]">
-            <thead className="text-[11px] uppercase tracking-wide text-slate-400">
-              <tr>
-                <th className="py-2 pr-3">Source field</th>
-                <th className="py-2 pr-3">WYZ understands as</th>
-                <th className="py-2 pr-3">Confidence</th>
-                <th className="py-2">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {visibleRows.map((row) => {
-                const key = `${row.source_file}:${row.source_column}`;
-                const draft = draftConfirms[key]?.canonical_field ?? row.canonical_field ?? "";
-                return (
-                  <tr key={key} className="border-t border-gray-100">
-                    <td className="py-2 pr-3">
-                      <div className="font-medium text-slate-700">{row.source_column}</div>
-                      <div className="text-[11px] text-slate-400">{row.source_file}</div>
-                    </td>
-                    <td className="py-2 pr-3">
-                      <select
-                        value={draft}
-                        onChange={(event) =>
-                          setDraftConfirms((prev) => ({
-                            ...prev,
-                            [key]: {
-                              source_file: row.source_file,
-                              source_column: row.source_column,
-                              canonical_field: event.target.value,
-                            },
-                          }))
-                        }
-                        className="max-w-[220px] rounded-lg border border-[rgba(26,54,115,0.16)] px-2 py-1 text-[12px]"
+        <div className="space-y-3">
+          {groups.map((group) => {
+            const visibleRows =
+              showAllMappings || attentionRows.length === 0
+                ? group.rows
+                : group.rows.filter((row) => attentionKeys.has(row.key));
+
+            if (!showAllMappings && attentionRows.length > 0 && visibleRows.length === 0) {
+              return (
+                <div key={group.role} className="rounded-xl border border-gray-100 bg-[#f8fafc] px-3 py-2.5">
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <p className="text-[13px] font-semibold text-[#1a3673]">{group.title}</p>
+                    <p className="text-[11px] text-slate-400">
+                      {group.rows.length} accepted
+                      {group.filename ? ` · ${group.filename}` : ""}
+                    </p>
+                  </div>
+                </div>
+              );
+            }
+
+            return (
+              <div key={group.role} className="rounded-xl border border-gray-100 bg-[#f8fafc] p-3">
+                <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+                  <p className="text-[13px] font-semibold text-[#1a3673]">{group.title}</p>
+                  {group.filename ? <p className="truncate text-[11px] text-slate-400">{group.filename}</p> : null}
+                </div>
+                <ul className="space-y-2">
+                  {visibleRows.map((row) => {
+                    const draft = draftConfirms[row.key]?.canonical_field ?? row.canonicalField ?? "";
+                    const editable = row.needsAttention;
+                    return (
+                      <li
+                        key={row.key}
+                        className="grid gap-2 rounded-lg border border-white/80 bg-white px-3 py-2 sm:grid-cols-[1fr_1fr_auto]"
                       >
-                        {fieldOptions(row.file_role).map((field) => (
-                          <option key={field.name} value={field.name}>
-                            {field.name}
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-                    <td className="py-2 pr-3 tabular-nums text-slate-500">
-                      {row.final_confidence != null ? Number(row.final_confidence).toFixed(2) : "—"}
-                    </td>
-                    <td className="py-2 text-slate-500">{row.status}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                        <div className="min-w-0">
+                          <p className="text-[12px] font-medium text-slate-700">{row.sourceColumn || "—"}</p>
+                          <p className="truncate text-[11px] text-slate-400">{row.sourceFile}</p>
+                        </div>
+                        <div className="min-w-0">
+                          {editable ? (
+                            <select
+                              value={draft}
+                              onChange={(event) =>
+                                setDraftConfirms((prev) => ({
+                                  ...prev,
+                                  [row.key]: {
+                                    source_file: row.sourceFile,
+                                    source_column: row.sourceColumn,
+                                    canonical_field: event.target.value,
+                                  },
+                                }))
+                              }
+                              className="w-full max-w-[240px] rounded-lg border border-[rgba(26,54,115,0.16)] px-2 py-1 text-[12px]"
+                              aria-label={`Map ${row.sourceColumn}`}
+                            >
+                              {fieldOptions(row.fileRole).map((field) => (
+                                <option key={field.name} value={field.name}>
+                                  {field.name}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <p className="text-[12px] font-medium text-[#1a3673]">{row.canonicalField || "—"}</p>
+                          )}
+                          <p className="text-[11px] text-slate-400">Financial field</p>
+                        </div>
+                        <div className="text-left sm:text-right">
+                          <p className="text-[11px] font-medium text-slate-600">{row.reviewLabel}</p>
+                          {row.confidence != null ? (
+                            <p className="text-[11px] tabular-nums text-slate-400">
+                              Confidence {Number(row.confidence).toFixed(2)}
+                            </p>
+                          ) : null}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            );
+          })}
         </div>
-      )}
-      {(visibleRows.length > 0 || attentionRows.length > 0) && (
-        <button
-          type="button"
-          disabled={busy}
-          onClick={onConfirm}
-          className="rounded-xl bg-[#1a3673] px-4 py-2.5 text-[13px] font-semibold text-white hover:bg-[#142a5c] disabled:opacity-60"
-        >
-          Confirm mappings
-        </button>
       )}
     </div>
   );
 }
 
-export function ValidateStepPanel({ dataset, onAnalyse, busy }) {
+export function ValidateStepPanel({ dataset }) {
   const ready = canStartAnalysis(dataset);
   const blocked = dataset?.readiness && dataset.readiness.ready_for_engine === false;
   const items = readinessDisplayItems(dataset?.readiness || {});
   const failing = items.filter((item) => !item.ok);
   const highlights = ready ? validateReadinessHighlights(dataset?.readiness) : [];
+  const summary = ready ? validateExecutiveSummary(dataset) : [];
 
   return (
     <div className="space-y-4">
+      {ready ? (
+        <p className="text-[13px] font-medium text-emerald-800">
+          WYZ has enough connected financial data to analyse the business.
+        </p>
+      ) : null}
+
+      {summary.length > 0 ? (
+        <div className="flex flex-wrap gap-2">
+          {summary.map((chip) => (
+            <span
+              key={chip.key}
+              className="rounded-lg border border-emerald-100 bg-emerald-50/80 px-2.5 py-1 text-[12px] font-semibold text-emerald-800"
+            >
+              {chip.label}
+            </span>
+          ))}
+        </div>
+      ) : null}
+
       {ready && highlights.length > 0 ? (
-        <ul className="space-y-1.5 rounded-xl border border-emerald-100 bg-emerald-50/60 px-4 py-3">
+        <ul className="space-y-1.5">
           {highlights.map((item) => (
-            <li key={item.key} className="flex items-center gap-2 text-[13px] font-medium text-emerald-800">
+            <li key={item.key} className="flex items-center gap-2 text-[13px] text-emerald-800">
               <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
               {item.label}
             </li>
           ))}
         </ul>
-      ) : ready ? (
-        <p className="inline-flex items-center gap-2 text-[13px] font-medium text-emerald-700">
-          <CheckCircle2 className="h-4 w-4" />
-          Verified and ready for analysis
-        </p>
       ) : null}
 
       {blocked ? (
@@ -337,16 +375,6 @@ export function ValidateStepPanel({ dataset, onAnalyse, busy }) {
       ) : (
         <p className="text-[13px] text-slate-500">Waiting for readiness checks…</p>
       )}
-
-      <button
-        type="button"
-        disabled={busy || !canStartAnalysis(dataset)}
-        onClick={onAnalyse}
-        className="inline-flex items-center gap-2 rounded-xl bg-[#1a3673] px-4 py-2.5 text-[13px] font-semibold text-white hover:bg-[#142a5c] disabled:opacity-50"
-      >
-        <BarChart3 className="h-4 w-4" />
-        Analyse my business
-      </button>
     </div>
   );
 }
@@ -379,12 +407,12 @@ export function AnalyseStepPanel({ job, dataset }) {
           </div>
           <div className="space-y-1.5">
             <div
-              className="h-1.5 overflow-hidden rounded-full bg-slate-100"
+              className="relative h-1.5 overflow-hidden rounded-full bg-slate-100"
               role="progressbar"
               aria-valuemin={0}
               aria-valuemax={100}
               aria-valuenow={progressPct != null ? progressPct : undefined}
-              aria-label="Analysis progress"
+              aria-label={progressPct != null ? "Analysis progress" : "Analysis in progress"}
             >
               {progressPct != null ? (
                 <div
@@ -392,12 +420,27 @@ export function AnalyseStepPanel({ job, dataset }) {
                   style={{ width: `${progressPct}%` }}
                 />
               ) : (
-                <div className="h-full w-1/3 animate-pulse rounded-full bg-[#1a3673]/45" />
+                <>
+                  <div
+                    className="absolute inset-y-0 w-1/3 rounded-full bg-[#1a3673]/55"
+                    style={{
+                      animation: "wyzOnboardingIndeterminate 1.35s ease-in-out infinite",
+                    }}
+                  />
+                  <style>{`
+                    @keyframes wyzOnboardingIndeterminate {
+                      0% { transform: translateX(-120%); }
+                      100% { transform: translateX(360%); }
+                    }
+                  `}</style>
+                </>
               )}
             </div>
             {progressPct != null ? (
               <p className="text-[11px] tabular-nums text-slate-400">{Math.round(progressPct)}% complete</p>
-            ) : null}
+            ) : (
+              <p className="text-[11px] text-slate-400">In progress</p>
+            )}
           </div>
         </>
       )}

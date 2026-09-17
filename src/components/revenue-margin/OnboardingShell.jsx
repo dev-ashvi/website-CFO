@@ -1,7 +1,7 @@
 import OnboardingStepper from "./OnboardingStepper.jsx";
 
 /**
- * Shell for progressive onboarding: stepper + single focused panel.
+ * Shell for progressive onboarding: quiet stepper + focused panel + action row.
  */
 export default function OnboardingShell({ steps, title, subtitle, children, footer = null }) {
   return (
@@ -15,8 +15,26 @@ export default function OnboardingShell({ steps, title, subtitle, children, foot
           </div>
         )}
         {children}
-        {footer ? <div className="mt-4 flex flex-wrap items-center gap-3">{footer}</div> : null}
+        {footer ? (
+          <div className="mt-5 flex flex-col-reverse gap-3 border-t border-gray-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
+            {footer}
+          </div>
+        ) : null}
       </section>
     </div>
+  );
+}
+
+/** Secondary ← Back control for presentation review navigation. */
+export function OnboardingBackButton({ onClick, disabled = false, label = "← Back" }) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className="self-start text-[13px] font-medium text-slate-500 hover:text-[#1a3673] disabled:opacity-40"
+    >
+      {label}
+    </button>
   );
 }

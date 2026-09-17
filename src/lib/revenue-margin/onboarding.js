@@ -1,6 +1,7 @@
 /**
- * Progressive onboarding presentation for Revenue & Margin (P7.1 Pass 1).
- * Backend dataset.status remains authoritative — this module is UI routing only.
+ * Progressive onboarding presentation for Revenue & Margin (P7.1).
+ * Backend dataset.status remains authoritative for capability.
+ * Session review flags control whether the user has reviewed Detect / Map.
  */
 
 import {
@@ -33,7 +34,7 @@ export const ONBOARDING_STAGE_LABELS = Object.freeze({
   analyse: "Analyse",
 });
 
-/** Business-friendly file role labels for the Detect step. */
+/** Business-friendly file role labels for Detect / Map grouping. */
 export const DETECT_ROLE_LABELS = Object.freeze({
   ORDER_LINES: "Orders",
   SKU_MASTER: "Products / COGS",
@@ -42,36 +43,88 @@ export const DETECT_ROLE_LABELS = Object.freeze({
   UNKNOWN: "Unrecognised file",
 });
 
+export const REVIEW_STEPS = Object.freeze({
+  DETECT: "detect",
+  MAP: "map",
+});
+
+const REVIEW_PREFIX = "wyz_rm_step_review:";
+/** Legacy detect-only key — still read for session continuity. */
 const DETECT_ACK_PREFIX = "wyz_rm_detect_ack:";
+
+const ROLE_DISPLAY_ORDER = [
+  "ORDER_LINES",
+  "SKU_MASTER",
+  "CHANNEL_SETTLEMENTS",
+  "MARKETING_SPEND",
+  "UNKNOWN",
+];
 
 export function detectAckStorageKey(datasetId) {
   if (!datasetId) return null;
   return `${DETECT_ACK_PREFIX}${datasetId}`;
 }
 
-export function readDetectAcknowledged(datasetId, storage = globalThis.sessionStorage) {
-  const key = detectAckStorageKey(datasetId);
+export function stepReviewStorageKey(datasetId, step) {
+  if (!datasetId || !step) return null;
+  return `${REVIEW_PREFIX}${datasetId}:${step}`;
+}
+
+export function readStepReviewed(datasetId, step, storage = globalThis.sessionStorage) {
+  const key = stepReviewStorageKey(datasetId, step);
   if (!key || !storage) return false;
   try {
-    return storage.getItem(key) === "1";
+    if (storage.getItem(key) === "1") return true;
+    // Migrate legacy detect acknowledgement into the generalized model.
+    if (step === REVIEW_STEPS.DETECT) {
+      const legacy = detectAckStorageKey(datasetId);
+      if (legacy && storage.getItem(legacy) === "1") return true;
+    }
+    return false;
   } catch {
     return false;
   }
 }
 
-export function writeDetectAcknowledged(datasetId, value = true, storage = globalThis.sessionStorage) {
-  const key = detectAckStorageKey(datasetId);
+export function writeStepReviewed(datasetId, step, value = true, storage = globalThis.sessionStorage) {
+  const key = stepReviewStorageKey(datasetId, step);
   if (!key || !storage) return;
   try {
     if (value) storage.setItem(key, "1");
     else storage.removeItem(key);
+    if (step === REVIEW_STEPS.DETECT) {
+      const legacy = detectAckStorageKey(datasetId);
+      if (!legacy) return;
+      if (value) storage.setItem(legacy, "1");
+      else storage.removeItem(legacy);
+    }
   } catch {
     /* ignore quota / private mode */
   }
 }
 
+export function clearStepReviewed(datasetId, step, storage = globalThis.sessionStorage) {
+  writeStepReviewed(datasetId, step, false, storage);
+}
+
+export function clearAllStepReviews(datasetId, storage = globalThis.sessionStorage) {
+  clearStepReviewed(datasetId, REVIEW_STEPS.DETECT, storage);
+  clearStepReviewed(datasetId, REVIEW_STEPS.MAP, storage);
+}
+
+/** @deprecated Prefer readStepReviewed(datasetId, REVIEW_STEPS.DETECT) */
+export function readDetectAcknowledged(datasetId, storage = globalThis.sessionStorage) {
+  return readStepReviewed(datasetId, REVIEW_STEPS.DETECT, storage);
+}
+
+/** @deprecated Prefer writeStepReviewed(datasetId, REVIEW_STEPS.DETECT, value) */
+export function writeDetectAcknowledged(datasetId, value = true, storage = globalThis.sessionStorage) {
+  writeStepReviewed(datasetId, REVIEW_STEPS.DETECT, value, storage);
+}
+
+/** @deprecated Prefer clearStepReviewed(datasetId, REVIEW_STEPS.DETECT) */
 export function clearDetectAcknowledged(datasetId, storage = globalThis.sessionStorage) {
-  writeDetectAcknowledged(datasetId, false, storage);
+  clearStepReviewed(datasetId, REVIEW_STEPS.DETECT, storage);
 }
 
 /**
@@ -123,6 +176,20 @@ export function hasDetectedSources(dataset) {
   );
 }
 
+export function hasMappingRows(dataset) {
+  return (dataset?.mappings || []).length > 0;
+}
+
+/**
+ * Map is a presentation trust step whenever mapping rows exist,
+ * or the backend still requires mapping review (NEEDS_REVIEW).
+ */
+export function needsMapPresentation(dataset) {
+  if (!dataset) return false;
+  if (dataset.status === DATASET_STATUSES.NEEDS_REVIEW) return true;
+  return hasMappingRows(dataset);
+}
+
 function isAnalysisBusy(dataset, job) {
   if (dataset?.status === DATASET_STATUSES.ANALYSING) return true;
   if (isJobBusy(job?.status) || isJobBusy(job?.stage)) return true;
@@ -143,20 +210,25 @@ function isAnalysisFailed(dataset, job) {
 }
 
 /**
- * Derive the single focused onboarding stage from backend state + detect ack.
- * Detect may be a frontend acknowledgement when the backend already advanced.
+ * Derive the single focused onboarding stage from backend capability + session reviews.
+ * Backend completion does NOT auto-skip Detect or Map presentation.
  */
 export function resolveOnboardingStage({
   dataset = null,
   job = null,
-  detectAcknowledged = false,
+  detectReviewed = false,
+  mappingReviewed = false,
+  /** @deprecated alias for detectReviewed */
+  detectAcknowledged = undefined,
 } = {}) {
   if (!dataset) return "upload";
 
+  const detectAck = detectAcknowledged !== undefined ? Boolean(detectAcknowledged) : Boolean(detectReviewed);
+  const mapAck = Boolean(mappingReviewed);
   const status = dataset.status;
   const detected = hasDetectedSources(dataset);
   const attention = mappingRowsNeedingAttention(dataset.mappings || []);
-  const hasMappings = (dataset.mappings || []).length > 0;
+  const showMap = needsMapPresentation(dataset);
 
   if (isAnalysisBusy(dataset, job)) return "analyse";
   if (isAnalysisFailed(dataset, job)) return "analyse";
@@ -168,32 +240,32 @@ export function resolveOnboardingStage({
 
   if (status === DATASET_STATUSES.FAILED) {
     if (!detected) return "upload";
-    if (!detectAcknowledged) return "detect";
-    if (attention.length > 0) return "map";
+    if (!detectAck) return "detect";
+    if (attention.length > 0 || (showMap && !mapAck)) return "map";
     if (dataset.readiness) return "validate";
-    if (hasMappings) return "map";
+    if (showMap) return "map";
     return "upload";
   }
 
   if (status === DATASET_STATUSES.READY || status === DATASET_STATUSES.VALIDATING) {
-    if (detected && !detectAcknowledged) return "detect";
+    if (detected && !detectAck) return "detect";
+    if (showMap && !mapAck) return "map";
     return "validate";
   }
 
   if (status === DATASET_STATUSES.NEEDS_REVIEW) {
-    if (detected && !detectAcknowledged) return "detect";
+    if (detected && !detectAck) return "detect";
     return "map";
   }
 
   if (status === DATASET_STATUSES.MAPPING) {
-    if (detected && !detectAcknowledged) return "detect";
+    if (detected && !detectAck) return "detect";
     if (detected) return "detect";
     return "upload";
   }
 
   if (status === DATASET_STATUSES.UPLOADING || status === DATASET_STATUSES.PROFILING) {
     if (detected && !isIngestBusy(status)) return "detect";
-    // Still profiling: keep Upload if roles not ready; otherwise Detect with busy cue.
     if (detected) return "detect";
     return "upload";
   }
@@ -203,11 +275,22 @@ export function resolveOnboardingStage({
   }
 
   // Fallback for unexpected statuses with partial data
-  if (detected && !detectAcknowledged) return "detect";
-  if (attention.length > 0) return "map";
+  if (detected && !detectAck) return "detect";
+  if (attention.length > 0 || (showMap && !mapAck)) return "map";
   if (dataset.readiness) return "validate";
-  if (hasMappings) return "map";
+  if (showMap) return "map";
   return "upload";
+}
+
+/**
+ * Presentation-only back target. Does not mutate backend state.
+ * Detect → Upload is intentionally unsupported (ambiguous after files exist).
+ * Analyse has no Back once a job is authoritative.
+ */
+export function onboardingBackTarget(stage) {
+  if (stage === "map") return "detect";
+  if (stage === "validate") return "map";
+  return null;
 }
 
 /**
@@ -241,6 +324,62 @@ export function detectSourceCards(dataset) {
   });
 }
 
+function mappingReviewLabel(row) {
+  if (row?.needs_attention || ["review_recommended", "user_confirmation_required", "rejected"].includes(row?.status)) {
+    return "Needs review";
+  }
+  if (row?.origin === "user_confirmed" || row?.status === "confirmed") return "Confirmed";
+  if (row?.status === "auto_accepted" || row?.origin === "auto" || row?.origin === "auto_accepted") {
+    return "Accepted";
+  }
+  if (row?.status) {
+    const raw = String(row.status).replace(/_/g, " ");
+    if (/auto|accepted|mapped|confirmed/i.test(raw)) return "Accepted";
+  }
+  return "Accepted";
+}
+
+/**
+ * Group existing mapping rows by business role for the Map trust screen.
+ */
+export function mappingGroupsByRole(dataset) {
+  const mappings = dataset?.mappings || [];
+  const filesByName = new Map((dataset?.files || []).map((f) => [f.filename, f]));
+  const groups = new Map();
+
+  for (const row of mappings) {
+    const role = row.file_role || filesByName.get(row.source_file)?.file_role || "UNKNOWN";
+    if (!groups.has(role)) {
+      groups.set(role, {
+        role,
+        title: DETECT_ROLE_LABELS[role] || role,
+        filename: row.source_file || null,
+        rows: [],
+      });
+    }
+    const group = groups.get(role);
+    if (!group.filename && row.source_file) group.filename = row.source_file;
+    group.rows.push({
+      key: `${row.source_file}:${row.source_column}`,
+      sourceFile: row.source_file || null,
+      sourceColumn: row.source_column || null,
+      canonicalField: row.canonical_field || null,
+      confidence: row.final_confidence != null ? Number(row.final_confidence) : null,
+      status: row.status || null,
+      reviewLabel: mappingReviewLabel(row),
+      needsAttention: Boolean(
+        row.needs_attention || ["review_recommended", "user_confirmation_required", "rejected"].includes(row.status),
+      ),
+      fileRole: role,
+      raw: row,
+    });
+  }
+
+  return ROLE_DISPLAY_ORDER.filter((role) => groups.has(role))
+    .concat([...groups.keys()].filter((role) => !ROLE_DISPLAY_ORDER.includes(role)))
+    .map((role) => groups.get(role));
+}
+
 /**
  * Compact Validate-step success facts from verified readiness only.
  * Does not invent checks — only surfaces ready_for_engine + ok joins.
@@ -266,4 +405,36 @@ export function validateReadinessHighlights(readiness) {
   }
 
   return highlights;
+}
+
+/**
+ * Executive readiness chips derived only from existing dataset fields.
+ */
+export function validateExecutiveSummary(dataset) {
+  if (!dataset) return [];
+  const chips = [];
+  const sourceCount = (dataset.files || []).length;
+  if (sourceCount > 0) {
+    chips.push({ key: "sources", label: `${sourceCount} Data source${sourceCount === 1 ? "" : "s"}` });
+  }
+
+  const mappings = dataset.mappings || [];
+  const mappedCount = mappings.filter((row) => row.canonical_field).length;
+  if (mappedCount > 0) {
+    chips.push({ key: "mapped", label: `${mappedCount} Mapped` });
+  }
+
+  for (const join of dataset.readiness?.joins || []) {
+    if (!join?.ok) continue;
+    const pct = Math.round(Number(join.match_pct || 0) * 100);
+    if (!Number.isFinite(pct)) continue;
+    const name = String(join.name || "");
+    if (name.includes("sku_master")) {
+      chips.push({ key: `join-${name}`, label: `${pct}% Product joins` });
+    } else if (name.includes("settlements")) {
+      chips.push({ key: `join-${name}`, label: `${pct}% Settlement joins` });
+    }
+  }
+
+  return chips;
 }

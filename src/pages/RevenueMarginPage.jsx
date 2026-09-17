@@ -16,14 +16,17 @@ import {
   DATASET_STATUSES,
   isIngestBusy,
   jobErrorMessage,
+  mappingRowsNeedingAttention,
 } from "../lib/revenue-margin/workflow.js";
 import {
+  onboardingBackTarget,
   onboardingStepperModel,
   PRESENTATION_MODE,
-  readDetectAcknowledged,
+  readStepReviewed,
   resolveOnboardingStage,
   resolvePresentationMode,
-  writeDetectAcknowledged,
+  REVIEW_STEPS,
+  writeStepReviewed,
 } from "../lib/revenue-margin/onboarding.js";
 import {
   buildRevenueMarginPath,
@@ -39,7 +42,7 @@ import {
 } from "../lib/revenue-margin/workspaceRestore.js";
 import AnalysisWorkspace from "../components/revenue-margin/AnalysisWorkspace.jsx";
 import DatasetLibrarySwitcher from "../components/revenue-margin/DatasetLibrarySwitcher.jsx";
-import OnboardingShell from "../components/revenue-margin/OnboardingShell.jsx";
+import OnboardingShell, { OnboardingBackButton } from "../components/revenue-margin/OnboardingShell.jsx";
 import {
   AnalyseStepPanel,
   DetectStepPanel,
@@ -62,29 +65,30 @@ function onboardingCopy(stage, dataset) {
       return {
         title: "Upload your business data",
         subtitle:
-          "Add the commerce files WYZ needs to understand revenue and profitability — orders, products/COGS, settlements, and marketing spend.",
+          "Give WYZ the commerce files needed for revenue and profitability — orders, products/COGS, settlements, and marketing spend.",
       };
     case "detect":
       return {
         title: sourceCount > 0 ? `We found ${sourceCount} data source${sourceCount === 1 ? "" : "s"}` : "We found your business data",
-        subtitle: "Review what WYZ detected before continuing.",
+        subtitle: "WYZ identifies what each data source represents. Review before continuing.",
       };
     case "map":
       return {
-        title: "Review your data mapping",
-        subtitle: "Confirm how source fields map to what WYZ understands. High-confidence mappings are already accepted.",
+        title: "Map your financial data",
+        subtitle:
+          "WYZ has mapped your files to the financial model. Review how your data will be interpreted.",
       };
     case "validate":
       return {
         title: canStartAnalysis(dataset) ? "Your data is ready" : "Data readiness",
         subtitle: canStartAnalysis(dataset)
-          ? "A verified readiness check confirms you can analyse your business."
+          ? "WYZ verifies that the data can produce reliable financial analysis."
           : "Resolve any outstanding checks before running analysis.",
       };
     case "analyse":
       return {
         title: "Analysing your business",
-        subtitle: "Building your financial workspace from the validated dataset.",
+        subtitle: "WYZ builds the financial workspace from the validated dataset.",
       };
     default:
       return { title: "Set up your dataset", subtitle: null };
@@ -104,7 +108,8 @@ export default function RevenueMarginPage() {
   const [restoreError, setRestoreError] = useState(null);
   const [error, setError] = useState(null);
   const [showAllMappings, setShowAllMappings] = useState(false);
-  const [detectAcknowledged, setDetectAcknowledged] = useState(false);
+  const [detectReviewed, setDetectReviewed] = useState(false);
+  const [mappingReviewed, setMappingReviewed] = useState(false);
   const fileRef = useRef(null);
   const restoreGenerationRef = useRef(0);
 
@@ -121,19 +126,23 @@ export default function RevenueMarginPage() {
       resolveOnboardingStage({
         dataset,
         job,
-        detectAcknowledged,
+        detectReviewed,
+        mappingReviewed,
       }),
-    [dataset, job, detectAcknowledged],
+    [dataset, job, detectReviewed, mappingReviewed],
   );
   const stepperSteps = useMemo(() => onboardingStepperModel(onboardingStage), [onboardingStage]);
   const stageCopy = onboardingCopy(onboardingStage, dataset);
+  const backTarget = onboardingBackTarget(onboardingStage);
 
   useEffect(() => {
     if (!dataset?.dataset_id) {
-      setDetectAcknowledged(false);
+      setDetectReviewed(false);
+      setMappingReviewed(false);
       return;
     }
-    setDetectAcknowledged(readDetectAcknowledged(dataset.dataset_id));
+    setDetectReviewed(readStepReviewed(dataset.dataset_id, REVIEW_STEPS.DETECT));
+    setMappingReviewed(readStepReviewed(dataset.dataset_id, REVIEW_STEPS.MAP));
   }, [dataset?.dataset_id]);
 
   function persistActiveDataset(datasetId, { history = "replace" } = {}) {
@@ -158,7 +167,8 @@ export default function RevenueMarginPage() {
     setError(null);
     setRestoreError(null);
     setShowAllMappings(false);
-    setDetectAcknowledged(readDetectAcknowledged(datasetId));
+    setDetectReviewed(readStepReviewed(datasetId, REVIEW_STEPS.DETECT));
+    setMappingReviewed(readStepReviewed(datasetId, REVIEW_STEPS.MAP));
     navigate(buildRevenueMarginPath(datasetId), { replace: false });
   }
 
@@ -171,7 +181,8 @@ export default function RevenueMarginPage() {
     setRestoreError(null);
     setError(null);
     setShowAllMappings(false);
-    setDetectAcknowledged(false);
+    setDetectReviewed(false);
+    setMappingReviewed(false);
     setRestorePhase(RESTORE_PHASE.IDLE);
     // Push so Back can return to the previous dataset URL.
     navigate("/app/revenue-margin", { replace: false });
@@ -179,9 +190,29 @@ export default function RevenueMarginPage() {
 
   function acknowledgeDetect() {
     if (dataset?.dataset_id) {
-      writeDetectAcknowledged(dataset.dataset_id, true);
+      writeStepReviewed(dataset.dataset_id, REVIEW_STEPS.DETECT, true);
     }
-    setDetectAcknowledged(true);
+    setDetectReviewed(true);
+  }
+
+  function navigateOnboardingBack() {
+    if (!dataset?.dataset_id || !backTarget) return;
+    if (backTarget === "detect") {
+      writeStepReviewed(dataset.dataset_id, REVIEW_STEPS.DETECT, false);
+      setDetectReviewed(false);
+      return;
+    }
+    if (backTarget === "map") {
+      writeStepReviewed(dataset.dataset_id, REVIEW_STEPS.MAP, false);
+      setMappingReviewed(false);
+    }
+  }
+
+  function markMappingReviewed() {
+    if (dataset?.dataset_id) {
+      writeStepReviewed(dataset.dataset_id, REVIEW_STEPS.MAP, true);
+    }
+    setMappingReviewed(true);
   }
 
   async function executeRestore() {
@@ -366,11 +397,32 @@ export default function RevenueMarginPage() {
 
   async function handleConfirmMappings() {
     if (!dataset) return;
-    const items = Object.values(draftConfirms).filter((item) => item.canonical_field);
+    const attention = mappingRowsNeedingAttention(dataset.mappings || []);
+
+    // Auto-accepted mappings: presentation confirmation only — no API mutation.
+    if (attention.length === 0) {
+      setError(null);
+      markMappingReviewed();
+      return;
+    }
+
+    const items = attention
+      .map((row) => {
+        const key = `${row.source_file}:${row.source_column}`;
+        const draft = draftConfirms[key];
+        return {
+          source_file: row.source_file,
+          source_column: row.source_column,
+          canonical_field: draft?.canonical_field || row.canonical_field,
+        };
+      })
+      .filter((item) => item.canonical_field);
+
     if (!items.length) {
       setError("Confirm or change at least one field before saving.");
       return;
     }
+
     setBusy(true);
     setError(null);
     try {
@@ -378,6 +430,8 @@ export default function RevenueMarginPage() {
       setDataset(next);
       setDraftConfirms({});
       persistActiveDataset(next.dataset_id);
+      writeStepReviewed(next.dataset_id, REVIEW_STEPS.MAP, true);
+      setMappingReviewed(true);
     } catch (err) {
       setError(err.message || "Could not save mapping confirmations");
     } finally {
@@ -560,14 +614,41 @@ export default function RevenueMarginPage() {
               subtitle={stageCopy.subtitle}
               footer={
                 onboardingStage === "detect" ? (
-                  <button
-                    type="button"
-                    disabled={busy || isIngestBusy(dataset?.status)}
-                    onClick={acknowledgeDetect}
-                    className="rounded-xl bg-[#1a3673] px-4 py-2.5 text-[13px] font-semibold text-white hover:bg-[#142a5c] disabled:opacity-50"
-                  >
-                    Continue
-                  </button>
+                  <>
+                    <span className="hidden sm:block" aria-hidden />
+                    <button
+                      type="button"
+                      disabled={busy || isIngestBusy(dataset?.status)}
+                      onClick={acknowledgeDetect}
+                      className="self-stretch rounded-xl bg-[#1a3673] px-4 py-2.5 text-[13px] font-semibold text-white hover:bg-[#142a5c] disabled:opacity-50 sm:self-auto"
+                    >
+                      Continue
+                    </button>
+                  </>
+                ) : onboardingStage === "map" ? (
+                  <>
+                    <OnboardingBackButton onClick={navigateOnboardingBack} disabled={busy} />
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={handleConfirmMappings}
+                      className="self-stretch rounded-xl bg-[#1a3673] px-4 py-2.5 text-[13px] font-semibold text-white hover:bg-[#142a5c] disabled:opacity-60 sm:self-auto"
+                    >
+                      Confirm mappings
+                    </button>
+                  </>
+                ) : onboardingStage === "validate" ? (
+                  <>
+                    <OnboardingBackButton onClick={navigateOnboardingBack} disabled={busy} />
+                    <button
+                      type="button"
+                      disabled={busy || !canStartAnalysis(dataset)}
+                      onClick={handleAnalyse}
+                      className="inline-flex items-center justify-center gap-2 self-stretch rounded-xl bg-[#1a3673] px-4 py-2.5 text-[13px] font-semibold text-white hover:bg-[#142a5c] disabled:opacity-50 sm:self-auto"
+                    >
+                      Analyse my business
+                    </button>
+                  </>
                 ) : null
               }
             >
@@ -591,13 +672,9 @@ export default function RevenueMarginPage() {
                   setDraftConfirms={setDraftConfirms}
                   showAllMappings={showAllMappings}
                   setShowAllMappings={setShowAllMappings}
-                  onConfirm={handleConfirmMappings}
-                  busy={busy}
                 />
               )}
-              {onboardingStage === "validate" && (
-                <ValidateStepPanel dataset={dataset} onAnalyse={handleAnalyse} busy={busy} />
-              )}
+              {onboardingStage === "validate" && <ValidateStepPanel dataset={dataset} />}
               {onboardingStage === "analyse" && <AnalyseStepPanel job={job} dataset={dataset} />}
             </OnboardingShell>
           </div>
