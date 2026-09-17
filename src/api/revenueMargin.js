@@ -187,12 +187,23 @@ export async function updateStrategicDecisionStatus(datasetId, decisionId, body)
   );
 }
 
-export function pollUntil(loadFn, { isDone, intervalMs = 1000, timeoutMs = 180000 } = {}) {
+/** Transient poll failures worth retrying (includes observed pilot 501). */
+export function isTransientAnalyticsPollError(err) {
+  const status = err && typeof err.status === "number" ? err.status : null;
+  return status === 0 || status === 500 || status === 501 || status === 502 || status === 503 || status === 504;
+}
+
+export function pollUntil(
+  loadFn,
+  { isDone, intervalMs = 1000, timeoutMs = 180000, maxTransientErrors = 5 } = {},
+) {
   const started = Date.now();
+  let transientErrors = 0;
   return new Promise((resolve, reject) => {
     const tick = async () => {
       try {
         const value = await loadFn();
+        transientErrors = 0;
         if (isDone(value)) {
           resolve(value);
           return;
@@ -203,9 +214,89 @@ export function pollUntil(loadFn, { isDone, intervalMs = 1000, timeoutMs = 18000
         }
         setTimeout(tick, intervalMs);
       } catch (err) {
+        if (isTransientAnalyticsPollError(err) && transientErrors < maxTransientErrors) {
+          transientErrors += 1;
+          if (Date.now() - started > timeoutMs) {
+            reject({ status: 0, message: "Timed out waiting for analytics worker." });
+            return;
+          }
+          setTimeout(tick, intervalMs);
+          return;
+        }
         reject(err);
       }
     };
     tick();
   });
+}
+
+function terminalJobFromDataset(dataset, jobId) {
+  const status = dataset?.analysis_status || dataset?.status || null;
+  if (status === "COMPLETED") {
+    return {
+      job_id: jobId,
+      analysis_job_id: jobId,
+      status: "COMPLETED",
+      stage: "COMPLETED",
+      message: "Analysis complete",
+      recovered_from_dataset: true,
+    };
+  }
+  if (status === "FAILED") {
+    return {
+      job_id: jobId,
+      analysis_job_id: jobId,
+      status: "FAILED",
+      stage: "FAILED",
+      error: dataset?.error || { message: "Analysis failed" },
+      recovered_from_dataset: true,
+    };
+  }
+  return null;
+}
+
+/**
+ * Poll a job with transient retries. If polls still fail, trust dataset state.
+ */
+export async function waitForAnalysisJob(jobId, datasetId, pollOptions = {}) {
+  const opts = {
+    isDone: (value) => value?.status === "COMPLETED" || value?.status === "FAILED",
+    intervalMs: 1000,
+    timeoutMs: 180000,
+    maxTransientErrors: 5,
+    ...pollOptions,
+  };
+  try {
+    return await pollUntil(() => getAnalysisJob(jobId), opts);
+  } catch (err) {
+    if (!datasetId) throw err;
+    let dataset;
+    try {
+      dataset = await getDataset(datasetId);
+    } catch {
+      throw err;
+    }
+    const recovered = terminalJobFromDataset(dataset, jobId);
+    if (recovered) {
+      if (recovered.status === "COMPLETED") {
+        try {
+          return await getAnalysisJob(jobId);
+        } catch {
+          return recovered;
+        }
+      }
+      return recovered;
+    }
+    const busy = ["QUEUED", "CLAIMED", "RUNNING", "ANALYSING", "WRITING_RESULT"].includes(
+      String(dataset?.analysis_status || dataset?.status || ""),
+    );
+    throw {
+      status: (err && err.status) || 0,
+      message: busy
+        ? "Analysis is still running on the server. Refresh this page or try again in a moment."
+        : (err && err.message) || "Timed out waiting for analytics worker.",
+      details: { err, dataset_status: dataset?.status, analysis_status: dataset?.analysis_status },
+      code: "ANALYSIS_POLL_RECOVERY_NEEDED",
+    };
+  }
 }

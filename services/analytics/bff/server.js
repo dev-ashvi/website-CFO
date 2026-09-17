@@ -257,19 +257,40 @@ function proxy(req, res) {
 
   const origin = requestOrigin(req);
   const upstreamUrl = new URL(incoming.pathname + incoming.search, UPSTREAM);
+  const method = String(req.method || "GET").toUpperCase();
   const headers = { ...req.headers };
-  delete headers.host;
-  delete headers.connection;
-  delete headers["x-wyz-pilot-token"];
+  // Drop hop-by-hop / connection-scoped headers. Never let a prior POST body
+  // framing hint (content-length/type) ride onto a subsequent GET on reuse.
+  for (const hop of [
+    "host",
+    "connection",
+    "keep-alive",
+    "proxy-connection",
+    "transfer-encoding",
+    "te",
+    "trailer",
+    "upgrade",
+    "x-wyz-pilot-token",
+  ]) {
+    delete headers[hop];
+  }
+  if (method === "GET" || method === "HEAD" || method === "OPTIONS") {
+    delete headers["content-length"];
+    delete headers["content-type"];
+  }
   headers["x-wyz-pilot-token"] = PILOT_TOKEN;
   headers["x-wyz-bff"] = "1";
   headers["x-wyz-release"] = RELEASE;
+  // Avoid upstream keep-alive request smuggling / leftover-body risk on the
+  // BFF → analytics-api hop (observed pilot symptom: literal "{}GET" request-line).
+  headers.connection = "close";
 
   const proxyReq = http.request(
     upstreamUrl,
     {
-      method: req.method,
+      method,
       headers,
+      agent: false,
       timeout: Number(process.env.WYZ_BFF_PROXY_TIMEOUT_MS || 600000),
     },
     (proxyRes) => {
@@ -295,6 +316,10 @@ function proxy(req, res) {
     }
   });
 
+  if (method === "GET" || method === "HEAD") {
+    proxyReq.end();
+    return;
+  }
   req.pipe(proxyReq);
 }
 

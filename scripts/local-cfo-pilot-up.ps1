@@ -36,7 +36,7 @@ Write-Host "==> Starting compose (release=$sha)"
 Push-Location $Analytics
 $env:WYZ_RELEASE_SHA = $sha
 $env:WYZ_FRONTEND_DIST = "./frontend-dist"
-docker compose -f docker-compose.yml -f docker-compose.local-pilot.yml --env-file .env.local-pilot up -d --build
+docker compose -f docker-compose.yml -f docker-compose.local-pilot.yml --env-file .env.local-pilot up -d --build --force-recreate
 if ($LASTEXITCODE -ne 0) { Pop-Location; exit $LASTEXITCODE }
 Pop-Location
 

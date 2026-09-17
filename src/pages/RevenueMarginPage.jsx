@@ -11,13 +11,12 @@ import {
 import {
   confirmMappings,
   createDataset,
-  getAnalysisJob,
   getAnalysisResult,
   getDataset,
   listDatasets,
-  pollUntil,
   startAnalysisJob,
   uploadDatasetFiles,
+  waitForAnalysisJob,
 } from "../api/revenueMargin.js";
 import { readinessDisplayItems } from "../lib/revenue-margin/dataQuality.js";
 import {
@@ -328,10 +327,10 @@ export default function RevenueMarginPage() {
       const createdJob = await startAnalysisJob(dataset.dataset_id);
       setJob(createdJob);
       setDataset((prev) => ({ ...prev, status: DATASET_STATUSES.ANALYSING, analysis_status: DATASET_STATUSES.ANALYSING }));
-      const finished = await pollUntil(() => getAnalysisJob(createdJob.analysis_job_id), {
-        isDone: (value) => value.status === "COMPLETED" || value.status === "FAILED",
+      const finished = await waitForAnalysisJob(createdJob.analysis_job_id || createdJob.job_id, dataset.dataset_id, {
         intervalMs: 1000,
         timeoutMs: 180000,
+        maxTransientErrors: 5,
       });
       setJob(finished);
       if (finished.status === "FAILED") {
@@ -346,6 +345,28 @@ export default function RevenueMarginPage() {
       setDataset(latest);
       persistActiveDataset(latest.dataset_id);
     } catch (err) {
+      // Never leave the UI permanently on a stale QUEUED/ANALYSING client state.
+      try {
+        const latest = await getDataset(dataset.dataset_id);
+        setDataset(latest);
+        if (latest?.status === DATASET_STATUSES.COMPLETED || latest?.analysis_status === DATASET_STATUSES.COMPLETED) {
+          const summary = await getAnalysisResult(dataset.dataset_id);
+          setResult(normalizeRevenueMarginWorkspaceResult(summary));
+          setJob({
+            job_id: latest.latest_job_id,
+            analysis_job_id: latest.latest_job_id,
+            status: "COMPLETED",
+            stage: "COMPLETED",
+          });
+          setError(null);
+          return;
+        }
+        if (latest?.status === DATASET_STATUSES.FAILED || latest?.analysis_status === DATASET_STATUSES.FAILED) {
+          setJob({ status: "FAILED", stage: "FAILED", error: latest.error });
+        }
+      } catch {
+        // fall through to error message
+      }
       setError(err.message || "Analysis failed");
     } finally {
       setBusy(false);
