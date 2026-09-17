@@ -222,7 +222,7 @@ describe("workspace restore state machine", () => {
     const page = readFileSync(join(root, "../../pages/RevenueMarginPage.jsx"), "utf8");
     const panel = readFileSync(join(root, "../../components/revenue-margin/TrackedDecisionsPanel.jsx"), "utf8");
     assert.match(page, /runWorkspaceRestore/);
-    assert.match(page, /AnalysisWorkspace result=\{result\} datasetId=\{dataset\?\.dataset_id\}/);
+    assert.match(page, /AnalysisWorkspace[^>]*result=\{result\}[^>]*datasetId=\{dataset\?\.dataset_id\}/);
     assert.match(panel, /listStrategicDecisions/);
   });
 

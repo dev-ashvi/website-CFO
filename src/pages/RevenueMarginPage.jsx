@@ -1,13 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import {
-  AlertTriangle,
-  BarChart3,
-  CheckCircle2,
-  Loader2,
-  Upload,
-  FileSpreadsheet,
-} from "lucide-react";
+import { AlertTriangle, Loader2 } from "lucide-react";
 import {
   confirmMappings,
   createDataset,
@@ -18,17 +11,20 @@ import {
   uploadDatasetFiles,
   waitForAnalysisJob,
 } from "../api/revenueMargin.js";
-import { readinessDisplayItems } from "../lib/revenue-margin/dataQuality.js";
 import {
   canStartAnalysis,
   DATASET_STATUSES,
   isIngestBusy,
-  isJobBusy,
   jobErrorMessage,
-  mappingRowsNeedingAttention,
-  ROLE_LABELS,
-  workflowStep,
 } from "../lib/revenue-margin/workflow.js";
+import {
+  onboardingStepperModel,
+  PRESENTATION_MODE,
+  readDetectAcknowledged,
+  resolveOnboardingStage,
+  resolvePresentationMode,
+  writeDetectAcknowledged,
+} from "../lib/revenue-margin/onboarding.js";
 import {
   buildRevenueMarginPath,
   clearActiveDatasetId,
@@ -43,12 +39,56 @@ import {
 } from "../lib/revenue-margin/workspaceRestore.js";
 import AnalysisWorkspace from "../components/revenue-margin/AnalysisWorkspace.jsx";
 import DatasetLibrarySwitcher from "../components/revenue-margin/DatasetLibrarySwitcher.jsx";
+import OnboardingShell from "../components/revenue-margin/OnboardingShell.jsx";
+import {
+  AnalyseStepPanel,
+  DetectStepPanel,
+  MappingStepPanel,
+  UploadStepPanel,
+  ValidateStepPanel,
+} from "../components/revenue-margin/OnboardingPanels.jsx";
 
 function statusTone(status) {
   if (status === DATASET_STATUSES.COMPLETED || status === DATASET_STATUSES.READY) return "text-emerald-700 bg-emerald-50";
   if (status === DATASET_STATUSES.FAILED) return "text-rose-700 bg-rose-50";
   if (status === DATASET_STATUSES.NEEDS_REVIEW) return "text-amber-800 bg-amber-50";
   return "text-[#1a3673] bg-[#1a3673]/10";
+}
+
+function onboardingCopy(stage, dataset) {
+  const sourceCount = dataset?.files?.length || 0;
+  switch (stage) {
+    case "upload":
+      return {
+        title: "Upload your business data",
+        subtitle:
+          "Add the commerce files WYZ needs to understand revenue and profitability — orders, products/COGS, settlements, and marketing spend.",
+      };
+    case "detect":
+      return {
+        title: sourceCount > 0 ? `We found ${sourceCount} data source${sourceCount === 1 ? "" : "s"}` : "We found your business data",
+        subtitle: "Review what WYZ detected before continuing.",
+      };
+    case "map":
+      return {
+        title: "Review your data mapping",
+        subtitle: "Confirm how source fields map to what WYZ understands. High-confidence mappings are already accepted.",
+      };
+    case "validate":
+      return {
+        title: canStartAnalysis(dataset) ? "Your data is ready" : "Data readiness",
+        subtitle: canStartAnalysis(dataset)
+          ? "Everything needed for analysis looks good. Review any details, then analyse your business."
+          : "Resolve any outstanding checks before running analysis.",
+      };
+    case "analyse":
+      return {
+        title: "Analysing your business",
+        subtitle: "Building your financial workspace from the validated dataset.",
+      };
+    default:
+      return { title: "Set up your dataset", subtitle: null };
+  }
 }
 
 export default function RevenueMarginPage() {
@@ -64,6 +104,7 @@ export default function RevenueMarginPage() {
   const [restoreError, setRestoreError] = useState(null);
   const [error, setError] = useState(null);
   const [showAllMappings, setShowAllMappings] = useState(false);
+  const [detectAcknowledged, setDetectAcknowledged] = useState(false);
   const fileRef = useRef(null);
   const restoreGenerationRef = useRef(0);
 
@@ -72,14 +113,28 @@ export default function RevenueMarginPage() {
   const restoreFailed =
     restorePhase === RESTORE_PHASE.FAILED || restorePhase === RESTORE_PHASE.NOT_FOUND;
 
-  const step = workflowStep(dataset?.status);
-  const attentionRows = useMemo(
-    () => mappingRowsNeedingAttention(dataset?.mappings || []),
-    [dataset?.mappings],
+  const presentationMode = resolvePresentationMode({ dataset, result });
+  const isWorkspace = presentationMode === PRESENTATION_MODE.WORKSPACE;
+
+  const onboardingStage = useMemo(
+    () =>
+      resolveOnboardingStage({
+        dataset,
+        job,
+        detectAcknowledged,
+      }),
+    [dataset, job, detectAcknowledged],
   );
-  const allMappings = dataset?.mappings || [];
-  const autoAcceptedCount = Math.max(0, allMappings.length - attentionRows.length);
-  const visibleRows = showAllMappings ? allMappings : attentionRows;
+  const stepperSteps = useMemo(() => onboardingStepperModel(onboardingStage), [onboardingStage]);
+  const stageCopy = onboardingCopy(onboardingStage, dataset);
+
+  useEffect(() => {
+    if (!dataset?.dataset_id) {
+      setDetectAcknowledged(false);
+      return;
+    }
+    setDetectAcknowledged(readDetectAcknowledged(dataset.dataset_id));
+  }, [dataset?.dataset_id]);
 
   function persistActiveDataset(datasetId, { history = "replace" } = {}) {
     if (!datasetId) return;
@@ -102,6 +157,8 @@ export default function RevenueMarginPage() {
     setDraftConfirms({});
     setError(null);
     setRestoreError(null);
+    setShowAllMappings(false);
+    setDetectAcknowledged(readDetectAcknowledged(datasetId));
     navigate(buildRevenueMarginPath(datasetId), { replace: false });
   }
 
@@ -113,9 +170,18 @@ export default function RevenueMarginPage() {
     setDraftConfirms({});
     setRestoreError(null);
     setError(null);
+    setShowAllMappings(false);
+    setDetectAcknowledged(false);
     setRestorePhase(RESTORE_PHASE.IDLE);
     // Push so Back can return to the previous dataset URL.
     navigate("/app/revenue-margin", { replace: false });
+  }
+
+  function acknowledgeDetect() {
+    if (dataset?.dataset_id) {
+      writeDetectAcknowledged(dataset.dataset_id, true);
+    }
+    setDetectAcknowledged(true);
   }
 
   async function executeRestore() {
@@ -373,8 +439,6 @@ export default function RevenueMarginPage() {
     }
   }
 
-  const fieldOptions = (role) => dataset?.canonical_fields?.[role] || [];
-
   if (restoring) {
     return (
       <div className="flex min-h-0 flex-1 items-center justify-center text-[13px] text-slate-500">
@@ -431,6 +495,10 @@ export default function RevenueMarginPage() {
     );
   }
 
+  const headerSubtitle = isWorkspace
+    ? "Understand revenue, profitability and the decisions driving performance."
+    : "Set up your dataset, then open the financial workspace.";
+
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <header className="shrink-0 border-b border-gray-200/80 bg-white/90 px-4 py-4 sm:px-6">
@@ -440,9 +508,7 @@ export default function RevenueMarginPage() {
               Authenticated module
             </p>
             <h1 className="mt-1 text-lg font-semibold text-[#1a3673] sm:text-xl">Revenue & Margin</h1>
-            <p className="mt-0.5 max-w-2xl text-[12px] text-slate-500">
-              Upload commerce files, review uncertain mappings, then run the deterministic WYZ engine.
-            </p>
+            <p className="mt-0.5 max-w-2xl text-[12px] text-slate-500">{headerSubtitle}</p>
           </div>
           <div className="flex flex-wrap items-start gap-3">
             <DatasetLibrarySwitcher
@@ -461,241 +527,75 @@ export default function RevenueMarginPage() {
         </div>
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-6 sm:px-6">
-        <div className="mx-auto max-w-5xl space-y-6">
+      {isWorkspace ? (
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-6 sm:px-6">
           {error && (
-            <div className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-[13px] text-rose-800">
+            <div className="mx-auto mb-4 flex max-w-6xl items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-[13px] text-rose-800">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
               <p>{error}</p>
             </div>
           )}
-
-          <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm sm:p-6">
-            <h2 className="text-sm font-semibold text-[#1a3673]">1. Dataset</h2>
-            <form onSubmit={handleCreate} className="mt-3 flex flex-col gap-3 sm:flex-row">
-              <input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="flex-1 rounded-xl border border-[rgba(26,54,115,0.16)] px-3 py-2.5 text-sm text-[#1a3673] outline-none focus:border-[#1a3673]"
-                placeholder="Dataset name"
-              />
-              <button
-                type="submit"
-                disabled={busy}
-                className="rounded-xl bg-[#1a3673] px-4 py-2.5 text-[13px] font-semibold text-white hover:bg-[#142a5c] disabled:opacity-60"
-              >
-                Create dataset
-              </button>
-            </form>
-            {dataset && (
-              <p className="mt-3 text-[12px] text-slate-500">
-                {dataset.name} · {dataset.dataset_id} · v{dataset.dataset_version}
-              </p>
+          <AnalysisWorkspace key={dataset?.dataset_id || result.dataset_id || "workspace"} result={result} datasetId={dataset?.dataset_id} />
+        </div>
+      ) : (
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-6 sm:px-6">
+          <div className="mx-auto max-w-3xl space-y-4">
+            {error && (
+              <div className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-[13px] text-rose-800">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                <p>{error}</p>
+              </div>
             )}
-          </section>
 
-          <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm sm:p-6">
-            <h2 className="text-sm font-semibold text-[#1a3673]">2. Upload your business data</h2>
-            <p className="mt-1 text-[12px] text-slate-500">
-              Add order, product, settlement, and marketing files together. WYZ will classify them after profiling.
-            </p>
-            <div className="mt-4 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
-              <button
-                type="button"
-                disabled={!dataset || busy}
-                onClick={() => fileRef.current?.click()}
-                className="inline-flex items-center gap-2 rounded-xl border border-dashed border-[#1a3673]/30 bg-[#1a3673]/5 px-4 py-3 text-[13px] font-semibold text-[#1a3673] hover:bg-[#1a3673]/10 disabled:opacity-50"
-              >
-                <Upload className="h-4 w-4" />
-                Upload files
-              </button>
-              <input ref={fileRef} type="file" multiple accept=".csv,.xlsx,.xls" className="hidden" onChange={handleUpload} />
-              {isIngestBusy(dataset?.status) && (
-                <span className="inline-flex items-center gap-2 text-[12px] text-slate-500">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Profiling and mapping…
-                </span>
-              )}
-            </div>
-            {dataset?.files?.length > 0 && (
-              <ul className="mt-4 grid gap-3 sm:grid-cols-2">
-                {dataset.files.map((file) => (
-                  <li key={file.filename} className="rounded-xl border border-gray-100 bg-[#f8fafc] p-3">
-                    <div className="flex items-start gap-2">
-                      <FileSpreadsheet className="mt-0.5 h-4 w-4 text-emerald-600" />
-                      <div>
-                        <p className="text-[13px] font-semibold text-[#1a3673]">
-                          {file.label || ROLE_LABELS[file.file_role] || file.file_role}
-                        </p>
-                        <p className="text-[12px] text-slate-500">{file.filename}</p>
-                        <p className="mt-1 text-[11px] text-slate-500">
-                          {file.row_count != null ? `${file.row_count.toLocaleString("en-IN")} rows` : "Rows pending"}
-                          {file.date_min ? ` · ${file.date_min} → ${file.date_max || file.date_min}` : ""}
-                        </p>
-                      </div>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-
-          {(step === "review" || step === "ready" || attentionRows.length > 0 || allMappings.length > 0) && dataset && (
-            <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm sm:p-6">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <h2 className="text-sm font-semibold text-[#1a3673]">3. Mapping review</h2>
-                {allMappings.length > 0 && (
+            <OnboardingShell
+              steps={stepperSteps}
+              title={stageCopy.title}
+              subtitle={stageCopy.subtitle}
+              footer={
+                onboardingStage === "detect" ? (
                   <button
                     type="button"
-                    className="text-[12px] font-medium text-[#1a3673] underline-offset-2 hover:underline"
-                    onClick={() => setShowAllMappings((value) => !value)}
+                    disabled={busy || isIngestBusy(dataset?.status)}
+                    onClick={acknowledgeDetect}
+                    className="rounded-xl bg-[#1a3673] px-4 py-2.5 text-[13px] font-semibold text-white hover:bg-[#142a5c] disabled:opacity-50"
                   >
-                    {showAllMappings
-                      ? "Show only fields requiring attention"
-                      : `View all mappings${autoAcceptedCount > 0 ? ` (${autoAcceptedCount} auto-accepted hidden)` : ""}`}
+                    Continue
                   </button>
-                )}
-              </div>
-              <p className="mt-1 text-[12px] text-slate-500">
-                {attentionRows.length > 0
-                  ? `${attentionRows.length} field(s) need confirmation. High-confidence mappings are auto-accepted and hidden by default.`
-                  : "High-confidence mappings are accepted automatically. Expand to inspect the full mapping table."}
-              </p>
-              {!showAllMappings && autoAcceptedCount > 0 && (
-                <p className="mt-2 text-[12px] text-slate-500">
-                  {autoAcceptedCount} auto-accepted mapping{autoAcceptedCount === 1 ? "" : "s"} collapsed.
-                </p>
+                ) : null
+              }
+            >
+              {onboardingStage === "upload" && (
+                <UploadStepPanel
+                  dataset={dataset}
+                  name={name}
+                  onNameChange={setName}
+                  onCreate={handleCreate}
+                  onUploadClick={() => fileRef.current?.click()}
+                  fileInputRef={fileRef}
+                  onUploadChange={handleUpload}
+                  busy={busy}
+                />
               )}
-              {visibleRows.length === 0 ? (
-                <p className="mt-3 text-[13px] text-emerald-700">No uncertain mappings need attention.</p>
-              ) : (
-                <div className="mt-3 overflow-x-auto">
-                  <table className="min-w-full text-left text-[12px]">
-                    <thead className="text-[11px] uppercase tracking-wide text-slate-400">
-                      <tr>
-                        <th className="py-2 pr-3">Source</th>
-                        <th className="py-2 pr-3">WYZ field</th>
-                        <th className="py-2 pr-3">Confidence</th>
-                        <th className="py-2">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {visibleRows.map((row) => {
-                        const key = `${row.source_file}:${row.source_column}`;
-                        const draft = draftConfirms[key]?.canonical_field ?? row.canonical_field ?? "";
-                        return (
-                          <tr key={key} className="border-t border-gray-100">
-                            <td className="py-2 pr-3">
-                              <div className="font-medium text-slate-700">{row.source_column}</div>
-                              <div className="text-[11px] text-slate-400">{row.source_file}</div>
-                            </td>
-                            <td className="py-2 pr-3">
-                              <select
-                                value={draft}
-                                onChange={(event) =>
-                                  setDraftConfirms((prev) => ({
-                                    ...prev,
-                                    [key]: {
-                                      source_file: row.source_file,
-                                      source_column: row.source_column,
-                                      canonical_field: event.target.value,
-                                    },
-                                  }))
-                                }
-                                className="max-w-[220px] rounded-lg border border-[rgba(26,54,115,0.16)] px-2 py-1 text-[12px]"
-                              >
-                                {fieldOptions(row.file_role).map((field) => (
-                                  <option key={field.name} value={field.name}>
-                                    {field.name}
-                                  </option>
-                                ))}
-                              </select>
-                              <div className="text-[11px] text-slate-400">{row.origin}</div>
-                            </td>
-                            <td className="py-2 pr-3 tabular-nums">
-                              {row.final_confidence != null ? Number(row.final_confidence).toFixed(2) : "—"}
-                            </td>
-                            <td className="py-2 text-slate-600">{row.status}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+              {onboardingStage === "detect" && <DetectStepPanel dataset={dataset} />}
+              {onboardingStage === "map" && (
+                <MappingStepPanel
+                  dataset={dataset}
+                  draftConfirms={draftConfirms}
+                  setDraftConfirms={setDraftConfirms}
+                  showAllMappings={showAllMappings}
+                  setShowAllMappings={setShowAllMappings}
+                  onConfirm={handleConfirmMappings}
+                  busy={busy}
+                />
               )}
-              {visibleRows.length > 0 && (
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={handleConfirmMappings}
-                  className="mt-4 rounded-xl bg-[#1a3673] px-4 py-2.5 text-[13px] font-semibold text-white hover:bg-[#142a5c] disabled:opacity-60"
-                >
-                  Save mapping decisions
-                </button>
+              {onboardingStage === "validate" && (
+                <ValidateStepPanel dataset={dataset} onAnalyse={handleAnalyse} busy={busy} />
               )}
-            </section>
-          )}
-
-          {dataset?.readiness && (
-            <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm sm:p-6">
-              <h2 className="text-sm font-semibold text-[#1a3673]">4. Data readiness</h2>
-              <ReadinessList readiness={dataset.readiness} />
-              <button
-                type="button"
-                disabled={busy || !canStartAnalysis(dataset)}
-                onClick={handleAnalyse}
-                className="mt-4 inline-flex items-center gap-2 rounded-xl bg-[#fc7d25] px-4 py-2.5 text-[13px] font-semibold text-white hover:bg-[#e86f16] disabled:opacity-50"
-              >
-                <BarChart3 className="h-4 w-4" />
-                Run financial engine
-              </button>
-              {(dataset.status === DATASET_STATUSES.ANALYSING || isJobBusy(job?.status) || isJobBusy(job?.stage)) && (
-                <p className="mt-3 inline-flex items-center gap-2 text-[12px] text-slate-500">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  {job?.message || job?.stage || "Analysis in progress"}
-                </p>
-              )}
-            </section>
-          )}
-
-          {result && (
-            <AnalysisWorkspace
-              key={dataset?.dataset_id || result.dataset_id || "workspace"}
-              result={result}
-              datasetId={dataset?.dataset_id}
-            />
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ReadinessList({ readiness }) {
-  const items = readinessDisplayItems(readiness);
-  if (!items.length) {
-    return <p className="mt-3 text-[13px] text-emerald-700">No blocking data-quality issues reported by the analytics service.</p>;
-  }
-  return (
-    <ul className="mt-3 space-y-2">
-      {items.map((item) => (
-        <li key={`${item.label}-${item.detail}`} className="flex items-start gap-2 text-[13px] text-slate-600">
-          {item.ok ? (
-            <CheckCircle2 className="mt-0.5 h-4 w-4 text-emerald-600" />
-          ) : (
-            <AlertTriangle className="mt-0.5 h-4 w-4 text-amber-600" />
-          )}
-          <div>
-            <p>{item.label}</p>
-            {item.detail && (
-              <details className="mt-1 text-[11px] text-slate-400">
-                <summary className="cursor-pointer">Technical detail</summary>
-                <p className="mt-1">{item.detail}</p>
-              </details>
-            )}
+              {onboardingStage === "analyse" && <AnalyseStepPanel job={job} dataset={dataset} />}
+            </OnboardingShell>
           </div>
-        </li>
-      ))}
-    </ul>
+        </div>
+      )}
+    </div>
   );
 }
