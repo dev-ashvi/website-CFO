@@ -1,0 +1,50 @@
+# Caddy — TLS termination + same-origin SPA + analytics BFF
+#
+# Set WYZ_PILOT_DOMAIN to the public hostname (e.g. pilot.example.com).
+# ACME HTTP-01 uses :80; certificates stored in the caddy_data volume.
+
+{
+	email {$WYZ_ACME_EMAIL}
+}
+
+{$WYZ_PILOT_DOMAIN} {
+	encode gzip zstd
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+		-Server
+	}
+
+	# Public liveness only — no readiness / filesystem details.
+	handle /api/v1/analytics/health {
+		reverse_proxy analytics-api:8788
+	}
+
+	# All other analytics traffic through BFF (session gate + pilot token inject).
+	handle /api/v1/analytics/* {
+		reverse_proxy bff:8080 {
+			transport http {
+				read_timeout 600s
+				write_timeout 600s
+			}
+		}
+	}
+
+	# Optional SPA (built Vite dist). Same-origin /api/v1/analytics for the CFO pilot.
+	handle {
+		root * /srv/frontend
+		try_files {path} /index.html
+		file_server
+	}
+
+	request_body {
+		max_size {$WYZ_PROXY_MAX_BODY:120MB}
+	}
+
+	log {
+		output stdout
+		format json
+	}
+}

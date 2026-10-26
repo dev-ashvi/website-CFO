@@ -1,0 +1,107 @@
+# Oracle / production pilot override — use WITH the base compose file:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.pilot.yml --env-file /opt/wyz/.env.pilot up -d --build
+#
+# Effects:
+# - Remove host publish of analytics :8788 (private Docker network only)
+# - Bind-mount durable /data/wyz-analytics-work
+# - Add BFF (pilot-token inject) + Caddy (TLS + SPA)
+# - Docker log rotation
+#
+# Local P2/P3 workflow (docker-compose.yml alone) remains unchanged.
+
+name: wyz-analytics
+
+services:
+  analytics-api:
+    ports: !reset []
+    environment:
+      WYZ_RELEASE_SHA: ${WYZ_RELEASE_SHA:-unknown}
+      WYZ_ALLOWED_ORIGINS: ${WYZ_ALLOWED_ORIGINS}
+    volumes:
+      - type: bind
+        source: ${WYZ_HOST_WORK_DIR:-/data/wyz-analytics-work}
+        target: /data/wyz-analytics-work
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+    mem_limit: ${WYZ_API_MEM_LIMIT:-4g}
+
+  analytics-worker:
+    environment:
+      WYZ_RELEASE_SHA: ${WYZ_RELEASE_SHA:-unknown}
+    volumes:
+      - type: bind
+        source: ${WYZ_HOST_WORK_DIR:-/data/wyz-analytics-work}
+        target: /data/wyz-analytics-work
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+    mem_limit: ${WYZ_WORKER_MEM_LIMIT:-4g}
+
+  bff:
+    build:
+      context: ./bff
+      dockerfile: Dockerfile
+    image: wyz-analytics-bff:${WYZ_RELEASE_SHA:-local}
+    environment:
+      ANALYTICS_UPSTREAM: http://analytics-api:8788
+      WYZ_PILOT_API_TOKEN: ${WYZ_PILOT_API_TOKEN}
+      WYZ_ALLOWED_ORIGINS: ${WYZ_ALLOWED_ORIGINS}
+      WYZ_BFF_REQUIRE_BEARER: ${WYZ_BFF_REQUIRE_BEARER:-true}
+      WYZ_BFF_REJECT_DEMO: ${WYZ_BFF_REJECT_DEMO:-true}
+      WYZ_MAX_REQUEST_BODY_MB: ${WYZ_MAX_REQUEST_BODY_MB:-120}
+      WYZ_BFF_PROXY_TIMEOUT_MS: ${WYZ_BFF_PROXY_TIMEOUT_MS:-600000}
+      WYZ_RELEASE_SHA: ${WYZ_RELEASE_SHA:-unknown}
+    expose:
+      - "8080"
+    depends_on:
+      analytics-api:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2.8-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      WYZ_PILOT_DOMAIN: ${WYZ_PILOT_DOMAIN}
+      WYZ_ACME_EMAIL: ${WYZ_ACME_EMAIL:-}
+      WYZ_PROXY_MAX_BODY: ${WYZ_PROXY_MAX_BODY:-120MB}
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+      - ${WYZ_FRONTEND_DIST:-./frontend-dist}:/srv/frontend:ro
+    depends_on:
+      - bff
+      - analytics-api
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
+    restart: unless-stopped
+
+volumes:
+  # Keep named volume declared for local base file compatibility, but pilot bind-mounts host path.
+  wyz_analytics_data:
+    name: wyz_analytics_data
+  caddy_data:
+    name: wyz_caddy_data
+  caddy_config:
+    name: wyz_caddy_config

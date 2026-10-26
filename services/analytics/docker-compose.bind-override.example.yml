@@ -1,0 +1,14 @@
+# Optional: bind-mount local durable data for debugging (NOT default).
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.bind-override.example.yml up
+#
+# WARNING: Do not point this at production data casually.
+# Default compose uses a clean named volume instead.
+
+services:
+  analytics-api:
+    volumes:
+      - ${WYZ_BIND_WORK_DIR:-./.wyz-analytics-work}:/data/wyz-analytics-work
+  analytics-worker:
+    volumes:
+      - ${WYZ_BIND_WORK_DIR:-./.wyz-analytics-work}:/data/wyz-analytics-work
