@@ -40,6 +40,8 @@ export {
 } from "./session.js";
 export { normalizeSources } from "./ingestion.js";
 export {
+  buildBulkImpact,
+  buildProductMonthly,
   calculateMarketplace,
   countDistinctOrders,
   createEmptyFilters,

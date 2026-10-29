@@ -120,6 +120,10 @@ export default function MarketplaceIntelligencePage() {
   };
 
   const onAsk = async (question, chartId = null) => {
+    if (askLoading) return;
+    const text = String(question || "").trim();
+    if (!text) return;
+
     const context = buildInvestigationContext({
       sessionId: session.id,
       sectionId,
@@ -133,10 +137,7 @@ export default function MarketplaceIntelligencePage() {
     setAskLoading(true);
 
     const userId = `u-${++askTurnSeq}`;
-    setConversation((prev) => [
-      ...prev,
-      { id: userId, role: "user", content: String(question).slice(0, 500) },
-    ]);
+    setConversation((prev) => [...prev, { id: userId, role: "user", content: text.slice(0, 500) }]);
 
     const history = conversation
       .filter((turn) => turn.role === "user" || turn.role === "assistant")
@@ -145,7 +146,7 @@ export default function MarketplaceIntelligencePage() {
 
     try {
       const response = await askMarketplaceWyz({
-        question,
+        question: text,
         context,
         metrics: engine?.metrics || null,
         reconciliation: engine?.reconciliation || null,
@@ -169,10 +170,12 @@ export default function MarketplaceIntelligencePage() {
         },
       ]);
       if (response.status === "rate_limited") {
-        setAskError("Live Ask WYZ is rate-limited right now. Showing the calculated investigation.");
+        setAskError("Ask WYZ is receiving too many requests right now. Showing the calculated answer instead.");
+      } else if (response.status === "awaiting_calculations") {
+        setAskError("Upload or load a report first so Ask WYZ has metrics to cite.");
       }
-    } catch (err) {
-      setAskError(err?.message || "Ask WYZ is temporarily unavailable.");
+    } catch {
+      setAskError("Ask WYZ is temporarily unavailable. Try again in a moment.");
     } finally {
       setAskLoading(false);
     }

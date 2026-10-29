@@ -54,7 +54,7 @@ export async function askMarketplaceWyz({
   endpoint = MARKETPLACE_ASK_ENDPOINT,
   timeoutMs = ASK_REQUEST_TIMEOUT_MS,
 } = {}) {
-  const guided = investigate(question, context, metrics);
+  const guided = investigate(question, context, metrics, reconciliation);
   if (guided.status !== "answered") {
     return guided;
   }

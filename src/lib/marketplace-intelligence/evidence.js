@@ -82,8 +82,48 @@ export function selectEvidenceMetrics(metrics, reconciliation, context = {}) {
   const bulkOrders = (topline.bulkOrders || []).slice(0, 5).map((row) => ({
     amount: roundMoney(row.amount),
     productName: sanitizeProductLabel(row.productName),
-    week: clipText(row.week, 16),
+    // Intentionally omit order IDs from LLM evidence.
   }));
+
+  const bulkImpactRaw = products.bulkImpact || topline.bulkImpact || null;
+  const bulkImpact = bulkImpactRaw
+    ? {
+        bulkOrderCount: Number.isFinite(bulkImpactRaw.bulkOrderCount) ? bulkImpactRaw.bulkOrderCount : null,
+        bulkSales: roundMoney(bulkImpactRaw.bulkSales),
+        bulkShareOfGross: roundRatio(bulkImpactRaw.bulkShareOfGross),
+        productsLifted: (bulkImpactRaw.productsLifted || []).slice(0, 4).map((row) => ({
+          productName: sanitizeProductLabel(row.productName),
+          bulkOrders: Number.isFinite(row.bulkOrders) ? row.bulkOrders : null,
+          bulkSales: roundMoney(row.bulkSales),
+          rank: Number.isFinite(row.rank) ? row.rank : null,
+          bulkShareOfProduct: roundRatio(row.bulkShareOfProduct),
+        })),
+      }
+    : null;
+
+  const feeBurdenByOrderSize = (products.orderSizes?.buckets || topline.orderSizes?.buckets || [])
+    .slice(0, 4)
+    .map((row) => ({
+      id: clipText(row.id, 20),
+      label: clipText(row.label, 40),
+      orders: Number.isFinite(row.orders) ? row.orders : null,
+      sales: roundMoney(row.sales),
+      fees: row.feesAvailable ? roundMoney(row.fees) : null,
+      feeBurden: row.feesAvailable ? roundRatio(row.feeBurden) : null,
+      feesAvailable: Boolean(row.feesAvailable),
+    }));
+
+  const productMonthly = (products.productMonthly || [])
+    .slice(0, 5)
+    .map((row) => ({
+      productName: sanitizeProductLabel(row.productName),
+      months: (row.months || []).slice(-4).map((m) => ({
+        month: clipText(m.month, 16),
+        sales: roundMoney(m.sales),
+        orders: Number.isFinite(m.orders) ? m.orders : null,
+        growth: roundRatio(m.growth),
+      })),
+    }));
 
   const whereMoneyGoes = (economics.whereMoneyGoes || []).slice(0, 6).map((row) => ({
     id: clipText(row.id, 40),
@@ -128,6 +168,9 @@ export function selectEvidenceMetrics(metrics, reconciliation, context = {}) {
     "CSV Other credits are unexplained and are not assigned to tax, fees, or revenue without evidence.",
     "Bank transfers and GST appear on the Unified Summary PDF only when present.",
     "Opening and closing Amazon account balances are not in these exports.",
+    productMonthly.length
+      ? "Product monthly series covers top products only (aggregated; no order-level rows)."
+      : "Product-level monthly comparisons are unavailable for the current scope.",
   ];
 
   return {
@@ -153,6 +196,9 @@ export function selectEvidenceMetrics(metrics, reconciliation, context = {}) {
     kpis: baseKpis,
     monthly,
     bulkOrders,
+    bulkImpact,
+    feeBurdenByOrderSize,
+    productMonthly,
     whereMoneyGoes,
     products: productRows,
     waterfall,
@@ -210,6 +256,8 @@ export function buildAskPayload({
   // Trim products / monthly / history if oversized.
   payload.evidence.products = payload.evidence.products.slice(0, 5);
   payload.evidence.monthly = payload.evidence.monthly.slice(-3);
+  payload.evidence.productMonthly = (payload.evidence.productMonthly || []).slice(0, 3);
+  payload.evidence.feeBurdenByOrderSize = (payload.evidence.feeBurdenByOrderSize || []).slice(0, 4);
   payload.history = payload.history.slice(-2);
   return payload;
 }

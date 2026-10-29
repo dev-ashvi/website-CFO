@@ -38,6 +38,12 @@ function ContextChips({ context }) {
   );
 }
 
+function modeLabel(turn) {
+  if (turn.liveModel || turn.source === "ai") return "Live AI answer";
+  if (turn.status === "rate_limited") return "Calculated answer · live temporarily limited";
+  return "Calculated answer · live unavailable";
+}
+
 function TurnCard({ turn }) {
   const isUser = turn.role === "user";
   return (
@@ -47,21 +53,29 @@ function TurnCard({ turn }) {
       }`}
     >
       {!isUser ? (
-        <p className="text-[10px] font-semibold uppercase tracking-wide text-[#c55a12]">
-          {turn.liveModel ? "Live Ask WYZ" : "Calculated investigation"}
-          {turn.source === "guided" && turn.liveModel === false ? " · offline fallback" : ""}
+        <p
+          className={`text-[10px] font-semibold uppercase tracking-wide ${
+            turn.liveModel ? "text-[#0f7a4a]" : "text-[#c55a12]"
+          }`}
+        >
+          {modeLabel(turn)}
         </p>
       ) : null}
       <p className={`whitespace-pre-wrap ${isUser ? "text-white" : "text-slate-700"}`}>{turn.content}</p>
       {!isUser && turn.evidence?.length ? (
-        <ul className="mt-2 space-y-1 border-t border-slate-100 pt-2 text-xs text-slate-600">
-          {turn.evidence.slice(0, 6).map((item) => (
-            <li key={`${item.metricId}-${item.label}`} className="flex justify-between gap-3">
-              <span>{item.label}</span>
-              <span className="font-semibold text-[#1a3673]">{formatEvidenceValue(item.value)}</span>
-            </li>
-          ))}
-        </ul>
+        <div className="mt-2 border-t border-slate-100 pt-2">
+          <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+            Verified session metrics
+          </p>
+          <ul className="space-y-1 text-xs text-slate-600">
+            {turn.evidence.slice(0, 6).map((item) => (
+              <li key={`${item.metricId}-${item.label}`} className="flex justify-between gap-3">
+                <span>{item.label}</span>
+                <span className="font-semibold text-[#1a3673]">{formatEvidenceValue(item.value)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
       ) : null}
       {!isUser && turn.limitations?.length ? (
         <div className="mt-2 rounded-lg bg-[#fff8f3] px-2 py-1.5 text-[11px] leading-4 text-[#8a4b16]">
@@ -71,7 +85,7 @@ function TurnCard({ turn }) {
         </div>
       ) : null}
       {!isUser && turn.chartRefs?.length ? (
-        <p className="mt-2 text-[11px] text-slate-500">Related: {turn.chartRefs.join(", ")}</p>
+        <p className="mt-2 text-[11px] text-slate-500">See dashboard: {turn.chartRefs.join(", ")}</p>
       ) : null}
     </div>
   );
@@ -90,6 +104,7 @@ export default function AskWyzPanel({
   const section = getSection(sectionId);
   const [draft, setDraft] = useState("");
   const bottomRef = useRef(null);
+  const submittingRef = useRef(false);
   const latest = conversation[conversation.length - 1];
   const followUps = latest?.followUps || [];
 
@@ -99,9 +114,12 @@ export default function AskWyzPanel({
 
   const submit = (question) => {
     const text = String(question || draft).trim();
-    if (!text || loading) return;
+    if (!text || loading || submittingRef.current) return;
+    submittingRef.current = true;
     setDraft("");
-    onAsk?.(text);
+    Promise.resolve(onAsk?.(text)).finally(() => {
+      submittingRef.current = false;
+    });
   };
 
   return (
@@ -116,7 +134,7 @@ export default function AskWyzPanel({
           <h2 className="text-base font-semibold">Ask WYZ</h2>
           <span className="inline-flex items-center gap-1 rounded-full bg-[#fc7c23]/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#ffd2ad]">
             <Sparkles size={10} aria-hidden />
-            Live
+            Live capable
           </span>
         </div>
         {onToggleExpand ? (
@@ -135,17 +153,23 @@ export default function AskWyzPanel({
 
       <div className={`mt-4 space-y-2 overflow-y-auto pr-1 ${expanded ? "max-h-[28rem]" : "max-h-64"}`}>
         {conversation.length === 0 ? (
-          <p className="text-sm text-[#9eb0d0]">Ask a question or pick a suggestion. Numbers come from this session’s calculations.</p>
+          <p className="text-sm text-[#9eb0d0]">
+            Ask a question or pick a suggestion. Numbers always come from this session’s calculations.
+          </p>
         ) : (
           conversation.map((turn) => <TurnCard key={turn.id} turn={turn} />)
         )}
         {loading ? (
-          <p className="inline-flex items-center gap-2 text-sm text-[#d5e0f2]">
+          <p className="inline-flex items-center gap-2 rounded-xl bg-white/5 px-3 py-2 text-sm text-[#d5e0f2]">
             <Loader2 size={14} className="animate-spin" aria-hidden />
-            Investigating with verified metrics…
+            Reviewing verified metrics…
           </p>
         ) : null}
-        {error ? <p className="rounded-lg bg-[#5c1d1d] px-3 py-2 text-xs text-[#ffd0d0]">{error}</p> : null}
+        {error ? (
+          <p className="rounded-lg bg-[#5c1d1d]/80 px-3 py-2 text-xs text-[#ffd0d0]" role="alert">
+            {error}
+          </p>
+        ) : null}
         <div ref={bottomRef} />
       </div>
 

@@ -248,18 +248,55 @@ function answerFor(question, metrics, context) {
     };
   }
 
-  if (/growing or declining|product.*grow|product.*declin/.test(q)) {
-    const months = monthSeries(metrics);
+  if (/growing or declining|product.*grow|product.*declin|period-over-period product|product monthly/.test(q)) {
+    const series = metrics?.sections?.product_performance?.productMonthly || [];
     items.push(evidence("gross_product_sales", "Gross product sales", kpis.grossProductSales, "Order Payment product charges"));
+    if (series.length) {
+      for (const row of series.slice(0, 3)) {
+        const latest = row.months?.[row.months.length - 1];
+        if (latest) {
+          items.push(
+            evidence(
+              `product_month:${row.productName}:${latest.month}`,
+              `${row.productName} ${latest.month}`,
+              latest.sales,
+              "Product monthly aggregation",
+            ),
+          );
+          if (latest.growth != null) {
+            items.push(
+              evidence(
+                `product_growth:${row.productName}:${latest.month}`,
+                `${row.productName} MoM`,
+                latest.growth,
+                "Product MoM",
+              ),
+            );
+          }
+        }
+      }
+      const lead = series[0];
+      const latest = lead?.months?.[lead.months.length - 1];
+      return {
+        text: latest
+          ? `Among top products, ${lead.productName} latest month ${latest.month} is ${formatInr(latest.sales)}${
+              latest.growth != null ? ` (${formatPct(latest.growth)} MoM)` : ""
+            }. Product monthly series is aggregated for top SKUs only — not a full catalogue forecast.`
+          : "Product monthly series is present but incomplete for the current scope.",
+        evidence: items,
+        followUps: ["How do bulk orders affect product rankings?"],
+      };
+    }
+    const months = monthSeries(metrics);
     if (months.length >= 2) {
       const latest = months[months.length - 1];
       const prior = months[months.length - 2];
       items.push(evidence("latest_month", `${latest.month} sales`, latest.sales, "Monthly aggregation"));
       items.push(evidence("prior_month", `${prior.month} sales`, prior.sales, "Monthly aggregation"));
       return {
-        text: `Product-level month-over-month growth by SKU is not fully broken out in the current export aggregation. Overall sales moved from ${formatInr(
+        text: `Product-level monthly comparisons are unavailable in this scope. Overall sales moved from ${formatInr(
           prior.sales,
-        )} in ${prior.month} to ${formatInr(latest.sales)} in ${latest.month} (${formatPct(latest.growth)} MoM). Use the product filter to inspect one SKU’s contribution.`,
+        )} in ${prior.month} to ${formatInr(latest.sales)} in ${latest.month} (${formatPct(latest.growth)} MoM).`,
         evidence: items,
       };
     }
@@ -269,17 +306,52 @@ function answerFor(question, metrics, context) {
     };
   }
 
-  if (/bulk orders affect product|product rankings/.test(q)) {
+  if (/bulk orders affect product|product rankings|bulk-order impact|bulk impact/.test(q)) {
     const bulk = metrics?.sections?.topline?.bulkOrders || [];
+    const impact = metrics?.sections?.product_performance?.bulkImpact || metrics?.sections?.topline?.bulkImpact;
     const products = metrics?.sections?.product_performance?.products || [];
     items.push(evidence("bulk_orders", "Bulk-order candidates", bulk.length, "Bulk threshold"));
+    if (impact) {
+      items.push(evidence("bulk_sales", "Bulk candidate sales", impact.bulkSales, "Bulk threshold sales"));
+      items.push(evidence("bulk_share", "Bulk share of gross", impact.bulkShareOfGross, "Bulk sales / gross"));
+      for (const row of (impact.productsLifted || []).slice(0, 2)) {
+        items.push(evidence(`bulk_product:${row.productName}`, row.productName, row.bulkSales, "Bulk sales for product"));
+      }
+    }
     if (products[0]) items.push(evidence("top_product", products[0].productName, products[0].sales, "Product sales"));
     return {
-      text: bulk.length
-        ? `There are ${bulk.length} bulk-order candidate(s). The largest (${formatInr(bulk[0].amount)} · ${
-            bulk[0].productName || "product"
-          }) can raise that SKU’s revenue rank even if day-to-day demand is unchanged. Rankings use gross product sales, not run-rate.`
+      text: impact?.bulkOrderCount
+        ? `Bulk candidates: ${impact.bulkOrderCount} order(s) totaling ${formatInr(
+            impact.bulkSales,
+          )} (${formatPct(impact.bulkShareOfGross)} of gross). Most affected ranked product: ${
+            impact.productsLifted?.[0]
+              ? `${impact.productsLifted[0].productName} (rank #${impact.productsLifted[0].rank}, bulk ${formatInr(
+                  impact.productsLifted[0].bulkSales,
+                )})`
+              : "n/a"
+          }. Rankings use gross product sales, so bulk rows can lift a SKU without changing run-rate demand.`
         : "No bulk-order candidates detected, so current product rankings are less likely to be distorted by single large orders.",
+      evidence: items,
+    };
+  }
+
+  if (/fee burden by order|order size.*fee|fee.*order size/.test(q)) {
+    const buckets = metrics?.sections?.product_performance?.orderSizes?.buckets || [];
+    const withFees = buckets.filter((row) => row.feesAvailable && row.feeBurden != null);
+    for (const row of withFees.slice(0, 4)) {
+      items.push(evidence(`fee_bucket:${row.id}`, row.label, row.feeBurden, "abs(fees)/sales in bucket"));
+    }
+    if (!withFees.length) {
+      return {
+        text: "Fee burden by order-size bucket is unavailable because Amazon fees were missing on those order rows. Missing fees are not treated as zero.",
+        evidence: items,
+      };
+    }
+    const top = [...withFees].sort((a, b) => (b.feeBurden || 0) - (a.feeBurden || 0))[0];
+    return {
+      text: `Highest fee burden by order size is ${top.label} at ${formatPct(top.feeBurden)} (${formatInr(
+        top.fees,
+      )} fees on ${formatInr(top.sales)} sales). This uses reported Amazon fee amounts on Order Payment rows only.`,
       evidence: items,
     };
   }

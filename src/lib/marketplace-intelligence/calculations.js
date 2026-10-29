@@ -190,10 +190,10 @@ function orderSizeBuckets(orderTx) {
   const p90 = percentile(sizes, 0.9);
   const bulkThreshold = Math.max(median * 3, p90 || 0);
   const buckets = [
-    { id: "0_250", label: "₹0–250", min: 0, max: 250, orders: 0, sales: 0 },
-    { id: "250_500", label: "₹250–500", min: 250, max: 500, orders: 0, sales: 0 },
-    { id: "500_1000", label: "₹500–1,000", min: 500, max: 1000, orders: 0, sales: 0 },
-    { id: "1000_plus", label: "₹1,000+", min: 1000, max: Infinity, orders: 0, sales: 0 },
+    { id: "0_250", label: "₹0–250", min: 0, max: 250, orders: 0, sales: 0, fees: 0, feeRowsReported: 0 },
+    { id: "250_500", label: "₹250–500", min: 250, max: 500, orders: 0, sales: 0, fees: 0, feeRowsReported: 0 },
+    { id: "500_1000", label: "₹500–1,000", min: 500, max: 1000, orders: 0, sales: 0, fees: 0, feeRowsReported: 0 },
+    { id: "1000_plus", label: "₹1,000+", min: 1000, max: Infinity, orders: 0, sales: 0, fees: 0, feeRowsReported: 0 },
   ];
   const bulkOrders = [];
   for (const tx of orderTx) {
@@ -201,6 +201,10 @@ function orderSizeBuckets(orderTx) {
     const bucket = buckets.find((b) => amount >= b.min && amount < b.max) || buckets[buckets.length - 1];
     bucket.orders += 1;
     bucket.sales = roundMoney(bucket.sales + amount);
+    if (!tx.amazonFeesMissing) {
+      bucket.feeRowsReported += 1;
+      bucket.fees = roundMoney(bucket.fees + (tx.amazonFees || 0));
+    }
     if (amount >= bulkThreshold && bulkThreshold > 0) {
       bulkOrders.push({
         orderId: tx.orderId,
@@ -212,11 +216,87 @@ function orderSizeBuckets(orderTx) {
     }
   }
   return {
-    buckets,
+    buckets: buckets.map((bucket) => ({
+      id: bucket.id,
+      label: bucket.label,
+      orders: bucket.orders,
+      sales: bucket.sales,
+      fees: bucket.feeRowsReported ? bucket.fees : null,
+      feesAvailable: bucket.feeRowsReported > 0,
+      feeBurden: bucket.feeRowsReported ? ratio(Math.abs(bucket.fees), bucket.sales) : null,
+    })),
     median,
     p90,
     bulkThreshold: roundMoney(bulkThreshold),
     bulkOrders: bulkOrders.sort((a, b) => b.amount - a.amount),
+  };
+}
+
+/** Top products × recent months — aggregated only (no order rows). */
+export function buildProductMonthly(orderTx, { topN = 5, monthCount = 4 } = {}) {
+  const productTotals = new Map();
+  const cell = new Map();
+  const months = new Set();
+  for (const tx of orderTx || []) {
+    const month = monthKey(tx.postedAt);
+    const productName = tx.productName || "Unspecified product";
+    if (!month) continue;
+    months.add(month);
+    productTotals.set(productName, roundMoney((productTotals.get(productName) || 0) + (tx.productCharges || 0)));
+    const key = `${productName}::${month}`;
+    if (!cell.has(key)) cell.set(key, { productName, month, sales: 0, orderIds: new Set() });
+    const row = cell.get(key);
+    row.sales = roundMoney(row.sales + (tx.productCharges || 0));
+    if (tx.orderId && tx.orderId !== "---") row.orderIds.add(tx.orderId);
+  }
+  const recentMonths = [...months].sort().slice(-monthCount);
+  const topProducts = [...productTotals.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, topN)
+    .map(([name]) => name);
+
+  return topProducts.map((productName) => {
+    const series = recentMonths.map((month) => {
+      const row = cell.get(`${productName}::${month}`);
+      return {
+        month,
+        sales: row ? row.sales : 0,
+        orders: row ? row.orderIds.size : 0,
+      };
+    });
+    for (let i = 0; i < series.length; i += 1) {
+      const prev = i > 0 ? series[i - 1] : null;
+      series[i].growth = prev && prev.sales ? growthRate(series[i].sales, prev.sales) : null;
+    }
+    return { productName, months: series };
+  });
+}
+
+/** How bulk candidates affect product ranks (aggregated). */
+export function buildBulkImpact(products, bulkOrders, grossProductSales) {
+  const byProduct = new Map();
+  for (const row of bulkOrders || []) {
+    const name = row.productName || "Unspecified product";
+    if (!byProduct.has(name)) byProduct.set(name, { productName: name, bulkOrders: 0, bulkSales: 0 });
+    const item = byProduct.get(name);
+    item.bulkOrders += 1;
+    item.bulkSales = roundMoney(item.bulkSales + (row.amount || 0));
+  }
+  const rank = new Map((products || []).map((row, index) => [row.productName, index + 1]));
+  const productsLifted = [...byProduct.values()]
+    .map((row) => ({
+      ...row,
+      rank: rank.get(row.productName) || null,
+      bulkShareOfProduct: ratio(row.bulkSales, products.find((p) => p.productName === row.productName)?.sales || 0),
+    }))
+    .sort((a, b) => b.bulkSales - a.bulkSales)
+    .slice(0, 5);
+  const bulkSales = sumMoney(productsLifted.map((row) => row.bulkSales));
+  return {
+    bulkOrderCount: (bulkOrders || []).length,
+    bulkSales,
+    bulkShareOfGross: ratio(bulkSales, grossProductSales),
+    productsLifted,
   };
 }
 
@@ -403,10 +483,12 @@ export function calculateMarketplace(normalized, filters = createEmptyFilters())
   const monthly = buildMonthly(orders);
   const weekly = buildWeekly(orders);
   const products = buildProducts(orders, refunds);
+  const orderSizes = orderSizeBuckets(orders);
+  const productMonthly = buildProductMonthly(orders, { topN: 5, monthCount: 4 });
+  const bulkImpact = buildBulkImpact(products, orderSizes.bulkOrders, grossProductSales);
   const top8 = products.slice(0, 8);
   const top8Sales = sumMoney(top8.map((row) => row.sales));
   const top8Concentration = ratio(top8Sales, grossProductSales);
-  const orderSizes = orderSizeBuckets(orders);
   const moneyTaken = whereAmazonTakesMoney(scoped);
   const bankTransfers = normalized?.summary?.transfersToBank ?? normalized?.summary?.transfers ?? null;
 
@@ -489,6 +571,7 @@ export function calculateMarketplace(normalized, filters = createEmptyFilters())
         })),
         orderSizes,
         bulkOrders: orderSizes.bulkOrders.slice(0, 20),
+        bulkImpact,
       },
       amazon_economics: {
         sellingFees,
@@ -530,6 +613,8 @@ export function calculateMarketplace(normalized, filters = createEmptyFilters())
         top8Sales,
         orderSizes,
         trends: monthly,
+        productMonthly,
+        bulkImpact,
       },
       profitability: {
         grossProductSales,
