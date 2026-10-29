@@ -125,16 +125,37 @@ function clientIp(req) {
   return String(req.socket?.remoteAddress || "unknown").slice(0, 64);
 }
 
+function sameHostOrigin(req, origin) {
+  try {
+    const parsed = new URL(origin);
+    const host = String(req.headers.host || "")
+      .split(":")[0]
+      .trim()
+      .toLowerCase();
+    if (!host) return false;
+    // Allow exact host or www/apex pair for the request host.
+    const originHost = parsed.hostname.toLowerCase();
+    if (originHost === host) return true;
+    if (host.startsWith("www.") && originHost === host.slice(4)) return true;
+    if (originHost.startsWith("www.") && host === originHost.slice(4)) return true;
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 function checkOrigin(req) {
   const allow = allowedOrigins();
-  if (!allow.length) return { ok: true, mode: "unrestricted" };
   const origin = String(req.headers.origin || "").trim();
   if (!origin) {
-    // Same-origin navigations / server-to-server without Origin are allowed when configured
-    // hosts still need the browser Origin header for CORS POSTs from other sites.
+    // Non-browser / same-origin tooling may omit Origin. Rate limits still apply.
     return { ok: true, mode: "no_origin" };
   }
   if (allow.includes(origin)) return { ok: true, mode: "allowed" };
+  // Browser POSTs from the deployed site itself must work even if the env allowlist
+  // omitted the apex/www twin. Cross-site Origins remain blocked unless listed.
+  if (sameHostOrigin(req, origin)) return { ok: true, mode: "same_host" };
+  if (!allow.length) return { ok: true, mode: "unrestricted" };
   return { ok: false, mode: "blocked" };
 }
 

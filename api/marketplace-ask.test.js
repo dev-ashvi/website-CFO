@@ -109,11 +109,19 @@ describe("api/marketplace-ask NVIDIA proxy (Stage 3.1)", () => {
     assert.equal(source.includes("console.error(\"[marketplace-ask]\", body"), false);
   });
 
-  it("reports origin allowlist behavior", () => {
+  it("reports origin allowlist behavior and same-host browser POSTs", () => {
     const prev = process.env.WYZ_MARKETPLACE_ASK_ALLOWED_ORIGINS;
     process.env.WYZ_MARKETPLACE_ASK_ALLOWED_ORIGINS = "https://example.com";
-    assert.equal(__test.checkOrigin({ headers: { origin: "https://evil.test" } }).ok, false);
-    assert.equal(__test.checkOrigin({ headers: { origin: "https://example.com" } }).ok, true);
+    assert.equal(__test.checkOrigin({ headers: { origin: "https://evil.test", host: "financewyz.ai" } }).ok, false);
+    assert.equal(__test.checkOrigin({ headers: { origin: "https://example.com", host: "financewyz.ai" } }).ok, true);
+    assert.equal(
+      __test.checkOrigin({ headers: { origin: "https://financewyz.ai", host: "financewyz.ai" } }).ok,
+      true,
+    );
+    assert.equal(
+      __test.checkOrigin({ headers: { origin: "https://www.financewyz.ai", host: "financewyz.ai" } }).ok,
+      true,
+    );
     if (prev == null) delete process.env.WYZ_MARKETPLACE_ASK_ALLOWED_ORIGINS;
     else process.env.WYZ_MARKETPLACE_ASK_ALLOWED_ORIGINS = prev;
   });
