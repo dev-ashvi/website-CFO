@@ -18,7 +18,10 @@ const nav = [
   },
   {
     label: "WYZ Tools",
-    children: [{ label: "Cashflow Assessment", href: "/runway-simulator" }],
+    children: [
+      { label: "Cashflow Assessment", href: "/runway-simulator" },
+      { label: "Marketplace Intelligence", href: "/marketplace-intelligence" },
+    ],
   },
   {
     label: "Trust",
