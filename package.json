@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "node ./node_modules/vite/bin/vite.js build",
     "preview": "vite preview",
-    "test": "node --test src/lib/**/*.test.js src/api/**/*.test.js scripts/**/*.test.js",
+    "test": "node --test src/lib/**/*.test.js src/api/**/*.test.js api/**/*.test.js scripts/**/*.test.js",
     "analytics:worker": "node scripts/run-analytics-worker.js",
     "test:financial": "node --test src/lib/financial-simulator/**/*.test.js",
     "benchmark:ai": "node scripts/run-wyz-ai-benchmark.js",

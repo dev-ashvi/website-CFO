@@ -49,10 +49,21 @@ export { normalizeProductName } from "./classify.js";
 export { reconcileSettlement } from "./reconciliation.js";
 export {
   ASK_WYZ_DISCLOSURE,
+  ASK_WYZ_DISCLOSURE_LIVE,
   ASK_WYZ_MODE,
+  ASK_WYZ_MODE_LIVE,
   buildInvestigationContext,
   investigate,
 } from "./investigations.js";
+export {
+  EVIDENCE_SCHEMA_VERSION,
+  MAX_PAYLOAD_CHARS,
+  MAX_QUESTION_CHARS,
+  buildAskPayload,
+  selectEvidenceMetrics,
+  validateAskPayload,
+} from "./evidence.js";
+export { MARKETPLACE_ASK_ENDPOINT, askMarketplaceWyz } from "./askLive.js";
 export { METRIC_DEFINITIONS } from "./metricDefinitions.js";
 export { formatCount, formatInr, formatPct, parseIndianNumber } from "./money.js";
 export { normalizeAmazonCsvText } from "./normalize.js";

@@ -89,7 +89,7 @@ export default function SourcePanel({
         <div>
           <h2 className="text-base font-semibold text-[#1a3673]">Sources for this session</h2>
           <p className="mt-1 max-w-xl text-sm leading-6 text-slate-500">
-            Files stay in this browser tab. They are not saved on the site and are not visible to another visitor.
+            Files stay in this browser tab and are not saved on the site. Ask WYZ may send calculated metrics (never CSV/PDF bytes) to WYZ’s AI service.
           </p>
         </div>
         <div className="flex items-center gap-2">

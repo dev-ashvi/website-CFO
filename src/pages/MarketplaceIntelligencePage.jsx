@@ -8,12 +8,12 @@ import SectionPanel from "../components/marketplace-intelligence/SectionPanel.js
 import SourcePanel from "../components/marketplace-intelligence/SourcePanel.jsx";
 import {
   SECTIONS,
+  askMarketplaceWyz,
   attachSourceFile,
   buildInvestigationContext,
   createEmptyFilters,
   createMarketplaceSession,
   detachSourceFile,
-  investigate,
   requestSampleDataset,
   runMarketplaceEngine,
   sessionSummary,
@@ -22,11 +22,20 @@ import {
 const LIMITATIONS =
   "Product profit needs actual product costs. Units and referral-fee splits are unavailable in this Amazon export. CSV Other credits are unexplained and are not treated as tax or fees.";
 
+const PRIVACY_READY =
+  "Session files stay in this browser tab. Ask WYZ may send calculated metrics (not CSV/PDF bytes) to WYZ’s AI service.";
+
+let askTurnSeq = 0;
+
 export default function MarketplaceIntelligencePage() {
   const [session, setSession] = useState(() => createMarketplaceSession());
   const [sectionId, setSectionId] = useState(SECTIONS[0].id);
   const [notice, setNotice] = useState("");
-  const [response, setResponse] = useState(null);
+  const [conversation, setConversation] = useState([]);
+  const [askContext, setAskContext] = useState(null);
+  const [askLoading, setAskLoading] = useState(false);
+  const [askError, setAskError] = useState(null);
+  const [askExpanded, setAskExpanded] = useState(false);
   const [filters, setFilters] = useState(() => createEmptyFilters());
   const [engine, setEngine] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -86,14 +95,16 @@ export default function MarketplaceIntelligencePage() {
       return;
     }
     setSession(result.session);
-    setResponse(null);
+    setConversation([]);
+    setAskError(null);
     setFilters(createEmptyFilters());
     setNotice(result.classification.message);
   };
 
   const onClear = (slot) => {
     setSession((current) => detachSourceFile(current, slot));
-    setResponse(null);
+    setConversation([]);
+    setAskError(null);
     setFilters(createEmptyFilters());
     setNotice("File removed from this session.");
     setSourcesCollapsed(false);
@@ -102,21 +113,69 @@ export default function MarketplaceIntelligencePage() {
   const onSample = () => {
     const sample = requestSampleDataset(createMarketplaceSession());
     setSession(sample.session);
-    setResponse(null);
+    setConversation([]);
+    setAskError(null);
     setFilters(createEmptyFilters());
     setNotice(sample.message);
   };
 
-  const onAsk = (question, chartId = null) => {
+  const onAsk = async (question, chartId = null) => {
     const context = buildInvestigationContext({
       sessionId: session.id,
       sectionId,
       dateRange: filters.dateRange,
       product: filters.products?.[0] || null,
       filters,
-      chartId,
+      chartId: chartId || askContext?.chartId || null,
     });
-    setResponse(investigate(question, context, engine?.metrics || null));
+    setAskContext(context);
+    setAskError(null);
+    setAskLoading(true);
+
+    const userId = `u-${++askTurnSeq}`;
+    setConversation((prev) => [
+      ...prev,
+      { id: userId, role: "user", content: String(question).slice(0, 500) },
+    ]);
+
+    const history = conversation
+      .filter((turn) => turn.role === "user" || turn.role === "assistant")
+      .slice(-4)
+      .map((turn) => ({ role: turn.role, content: turn.content }));
+
+    try {
+      const response = await askMarketplaceWyz({
+        question,
+        context,
+        metrics: engine?.metrics || null,
+        reconciliation: engine?.reconciliation || null,
+        history,
+      });
+
+      const assistantId = `a-${++askTurnSeq}`;
+      setConversation((prev) => [
+        ...prev,
+        {
+          id: assistantId,
+          role: "assistant",
+          content: response.answer || "No answer yet.",
+          evidence: response.evidence || [],
+          limitations: response.limitations,
+          followUps: response.followUps || [],
+          chartRefs: response.chartRefs || [],
+          liveModel: Boolean(response.liveModel),
+          source: response.source || "guided",
+          status: response.status,
+        },
+      ]);
+      if (response.status === "rate_limited") {
+        setAskError("Live Ask WYZ is rate-limited right now. Showing the calculated investigation.");
+      }
+    } catch (err) {
+      setAskError(err?.message || "Ask WYZ is temporarily unavailable.");
+    } finally {
+      setAskLoading(false);
+    }
   };
 
   return (
@@ -154,9 +213,9 @@ export default function MarketplaceIntelligencePage() {
                 <h1 className="text-xl font-semibold tracking-tight text-[#1a3673] sm:text-2xl">
                   Marketplace analysis
                 </h1>
-                <p className="inline-flex items-center gap-1.5 text-xs text-slate-500">
+                <p className="inline-flex items-center gap-1.5 text-xs text-slate-500" title={PRIVACY_READY}>
                   <Shield size={12} aria-hidden />
-                  Session-only · {summary.persistence}
+                  Session files local · metrics may go to Ask WYZ
                 </p>
               </div>
             ) : (
@@ -203,7 +262,16 @@ export default function MarketplaceIntelligencePage() {
                 filters={filters}
                 onChange={(next) => {
                   setFilters(next);
-                  setResponse(null);
+                  setAskContext((prev) =>
+                    prev
+                      ? {
+                          ...prev,
+                          dateRange: next.dateRange,
+                          product: next.products?.[0] || null,
+                          filters: next,
+                        }
+                      : prev,
+                  );
                 }}
                 reconciliationStatus={engine.reconciliation?.status}
                 reconciliationLabel={engine.reconciliation?.statusLabel}
@@ -220,7 +288,9 @@ export default function MarketplaceIntelligencePage() {
                   type="button"
                   onClick={() => {
                     setSectionId(section.id);
-                    setResponse(null);
+                    setAskContext((prev) =>
+                      prev ? { ...prev, sectionId: section.id, chartId: null } : prev,
+                    );
                   }}
                   className={`shrink-0 rounded-full px-3 py-2 text-xs font-semibold transition-colors sm:px-4 sm:text-sm ${
                     active
@@ -235,14 +305,34 @@ export default function MarketplaceIntelligencePage() {
             })}
           </div>
 
-          <div className="mt-4 grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
+          <div
+            className={`mt-4 grid items-start gap-4 ${
+              askExpanded ? "lg:grid-cols-[minmax(0,1fr)_380px]" : "lg:grid-cols-[minmax(0,1fr)_300px]"
+            }`}
+          >
             <SectionPanel
               sectionId={sectionId}
               engine={engine}
               onInvestigate={(chartId, question) => onAsk(question, chartId)}
               limitations={ready ? LIMITATIONS : null}
             />
-            <AskWyzPanel sectionId={sectionId} response={response} onAsk={(question) => onAsk(question)} />
+            <AskWyzPanel
+              sectionId={sectionId}
+              context={
+                askContext || {
+                  sectionId,
+                  product: filters.products?.[0] || null,
+                  dateRange: filters.dateRange,
+                  chartId: null,
+                }
+              }
+              conversation={conversation}
+              loading={askLoading}
+              error={askError}
+              expanded={askExpanded}
+              onToggleExpand={() => setAskExpanded((value) => !value)}
+              onAsk={(question) => onAsk(question)}
+            />
           </div>
         </div>
       </main>

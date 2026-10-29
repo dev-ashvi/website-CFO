@@ -96,7 +96,7 @@ export async function askMarketplaceWyz({
           mode: "deterministic_guided",
           status: "rate_limited",
           answer: `${guided.answer} (Live Ask WYZ is temporarily rate-limited; showing the calculated investigation instead.)`,
-          followUps: [],
+          followUps: guided.followUps || [],
         };
       }
       return {
@@ -105,12 +105,16 @@ export async function askMarketplaceWyz({
         source: "guided",
         liveModel: false,
         mode: "deterministic_guided",
-        followUps: [],
+        followUps: guided.followUps || [],
       };
     }
 
     const payload = await res.json();
-    return mapLiveResponse(payload, guided, guided.context);
+    const mapped = mapLiveResponse(payload, guided, guided.context);
+    if (!mapped.followUps?.length && guided.followUps?.length) {
+      mapped.followUps = guided.followUps;
+    }
+    return mapped;
   } catch {
     return {
       ...guided,
@@ -118,7 +122,7 @@ export async function askMarketplaceWyz({
       source: "guided",
       liveModel: false,
       mode: "deterministic_guided",
-      followUps: [],
+      followUps: guided.followUps || [],
     };
   } finally {
     if (timer) clearTimeout(timer);

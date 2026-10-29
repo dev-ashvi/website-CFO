@@ -14,8 +14,10 @@ export const SECTIONS = [
     ],
     questions: [
       "How did monthly sales and growth move in this period?",
-      "What are order volume and average order value?",
+      "Why did sales decline after July?",
+      "Is the decline caused by fewer orders or smaller baskets?",
       "Which weeks look like bulk orders rather than a run-rate change?",
+      "Which products contributed most to the change?",
     ],
   },
   {
@@ -31,7 +33,9 @@ export const SECTIONS = [
     ],
     questions: [
       "Where is Amazon taking the money?",
-      "How do referral fees compare with total marketplace deductions?",
+      "What percentage of sales is going toward marketplace deductions?",
+      "How much is being spent on advertising?",
+      "Which products have the highest fee burden?",
       "How large are advertising, refunds, and promotional rebates?",
     ],
   },
@@ -47,8 +51,10 @@ export const SECTIONS = [
       "Product trends and order-size analysis",
     ],
     questions: [
-      "Which products contribute the most revenue?",
-      "How concentrated is revenue in the top eight products?",
+      "Which products drive most of my revenue?",
+      "Is my revenue too concentrated?",
+      "Which products are growing or declining?",
+      "How do bulk orders affect product rankings?",
       "Which products carry the highest fee burden?",
     ],
   },
@@ -64,9 +70,11 @@ export const SECTIONS = [
       "Product profit only when actual product costs are supplied",
     ],
     questions: [
-      "What cash did Amazon settle in this period?",
+      "How much money did Amazon transfer?",
+      "Why are sales and settlement proceeds different?",
+      "Can we calculate actual profitability?",
+      "Which financial information is missing?",
       "Which deductions sit between revenue and proceeds?",
-      "Is product profitability available for this file?",
     ],
   },
 ];
