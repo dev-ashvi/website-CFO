@@ -1,35 +1,33 @@
 import { useState } from "react";
 import { ArrowRight, ChevronDown, ChevronUp, MessageSquare } from "lucide-react";
-import { formatInr, formatPct, getSection } from "../../lib/marketplace-intelligence/index.js";
+import {
+  formatInr,
+  formatMonthLabel,
+  formatPct,
+  getSection,
+} from "../../lib/marketplace-intelligence/index.js";
 
-function facetLabel(key, value) {
-  if (key === "calculation") return `Calc ${value}`;
-  if (key === "coverage") return `Coverage ${value}`;
-  if (key === "reconciliation") return `Recon ${value}`;
-  if (key === "businessCause") return value === "none" ? "No business cause claimed" : "Causes unverified";
-  return `${key}: ${value}`;
-}
+/**
+ * Founder-facing period subtitle from filter-aware coverage.period.
+ * Same calendar year → "April – September 2026"; otherwise full labels.
+ */
+function formatBriefPeriodSubtitle(coverage) {
+  const period = coverage?.period;
+  const startYm = period?.start ? String(period.start).slice(0, 7) : null;
+  const endYm = period?.end ? String(period.end).slice(0, 7) : null;
+  if (!startYm || !endYm) return coverage?.periodLabel || null;
 
-function CoverageFacets({ facets }) {
-  if (!facets) return null;
-  const entries = [
-    ["calculation", facets.calculation],
-    ["coverage", facets.coverage],
-    ["reconciliation", facets.reconciliation],
-    ["businessCause", facets.businessCause],
-  ].filter(([, v]) => v);
-  return (
-    <div className="mt-3 flex flex-wrap gap-1.5">
-      {entries.map(([key, value]) => (
-        <span
-          key={key}
-          className="rounded-full border border-[rgba(26,54,115,0.12)] bg-white px-2.5 py-1 text-[10px] font-semibold text-[#1a3673]"
-        >
-          {facetLabel(key, value)}
-        </span>
-      ))}
-    </div>
-  );
+  const startLabel = formatMonthLabel(startYm);
+  const endLabel = formatMonthLabel(endYm);
+  if (!startLabel || !endLabel) return coverage?.periodLabel || null;
+
+  const startYear = startYm.slice(0, 4);
+  const endYear = endYm.slice(0, 4);
+  if (startYear === endYear) {
+    const startMonth = startLabel.replace(` ${startYear}`, "");
+    return `${startMonth} – ${endLabel}`;
+  }
+  return `${startLabel} – ${endLabel}`;
 }
 
 function DriverLine({ drivers }) {
@@ -233,7 +231,7 @@ function SecondaryFinding({ insight, onInvestigate, onOpenSection }) {
 
 /**
  * Compact Financial Intelligence Brief — local, deterministic, no NVIDIA wait.
- * Hierarchy: 1 primary + up to 4 secondary; details expand on demand.
+ * Hierarchy: founder heading + period → 1 primary + up to 4 secondary.
  */
 export default function IntelligenceBrief({ intelligence, onInvestigate, onOpenSection }) {
   const brief = intelligence?.brief || {
@@ -242,45 +240,26 @@ export default function IntelligenceBrief({ intelligence, onInvestigate, onOpenS
   };
   if (!intelligence || intelligence.status !== "ready" || !brief.primary) return null;
 
-  const coverage = intelligence.coverage || {};
-  const facets = coverage.facets || null;
+  const periodSubtitle = formatBriefPeriodSubtitle(intelligence.coverage || {});
 
   return (
     <section
-      className="mt-6 overflow-hidden rounded-[28px] border border-[rgba(26,54,115,0.12)] bg-[linear-gradient(180deg,#f7f9fd_0%,#ffffff_55%)] shadow-[0_18px_50px_rgba(26,54,115,0.06)]"
+      className="mt-5 overflow-hidden rounded-[28px] border border-[rgba(26,54,115,0.12)] bg-[linear-gradient(180deg,#f7f9fd_0%,#ffffff_55%)] shadow-[0_18px_50px_rgba(26,54,115,0.06)]"
       aria-labelledby="mi-intelligence-brief-title"
     >
-      <div className="border-b border-[rgba(26,54,115,0.08)] px-4 py-4 sm:px-6">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#fc7c23]">
-          Financial Intelligence Brief
-        </p>
+      <div className="px-4 pt-4 pb-1.5 sm:px-6 sm:pt-5 sm:pb-2">
         <h2
           id="mi-intelligence-brief-title"
-          className="mt-1 text-lg font-semibold tracking-tight text-[#1a3673] sm:text-xl"
+          className="text-lg font-semibold tracking-tight text-[#1a3673] sm:text-xl"
         >
-          What needs attention in this report
+          What needs your attention
         </h2>
-        <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">
-          Local verified metrics in Indian rupees (₹). Business causes stay unverified. Live AI is optional
-          narration only.
-        </p>
-        <CoverageFacets facets={facets} />
-        <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-slate-500">
-          <span className="rounded-full bg-white/80 px-2.5 py-1">
-            Coverage {coverage.periodLabel || "Current session"}
-          </span>
-          <span className="rounded-full bg-white/80 px-2.5 py-1">
-            {coverage.monthCount || 0} observed month(s)
-          </span>
-          {(coverage.notes || []).slice(0, 2).map((note) => (
-            <span key={note} className="rounded-full bg-white/80 px-2.5 py-1">
-              {note}
-            </span>
-          ))}
-        </div>
+        {periodSubtitle ? (
+          <p className="mt-0.5 text-sm text-slate-500">{periodSubtitle}</p>
+        ) : null}
       </div>
 
-      <div className="space-y-3 p-4 sm:p-5">
+      <div className="space-y-3 px-4 pb-4 pt-2 sm:px-6 sm:pb-5 sm:pt-2.5">
         <PrimaryFinding
           insight={brief.primary}
           onInvestigate={onInvestigate}
