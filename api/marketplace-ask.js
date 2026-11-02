@@ -47,12 +47,24 @@ const localBuckets = new Map();
 let localGlobalDay = { dayKey: "", count: 0 };
 let inFlight = 0;
 
-const SYSTEM_PROMPT = `You are Ask WYZ for Marketplace Intelligence — a financial investigation narrator.
+const SYSTEM_PROMPT = `You are Ask WYZ for Marketplace Intelligence — a financial investigation narrator for Indian Amazon seller reports.
 
 Rules:
 - Use ONLY numbers and facts present in the supplied evidence JSON.
 - Do not invent amounts, growth rates, product costs, profit margins, advertising attribution, refund reasons, or reconciliation explanations.
 - If a value is null/missing, say it is unavailable.
+- CURRENCY: Every monetary amount is Indian rupees (INR). Use ₹ or say "rupees". Never use USD, $, EUR, GBP, dollars, or any other currency.
+- Prefer human month labels from evidence (monthLabel like "September 2026"). Do not write raw codes like 2026-09 when a label is available.
+- Terminology: Gross Product Sales, Net Product Sales, Gross AOV, Median Order Value, Orders, Refunds.
+- Never conflate Gross Product Sales with Net Product Sales (refund-adjusted).
+- Distinguish Gross Product Sales vs Net Product Sales (gross minus customer product refunds).
+- Customer product refunds are Topline sales reductions — not Amazon Economics fee drains.
+- Do not claim refunds are full-order cancellations unless evidence.kpis.canSubtractFullRefunds is true; otherwise say orders were affected by refunds and net order count may be unavailable.
+- Gross AOV = Gross Product Sales / gross distinct Orders. Never mix net sales or net orders into AOV.
+- Median uses the same gross unique-order product-charge population as Gross AOV; never raw payment rows.
+- Promotional rebates are settlement adjustments, not Amazon marketplace fees.
+- Marketplace deduction rate denominator is always Gross Product Sales.
+- When chartInsights are present for the active chart, prefer those verified observations.
 - Product profit requires COGS; if COGS is absent, state that profitability cannot be calculated.
 - CSV Other credits are unexplained unless evidence says otherwise — do not assign them to tax, fees, or revenue.
 - Qualify unsupported causal claims (use “may”, “consistent with”, “not verified”).
@@ -63,6 +75,33 @@ Rules:
   limitations (array of up to 4 short strings),
   followUps (array of up to 3 short investigation questions),
   chartRefs (array of up to 3 chart/table ids from context when relevant).`;
+
+const FOREIGN_CURRENCY_RE =
+  /(?:\bUSD\b|\bUS\$\b|\bEUR\b|\bGBP\b|\bCAD\b|\bAUD\b|\bJPY\b|\bCNY\b|\$\s?\d|€\s?\d|£\s?\d|dollars?\b|euros?\b)/i;
+
+function hasForeignCurrency(text) {
+  return FOREIGN_CURRENCY_RE.test(String(text || ""));
+}
+
+function humanizeIsoMonths(text) {
+  const months = [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+  ];
+  return String(text || "").replace(/\b(20\d{2})-(0[1-9]|1[0-2])(?:-(0[1-9]|[12]\d|3[01]))?\b/g, (_, y, mo) => {
+    return `${months[Number(mo) - 1]} ${y}`;
+  });
+}
 
 function dayKey(now = Date.now()) {
   return new Date(now).toISOString().slice(0, 10);
@@ -311,6 +350,8 @@ function validateEvidenceShape(evidence) {
   if (!ALLOWED_SECTIONS.has(evidence?.context?.sectionId)) return false;
   if (!evidence.kpis || typeof evidence.kpis !== "object") return false;
   if (!Array.isArray(evidence.limitations)) return false;
+  // Currency contract: INR-only marketplace reports.
+  if (evidence.currency != null && String(evidence.currency).toUpperCase() !== "INR") return false;
   // Reject oversized product dumps / raw transaction arrays.
   if (Array.isArray(evidence.transactions) || Array.isArray(evidence.rows)) return false;
   if (Array.isArray(evidence.products) && evidence.products.length > 12) return false;
@@ -391,10 +432,14 @@ function extractJsonObject(text) {
 
 function sanitizeModelOutput(parsed, validated) {
   if (!parsed || typeof parsed !== "object") return null;
-  const explanation = String(parsed.explanation || "").trim().slice(0, 1200);
-  if (!explanation) return null;
+  const rawExplanation = String(parsed.explanation || "").trim().slice(0, 1200);
+  if (!rawExplanation) return null;
+  // Reject foreign-currency narration rather than rewriting symbols onto amounts.
+  if (hasForeignCurrency(rawExplanation)) {
+    return null;
+  }
   return {
-    explanation,
+    explanation: humanizeIsoMonths(rawExplanation),
     limitations: Array.isArray(parsed.limitations)
       ? parsed.limitations.map((item) => String(item).slice(0, 220)).filter(Boolean).slice(0, 4)
       : [],
@@ -406,6 +451,7 @@ function sanitizeModelOutput(parsed, validated) {
       : validated.evidence?.context?.chartId
         ? [validated.evidence.context.chartId]
         : [],
+    currency: "INR",
   };
 }
 
@@ -415,8 +461,10 @@ async function callNvidia(validated, config) {
     evidence: validated.evidence,
     guidedAnswer: validated.guidedAnswer,
     history: validated.history,
+    currency: "INR",
+    currencySymbol: "₹",
     instruction:
-      "Narrate a grounded answer. Prefer the guidedAnswer numbers when present. Do not invent figures.",
+      "Narrate a grounded answer in Indian rupees (INR / ₹) only. Prefer the guidedAnswer numbers when present. Use monthLabel fields (e.g. September 2026). Do not invent figures. Never use USD or $.",
   };
 
   const controller = new AbortController();
@@ -557,6 +605,9 @@ export const __test = {
   checkOrigin,
   upstashConfigured,
   resolveLimits,
+  hasForeignCurrency,
+  humanizeIsoMonths,
+  SYSTEM_PROMPT,
   SCHEMA_VERSION,
   DEFAULT_MODEL,
   DEFAULT_BASE_URL,

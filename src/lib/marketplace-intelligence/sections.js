@@ -4,16 +4,20 @@ export const SECTIONS = [
   {
     id: "topline",
     label: "Topline & Growth",
-    summary: "Sales, orders, average order value, mix, and weekly movement.",
+    summary: "Gross and net product sales, refunds, orders, AOV/median, mix, and weekly movement.",
     measures: [
+      "Gross, refund, and net product sales",
+      "Gross orders, refunded orders / orders affected by refunds, net orders when unambiguous",
+      "Average and median order value from unique order totals",
+      "Large-order skew above 2× median",
       "Monthly sales and growth rates",
-      "Order volume and average order value",
-      "Units sold when quantity is present",
-      "Product mix and seasonality",
-      "Weekly trends and bulk-order effects",
+      "Product mix, weekly trends, and bulk-order effects",
     ],
     questions: [
       "How did monthly sales and growth move in this period?",
+      "What are gross versus net product sales after refunds?",
+      "How many orders were refunded, and can we report net orders?",
+      "What is the median order value, and do large orders skew the average?",
       "Why did sales decline after July?",
       "Is the decline caused by fewer orders or smaller baskets?",
       "Which weeks look like bulk orders rather than a run-rate change?",
@@ -27,7 +31,7 @@ export const SECTIONS = [
     measures: [
       "Referral fees, separate from total marketplace deductions",
       "Fulfilment, advertising, and inbound transportation",
-      "Refunds, promotional rebates, and other adjustments",
+      "Promotional rebates and other adjustments (product refunds live in Topline)",
       "Effective marketplace fee percentages",
       "Where Amazon is taking the money",
     ],
@@ -36,7 +40,7 @@ export const SECTIONS = [
       "What percentage of sales is going toward marketplace deductions?",
       "How much is being spent on advertising?",
       "Which products have the highest fee burden?",
-      "How large are advertising, refunds, and promotional rebates?",
+      "How large are advertising and promotional rebates?",
     ],
   },
   {

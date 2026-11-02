@@ -46,22 +46,104 @@ function Drilldown({ title, rows, onClose }) {
   );
 }
 
-function ToplineSection({ section, onInvestigate }) {
+function ToplineSection({ section, chartInsights, onInvestigate }) {
+  const kpis = section.kpis || {};
+  const canNetOrders = kpis.netOrderCount != null && Boolean(kpis.canSubtractFullRefunds);
+  const netHint =
+    kpis.netOrdersBasis === "no_refunds"
+      ? "Equals gross orders — no refund rows in scope"
+      : canNetOrders
+        ? "Gross minus verified full-order refunds"
+        : "Unavailable — refunds are not all verified full-order reversals";
+  const orderMetrics = [
+    { label: "Gross orders", value: kpis.grossOrderCount ?? kpis.orderCount, kind: "count", hint: "Distinct Order IDs on Order Payment" },
+    canNetOrders && kpis.netOrdersBasis !== "no_refunds"
+      ? {
+          label: "Refunded orders",
+          value: kpis.fullRefundOrderCount,
+          kind: "count",
+          hint: "Full refunds matched to gross orders",
+        }
+      : {
+          label: "Orders affected by refunds",
+          value: kpis.ordersAffectedByRefunds ?? kpis.refundedOrderCount,
+          kind: "count",
+          hint:
+            kpis.netOrdersBasis === "no_refunds"
+              ? "No refund rows in current scope"
+              : "Partial/ambiguous or incomplete — not auto-subtracted",
+        },
+    {
+      label: "Net orders",
+      value: canNetOrders ? kpis.netOrderCount : null,
+      kind: "count",
+      hint: netHint,
+    },
+  ];
+  const skew = section.orderValues || {};
   return (
     <div className="space-y-4">
       <MetricGrid
         items={[
-          { label: "Gross product sales", value: section.kpis.grossProductSales, kind: "currency" },
-          { label: "Orders", value: section.kpis.orderCount, kind: "count", hint: "Distinct order IDs" },
-          { label: "Average order value", value: section.kpis.aov, kind: "currency" },
-          { label: "Latest MoM growth", value: section.kpis.momGrowthLatest, kind: "pct" },
+          { label: "Gross product sales", value: kpis.grossProductSales, kind: "currency", hint: "Order Payment product charges" },
+          { label: "Refund amount", value: kpis.refundAmountAbs, kind: "currency", hint: "Abs. product charges on Refund rows" },
+          { label: "Net product sales", value: kpis.netProductSales, kind: "currency", hint: "Gross − refund amount" },
+          { label: "Latest MoM growth", value: kpis.momGrowthLatest, kind: "pct" },
         ]}
       />
+      <MetricGrid items={orderMetrics} />
+      <MetricGrid
+        items={[
+          {
+            label: "Gross AOV",
+            value: kpis.aov,
+            kind: "currency",
+            hint: "Gross product sales ÷ gross distinct orders",
+          },
+          {
+            label: "Median order value",
+            value: kpis.medianOrderValue,
+            kind: "currency",
+            hint: "Same gross order population as Gross AOV",
+          },
+          { label: "Orders above 2× median", value: kpis.ordersAbove2xMedian, kind: "count" },
+          {
+            label: "Sales share above 2× median",
+            value: kpis.salesShareAbove2xMedian,
+            kind: "pct",
+            hint: skew.skewMaterial ? "Large orders materially skew gross AOV" : "Share of gross product sales",
+          },
+        ]}
+      />
+      {skew.skewMaterial ? (
+        <p className="rounded-xl bg-[#fff8f3] px-3 py-2 text-sm text-slate-600">
+          Large orders are materially skewing the average: {kpis.ordersAbove2xMedian} order(s) above 2× median
+          contribute {formatInr(kpis.salesAbove2xMedian)} ({formatPct(kpis.salesShareAbove2xMedian)} of gross
+          product sales). Median {formatInr(kpis.medianOrderValue)} is the better typical-order signal than gross AOV{" "}
+          {formatInr(kpis.aov)}.
+        </p>
+      ) : null}
       <div className="grid gap-4 lg:grid-cols-2">
-        <MonthlySalesChart rows={section.monthly} onInvestigate={() => onInvestigate("monthly-sales", "How did monthly sales and growth move in this period?")} />
-        <MonthlyOrdersChart rows={section.monthly} onInvestigate={() => onInvestigate("monthly-orders", "What are order volume and average order value?")} />
-        <WeeklySalesChart rows={section.weekly} onInvestigate={() => onInvestigate("weekly", "Which weeks look like bulk orders rather than a run-rate change?")} />
-        <ProductMixChart rows={section.productMix} onInvestigate={() => onInvestigate("product-mix", "Which products contribute the most revenue?")} />
+        <MonthlySalesChart
+          rows={section.monthly}
+          insights={chartInsights?.["monthly-sales"]}
+          onInvestigate={() => onInvestigate("monthly-sales", "How did monthly sales and growth move in this period?")}
+        />
+        <MonthlyOrdersChart
+          rows={section.monthly}
+          insights={chartInsights?.["monthly-orders"]}
+          onInvestigate={() => onInvestigate("monthly-orders", "What are order volume and average order value?")}
+        />
+        <WeeklySalesChart
+          rows={section.weekly}
+          insights={chartInsights?.weekly}
+          onInvestigate={() => onInvestigate("weekly", "Which weeks look like bulk orders rather than a run-rate change?")}
+        />
+        <ProductMixChart
+          rows={section.productMix}
+          insights={chartInsights?.["product-mix"]}
+          onInvestigate={() => onInvestigate("product-mix", "Which products contribute the most revenue?")}
+        />
       </div>
       <div>
         <h3 className="mb-2 text-sm font-semibold text-[#1a3673]">Bulk-order candidates</h3>
@@ -81,7 +163,7 @@ function ToplineSection({ section, onInvestigate }) {
   );
 }
 
-function EconomicsSection({ section, onInvestigate }) {
+function EconomicsSection({ section, chartInsights, onInvestigate }) {
   const [drillId, setDrillId] = useState(null);
   const drillRows = drillId ? section.drilldownByCategory?.[drillId] : null;
   return (
@@ -95,12 +177,27 @@ function EconomicsSection({ section, onInvestigate }) {
             label: "Effective deduction rate",
             value: section.effectiveMarketplaceDeductionRate,
             kind: "pct",
-            hint: "Fee outflows ÷ gross product sales",
+            hint: "Marketplace fees ÷ gross product sales (excludes refunds & promo rebates)",
           },
         ]}
       />
+      {section.refundsShownInTopline ? (
+        <p className="rounded-xl bg-[#f8fafc] px-3 py-2 text-sm text-slate-600">
+          Customer product refunds ({formatInr(Math.abs(section.refundProductCharges || 0))}) are shown in Topline
+          as sales reductions — not as Amazon fee drains. Refund-related Amazon fees remain in selling fees when
+          classified on refund rows.
+        </p>
+      ) : null}
+      {section.promotionalRebates ? (
+        <p className="rounded-xl bg-[#f8fafc] px-3 py-2 text-sm text-slate-600">
+          Promotional rebates ({formatInr(section.promotionalRebates)}) come from the CSV promotional rebates
+          column. They are settlement adjustments — not classified as Amazon marketplace fees, and excluded from
+          the marketplace deduction rate.
+        </p>
+      ) : null}
       <FeeBreakdownChart
-        rows={section.whereMoneyGoes}
+        rows={section.marketplaceFeeDrains || section.whereMoneyGoes?.filter((row) => row.isMarketplaceFee)}
+        insights={chartInsights?.["fee-breakdown"]}
         onInvestigate={() => onInvestigate("fee-breakdown", "Where is Amazon taking the money?")}
       />
       {section.unexplainedOtherCredits > 0 ? (
@@ -114,6 +211,12 @@ function EconomicsSection({ section, onInvestigate }) {
         columns={[
           { key: "label", label: "Category" },
           { key: "amount", label: "Amount", kind: "currency", defaultSort: "asc" },
+          {
+            key: "category",
+            label: "Class",
+            render: (value, row) =>
+              row.isMarketplaceFee ? "Marketplace fee" : value === "settlement_adjustment" ? "Adjustment" : value || "—",
+          },
           { key: "note", label: "Note" },
         ]}
         rows={section.whereMoneyGoes}
@@ -124,7 +227,7 @@ function EconomicsSection({ section, onInvestigate }) {
   );
 }
 
-function ProductSection({ section, onInvestigate }) {
+function ProductSection({ section, chartInsights, onInvestigate }) {
   return (
     <div className="space-y-4">
       <ConcentrationNote value={section.top8Concentration} />
@@ -137,9 +240,14 @@ function ProductSection({ section, onInvestigate }) {
         ]}
       />
       <div className="grid gap-4 lg:grid-cols-2">
-        <ConcentrationChart products={section.top8 || section.products} concentration={section.top8Concentration} />
+        <ConcentrationChart
+          products={section.top8 || section.products}
+          concentration={section.top8Concentration}
+          insights={chartInsights?.concentration}
+        />
         <ProductMixChart
           rows={section.products}
+          insights={chartInsights?.["product-rank"]}
           onInvestigate={() => onInvestigate("product-rank", "Which products contribute the most revenue?")}
         />
       </div>
@@ -215,7 +323,8 @@ function WaterfallTable({ waterfall }) {
   );
 }
 
-function ProfitabilitySection({ section, reconciliation }) {
+function ProfitabilitySection({ section, reconciliation, chartInsights }) {
+  const waterfallInsight = chartInsights?.waterfall;
   return (
     <div className="space-y-4">
       <MetricGrid
@@ -232,6 +341,17 @@ function ProfitabilitySection({ section, reconciliation }) {
         ]}
       />
       <h3 className="text-sm font-semibold text-[#1a3673]">Sales-to-settlement waterfall</h3>
+      {waterfallInsight ? (
+        <div className="space-y-1.5 rounded-xl bg-[#f8fafc] px-3 py-2 text-xs leading-5 text-slate-600">
+          <p>
+            <span className="font-semibold text-[#1a3673]">Key insight:</span> {waterfallInsight.keyInsight}
+          </p>
+          <p>
+            <span className="font-semibold text-[#c55a12]">Worth investigating:</span>{" "}
+            {waterfallInsight.worthInvestigating}
+          </p>
+        </div>
+      ) : null}
       <WaterfallTable waterfall={section.waterfall} />
 
       <h3 className="text-sm font-semibold text-[#1a3673]">PDF reconciliation</h3>
@@ -274,6 +394,7 @@ export default function SectionPanel({ sectionId, engine, onInvestigate, limitat
   const metrics = engine?.metrics;
   const ready = metrics?.status === "calculated";
   const section = metrics?.sections?.[sectionId];
+  const chartInsights = metrics?.chartInsights || {};
 
   return (
     <section className="rounded-[1.35rem] border border-[rgba(26,54,115,0.12)] bg-white p-5 shadow-[0_16px_40px_rgba(26,54,115,0.06)] sm:p-6">
@@ -302,22 +423,26 @@ export default function SectionPanel({ sectionId, engine, onInvestigate, limitat
 
       {ready && sectionId === "topline" ? (
         <div className="mt-5">
-          <ToplineSection section={section} onInvestigate={onInvestigate} />
+          <ToplineSection section={section} chartInsights={chartInsights} onInvestigate={onInvestigate} />
         </div>
       ) : null}
       {ready && sectionId === "amazon_economics" ? (
         <div className="mt-5">
-          <EconomicsSection section={section} onInvestigate={onInvestigate} />
+          <EconomicsSection section={section} chartInsights={chartInsights} onInvestigate={onInvestigate} />
         </div>
       ) : null}
       {ready && sectionId === "product_performance" ? (
         <div className="mt-5">
-          <ProductSection section={section} onInvestigate={onInvestigate} />
+          <ProductSection section={section} chartInsights={chartInsights} onInvestigate={onInvestigate} />
         </div>
       ) : null}
       {ready && sectionId === "profitability" ? (
         <div className="mt-5">
-          <ProfitabilitySection section={section} reconciliation={engine.reconciliation} />
+          <ProfitabilitySection
+            section={section}
+            reconciliation={engine.reconciliation}
+            chartInsights={chartInsights}
+          />
         </div>
       ) : null}
 

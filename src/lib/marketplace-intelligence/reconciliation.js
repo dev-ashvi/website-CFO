@@ -92,7 +92,7 @@ export function reconcileSettlement(normalized, metrics = null) {
         kpis.grossProductSales != null &&
         summary.sellerFulfilledProductSales != null &&
         Math.abs(kpis.grossProductSales - summary.sellerFulfilledProductSales) > 0.05
-          ? "Both measure seller product sales for the period, but the amounts differ. Cause not verified from these exports."
+          ? `Confirmed difference retained unresolved (CSV ${kpis.grossProductSales} vs PDF ${summary.sellerFulfilledProductSales}). Cause not verified from these exports — not force-matched.`
           : "CSV Order Payment product charges vs PDF Seller fulfilled product sales.",
       unresolved:
         kpis.grossProductSales != null &&
@@ -133,7 +133,7 @@ export function reconcileSettlement(normalized, metrics = null) {
         kpis.promotionalRebates != null &&
         summary.promotionalRebates != null &&
         Math.abs(kpis.promotionalRebates - summary.promotionalRebates) > 0.05
-          ? "Comparable rebate lines differ. PDF may net rebate refunds differently; not verified further."
+          ? `Confirmed difference retained unresolved (CSV ${kpis.promotionalRebates} vs PDF ${summary.promotionalRebates}). PDF may net rebate refunds differently; not force-matched.`
           : "CSV promotional rebates vs PDF promotional rebates.",
       unresolved:
         kpis.promotionalRebates != null &&

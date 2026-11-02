@@ -5,6 +5,7 @@
  * Layers: ingestion → calculations → reconciliation → investigations → UI.
  */
 import { calculateMarketplace, createEmptyFilters } from "./calculations.js";
+import { buildChartInsights } from "./insights.js";
 import { normalizeSources } from "./ingestion.js";
 import { reconcileSettlement } from "./reconciliation.js";
 
@@ -40,15 +41,20 @@ export {
 } from "./session.js";
 export { normalizeSources } from "./ingestion.js";
 export {
+  analyzeRefundOrders,
   buildBulkImpact,
+  buildOrderLevelTotals,
   buildProductMonthly,
   calculateMarketplace,
+  computeOrderValueStats,
   countDistinctOrders,
   createEmptyFilters,
   filterTransactions,
 } from "./calculations.js";
+export { buildChartInsights, densifyMonthly } from "./insights.js";
 export { normalizeProductName } from "./classify.js";
 export { reconcileSettlement } from "./reconciliation.js";
+export { medianOfSorted } from "./money.js";
 export {
   ASK_WYZ_DISCLOSURE,
   ASK_WYZ_DISCLOSURE_LIVE,
@@ -66,6 +72,16 @@ export {
   validateAskPayload,
 } from "./evidence.js";
 export { MARKETPLACE_ASK_ENDPOINT, askMarketplaceWyz } from "./askLive.js";
+export {
+  REPORT_CURRENCY,
+  REPORT_CURRENCY_NAME,
+  REPORT_CURRENCY_SYMBOL,
+  detectSalesBasisConfusion,
+  formatMonthLabel,
+  humanizePeriodLabels,
+  presentAskExplanation,
+  validateInrCurrencyPresentation,
+} from "./askPresentation.js";
 export { METRIC_DEFINITIONS } from "./metricDefinitions.js";
 export { formatCount, formatInr, formatPct, parseIndianNumber } from "./money.js";
 export { normalizeAmazonCsvText } from "./normalize.js";
@@ -79,6 +95,9 @@ export async function runMarketplaceEngine(session, filters = createEmptyFilters
       ? calculateMarketplace(normalized, filters)
       : calculateMarketplace({ transactions: [] }, filters);
   const reconciliation = reconcileSettlement(normalized, metrics);
+  if (metrics?.status === "calculated") {
+    metrics.chartInsights = buildChartInsights(metrics, reconciliation);
+  }
   return {
     sessionId: session?.id || null,
     persistence: "memory",

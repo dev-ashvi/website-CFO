@@ -4,6 +4,7 @@
  * Never includes raw CSV/PDF bytes or order-level customer identifiers.
  */
 
+import { buildCurrencyEvidenceFields, formatMonthLabel } from "./askPresentation.js";
 import { getSection } from "./sections.js";
 
 export const EVIDENCE_SCHEMA_VERSION = 1;
@@ -58,25 +59,59 @@ export function selectEvidenceMetrics(metrics, reconciliation, context = {}) {
 
   const baseKpis = {
     grossProductSales: roundMoney(kpis.grossProductSales),
+    refundAmountAbs: roundMoney(kpis.refundAmountAbs),
+    refundProductCharges: roundMoney(kpis.refundProductCharges),
     netProductSales: roundMoney(kpis.netProductSales),
-    orderCount: Number.isFinite(kpis.orderCount) ? kpis.orderCount : null,
+    // orderCount is a legacy alias of grossOrderCount — never a net denominator.
+    orderCount: Number.isFinite(kpis.grossOrderCount)
+      ? kpis.grossOrderCount
+      : Number.isFinite(kpis.orderCount)
+        ? kpis.orderCount
+        : null,
+    grossOrderCount: Number.isFinite(kpis.grossOrderCount) ? kpis.grossOrderCount : null,
+    refundedOrderCount: Number.isFinite(kpis.refundedOrderCount) ? kpis.refundedOrderCount : null,
+    fullRefundOrderCount: Number.isFinite(kpis.fullRefundOrderCount) ? kpis.fullRefundOrderCount : null,
+    ordersAffectedByRefunds: Number.isFinite(kpis.ordersAffectedByRefunds) ? kpis.ordersAffectedByRefunds : null,
+    netOrderCount: Number.isFinite(kpis.netOrderCount) ? kpis.netOrderCount : null,
+    canSubtractFullRefunds: Boolean(kpis.canSubtractFullRefunds),
+    netOrdersBasis: clipText(kpis.netOrdersBasis, 40) || null,
     aov: roundMoney(kpis.aov),
+    aovBasis: clipText(kpis.aovBasis || "gross_product_sales / gross_order_count", 80),
+    aovDenominator: "gross_order_count",
+    aovNumerator: "gross_product_sales",
+    medianOrderValue: roundMoney(kpis.medianOrderValue),
+    medianBasis: clipText(kpis.medianBasis || "gross_unique_order_product_charges", 80),
+    ordersAbove2xMedian: Number.isFinite(kpis.ordersAbove2xMedian) ? kpis.ordersAbove2xMedian : null,
+    salesAbove2xMedian: roundMoney(kpis.salesAbove2xMedian),
+    salesShareAbove2xMedian: roundRatio(kpis.salesShareAbove2xMedian),
     top8Concentration: roundRatio(kpis.top8Concentration),
     sellingFees: roundMoney(kpis.sellingFees),
     advertising: roundMoney(kpis.advertising),
-    refundProductCharges: roundMoney(kpis.refundProductCharges),
     promotionalRebates: roundMoney(kpis.promotionalRebates),
+    promotionalRebatesAreMarketplaceFees: false,
     inboundTransportation: roundMoney(kpis.inboundTransportation),
     otherSettlement: roundMoney(kpis.otherSettlement),
     netSettlementMovement: roundMoney(kpis.netSettlementMovement ?? kpis.amazonProceeds),
     effectiveMarketplaceDeductionRate: roundRatio(kpis.effectiveMarketplaceDeductionRate),
+    feeRateDenominator: "gross_product_sales",
+    productRefundsShownInTopline: true,
   };
+
+  const chartInsights = {};
+  for (const [id, pair] of Object.entries(metrics?.chartInsights || {})) {
+    chartInsights[clipText(id, 40)] = {
+      keyInsight: clipText(pair?.keyInsight, 220) || "Insufficient data",
+      worthInvestigating: clipText(pair?.worthInvestigating, 220) || "Insufficient data",
+    };
+  }
 
   const monthly = (topline.monthly || []).slice(-6).map((row) => ({
     month: clipText(row.month, 16),
+    monthLabel: clipText(formatMonthLabel(row.month), 24),
     sales: roundMoney(row.sales),
     orders: Number.isFinite(row.orders) ? row.orders : null,
     growth: roundRatio(row.growth),
+    metricBasis: "gross_product_sales",
   }));
 
   const bulkOrders = (topline.bulkOrders || []).slice(0, 5).map((row) => ({
@@ -163,8 +198,16 @@ export function selectEvidenceMetrics(metrics, reconciliation, context = {}) {
   }));
 
   const limitations = [
+    "All monetary amounts in this evidence are Indian rupees (INR / ₹). Do not use USD or other currencies.",
+    "Prefer monthLabel fields (e.g. September 2026) over raw YYYY-MM codes in narration.",
     "Product profit requires actual product costs (COGS), which are not in these Amazon exports.",
     "Amazon selling fees in the CSV are an aggregate — not proven referral-only.",
+    "Customer product refunds reduce Topline net product sales; they are not Amazon fee drains.",
+    "Do not treat refunds as full-order cancellations unless canSubtractFullRefunds is true.",
+    "Gross AOV = gross product sales / gross distinct orders. Do not mix net sales or net orders into AOV.",
+    "Median uses the same gross unique-order product-charge population as Gross AOV.",
+    "Promotional rebates are settlement adjustments — not Amazon marketplace fees.",
+    "Marketplace deduction rate uses gross product sales as denominator and excludes product refunds and promotional rebates.",
     "CSV Other credits are unexplained and are not assigned to tax, fees, or revenue without evidence.",
     "Bank transfers and GST appear on the Unified Summary PDF only when present.",
     "Opening and closing Amazon account balances are not in these exports.",
@@ -173,8 +216,11 @@ export function selectEvidenceMetrics(metrics, reconciliation, context = {}) {
       : "Product-level monthly comparisons are unavailable for the current scope.",
   ];
 
+  const currencyFields = buildCurrencyEvidenceFields(metrics?.currency || "INR");
+
   return {
     schemaVersion: EVIDENCE_SCHEMA_VERSION,
+    ...currencyFields,
     context: {
       sectionId,
       sectionLabel: getSection(sectionId).label,
@@ -184,16 +230,38 @@ export function selectEvidenceMetrics(metrics, reconciliation, context = {}) {
         ? {
             start: clipText(context.dateRange.start, 16) || null,
             end: clipText(context.dateRange.end, 16) || null,
+            startLabel: context.dateRange.start
+              ? clipText(formatMonthLabel(String(context.dateRange.start).slice(0, 7)), 24)
+              : null,
+            endLabel: context.dateRange.end
+              ? clipText(formatMonthLabel(String(context.dateRange.end).slice(0, 7)), 24)
+              : null,
           }
         : null,
       period: metrics?.period
         ? {
             start: clipText(metrics.period.start, 16) || null,
             end: clipText(metrics.period.end, 16) || null,
+            startLabel: metrics.period.start
+              ? clipText(formatMonthLabel(String(metrics.period.start).slice(0, 7)), 24)
+              : null,
+            endLabel: metrics.period.end
+              ? clipText(formatMonthLabel(String(metrics.period.end).slice(0, 7)), 24)
+              : null,
           }
         : null,
     },
+    terminology: {
+      grossProductSales: "Gross Product Sales",
+      netProductSales: "Net Product Sales",
+      grossAov: "Gross AOV",
+      medianOrderValue: "Median Order Value",
+      orders: "Orders",
+      refunds: "Refunds",
+      note: "Never conflate Gross Product Sales with Net Product Sales (refund-adjusted).",
+    },
     kpis: baseKpis,
+    chartInsights,
     monthly,
     bulkOrders,
     bulkImpact,
@@ -281,6 +349,9 @@ export function validateAskPayload(body) {
   }
   if (body.evidence.schemaVersion !== EVIDENCE_SCHEMA_VERSION) {
     return { ok: false, error: "invalid_evidence_schema" };
+  }
+  if (body.evidence.currency != null && String(body.evidence.currency).toUpperCase() !== "INR") {
+    return { ok: false, error: "invalid_currency" };
   }
   const sectionId = body.evidence?.context?.sectionId;
   if (!ALLOWED_SECTION_IDS.has(sectionId)) {

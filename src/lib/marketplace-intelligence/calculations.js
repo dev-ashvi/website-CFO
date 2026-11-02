@@ -2,8 +2,12 @@
  * Deterministic marketplace metrics. See metricDefinitions.js for contracts.
  */
 import { inDateRange, monthKey, weekKey } from "./dates.js";
-import { growthRate, ratio, roundMoney, sumMoney } from "./money.js";
+import { buildChartInsights } from "./insights.js";
+import { growthRate, medianOfSorted, ratio, roundMoney, sumMoney } from "./money.js";
 import { MISSING_PRODUCT_COST, MISSING_REFERRAL_SPLIT, MISSING_UNITS } from "./schema.js";
+
+/** Absolute tolerance when comparing refund product charges to order gross. */
+const FULL_REFUND_TOLERANCE = 0.05;
 
 export function createEmptyFilters() {
   return {
@@ -47,6 +51,178 @@ export function countDistinctOrders(orderTx) {
     orderCount: ids.size + missingIdRows,
     distinctOrderIds: ids.size,
     paymentRows: (orderTx || []).length,
+  };
+}
+
+/**
+ * Aggregate Order Payment rows to unique order-level product-charge totals.
+ * Payment-row amounts are never used directly for median / AOV / skew.
+ */
+export function buildOrderLevelTotals(orderTx) {
+  const map = new Map();
+  for (const tx of orderTx || []) {
+    const hasId = Boolean(tx.orderId && tx.orderId !== "---");
+    const key = hasId ? tx.orderId : `row:${tx.sourceRow}`;
+    if (!map.has(key)) {
+      map.set(key, {
+        key,
+        orderId: hasId ? tx.orderId : null,
+        synthetic: !hasId,
+        sales: 0,
+        fees: 0,
+        feeRowsReported: 0,
+        paymentRows: 0,
+        postedAt: tx.postedAt || null,
+        productName: tx.productName || null,
+      });
+    }
+    const row = map.get(key);
+    row.sales = roundMoney(row.sales + (tx.productCharges || 0));
+    row.paymentRows += 1;
+    if (!tx.amazonFeesMissing) {
+      row.feeRowsReported += 1;
+      row.fees = roundMoney(row.fees + (tx.amazonFees || 0));
+    }
+    if (!row.postedAt && tx.postedAt) row.postedAt = tx.postedAt;
+    if (!row.productName && tx.productName) row.productName = tx.productName;
+  }
+  return [...map.values()].sort((a, b) => b.sales - a.sales);
+}
+
+/**
+ * Classify refunds against unique gross order totals.
+ * Net orders are only returned when every refunded order in the gross set is a full refund
+ * and no partial/ambiguous cases remain.
+ */
+export function analyzeRefundOrders(orderLevels, refundTx) {
+  const grossById = new Map();
+  for (const row of orderLevels || []) {
+    if (row.orderId) grossById.set(row.orderId, row);
+  }
+
+  const refundMap = new Map();
+  for (const tx of refundTx || []) {
+    const hasId = Boolean(tx.orderId && tx.orderId !== "---");
+    const key = hasId ? tx.orderId : `row:${tx.sourceRow}`;
+    if (!refundMap.has(key)) {
+      refundMap.set(key, {
+        orderId: hasId ? tx.orderId : null,
+        refundProductCharges: 0,
+        refundRows: 0,
+        inGrossPopulation: hasId ? grossById.has(tx.orderId) : false,
+        grossSales: hasId ? grossById.get(tx.orderId)?.sales ?? null : null,
+      });
+    }
+    const row = refundMap.get(key);
+    row.refundProductCharges = roundMoney(row.refundProductCharges + (tx.productCharges || 0));
+    row.refundRows += 1;
+  }
+
+  const details = [...refundMap.values()].map((row) => {
+    const absRefund = roundMoney(Math.abs(row.refundProductCharges || 0));
+    let classification = "ambiguous";
+    if (!row.orderId) classification = "ambiguous";
+    else if (!row.inGrossPopulation) classification = "outside_gross_window";
+    else if (row.grossSales != null && Math.abs(absRefund - row.grossSales) <= FULL_REFUND_TOLERANCE) {
+      classification = "full";
+    } else if (row.grossSales != null && absRefund + FULL_REFUND_TOLERANCE < row.grossSales) {
+      classification = "partial";
+    } else if (row.grossSales != null && absRefund > row.grossSales + FULL_REFUND_TOLERANCE) {
+      classification = "ambiguous";
+    }
+    return {
+      ...row,
+      absRefund,
+      classification,
+    };
+  });
+
+  const refundedOrderCount = details.length;
+  const fullInGross = details.filter((row) => row.classification === "full");
+  const partial = details.filter((row) => row.classification === "partial");
+  const outside = details.filter((row) => row.classification === "outside_gross_window");
+  const ambiguous = details.filter((row) => row.classification === "ambiguous");
+  // Net orders only when every in-gross refund is a verified full-order reversal,
+  // or when there are no refund rows at all (net = gross).
+  const canSubtractFullRefunds =
+    refundedOrderCount === 0 ||
+    (partial.length === 0 &&
+      ambiguous.length === 0 &&
+      fullInGross.length === details.filter((row) => row.inGrossPopulation).length &&
+      fullInGross.length > 0 &&
+      outside.length + fullInGross.length === refundedOrderCount);
+
+  return {
+    refundedOrderCount,
+    refundAmount: sumMoney(details.map((row) => row.refundProductCharges)),
+    details,
+    fullRefundOrderCount: fullInGross.length,
+    partialRefundOrderCount: partial.length,
+    outsideGrossWindowCount: outside.length,
+    ambiguousRefundOrderCount: ambiguous.length,
+    canSubtractFullRefunds,
+    ordersAffectedByRefunds:
+      refundedOrderCount === 0
+        ? 0
+        : details.filter((row) => row.inGrossPopulation || !row.orderId).length || refundedOrderCount,
+    netOrdersBasis:
+      refundedOrderCount === 0
+        ? "no_refunds"
+        : canSubtractFullRefunds
+          ? "gross_minus_full_refunds"
+          : "not_subtracted",
+  };
+}
+
+/**
+ * Gross AOV, median, and large-order skew from the same unique gross order population.
+ * AOV = gross product sales / gross distinct orders. Median uses the same order totals.
+ */
+export function computeOrderValueStats(orderLevels, grossProductSales) {
+  const amounts = (orderLevels || []).map((row) => row.sales).filter((v) => Number.isFinite(v)).sort((a, b) => a - b);
+  const orderCount = amounts.length;
+  const basis = {
+    salesBasis: "gross_product_sales",
+    orderBasis: "gross_distinct_orders",
+    aovFormula: "gross_product_sales / gross_order_count",
+    medianPopulation: "gross_unique_order_product_charges",
+  };
+  if (!orderCount) {
+    return {
+      orderCount: 0,
+      aov: null,
+      medianOrderValue: null,
+      ordersAbove2xMedian: 0,
+      salesAbove2xMedian: 0,
+      salesShareAbove2xMedian: null,
+      skewMaterial: false,
+      ...basis,
+    };
+  }
+  const salesTotal = grossProductSales != null ? grossProductSales : sumMoney(amounts);
+  const aov = ratio(salesTotal, orderCount);
+  const medianOrderValue = medianOfSorted(amounts);
+  const threshold = medianOrderValue != null ? medianOrderValue * 2 : null;
+  let ordersAbove2xMedian = 0;
+  let salesAbove2xMedian = 0;
+  if (threshold != null) {
+    for (const amount of amounts) {
+      if (amount > threshold) {
+        ordersAbove2xMedian += 1;
+        salesAbove2xMedian = roundMoney(salesAbove2xMedian + amount);
+      }
+    }
+  }
+  const salesShareAbove2xMedian = ratio(salesAbove2xMedian, salesTotal);
+  return {
+    orderCount,
+    aov,
+    medianOrderValue,
+    ordersAbove2xMedian,
+    salesAbove2xMedian,
+    salesShareAbove2xMedian,
+    skewMaterial: Boolean(ordersAbove2xMedian && salesShareAbove2xMedian != null && salesShareAbove2xMedian >= 0.25),
+    ...basis,
   };
 }
 
@@ -183,38 +359,45 @@ function buildProducts(orderTx, refundTx) {
   return rows;
 }
 
-function orderSizeBuckets(orderTx) {
-  const sizes = orderTx.map((tx) => tx.productCharges || 0).sort((a, b) => a - b);
+/**
+ * Order-size buckets and bulk candidates from unique order-level totals.
+ * Fee burden by bucket uses fees already aggregated onto each order level.
+ */
+function orderSizeBuckets(orderLevels) {
+  const levels = orderLevels || [];
+  const sizes = levels.map((row) => row.sales).sort((a, b) => a - b);
   if (!sizes.length) return { buckets: [], median: null, p90: null, bulkOrders: [] };
-  const median = percentile(sizes, 0.5);
+  const median = medianOfSorted(sizes);
   const p90 = percentile(sizes, 0.9);
-  const bulkThreshold = Math.max(median * 3, p90 || 0);
+  const bulkThreshold = Math.max((median || 0) * 3, p90 || 0);
   const buckets = [
     { id: "0_250", label: "₹0–250", min: 0, max: 250, orders: 0, sales: 0, fees: 0, feeRowsReported: 0 },
     { id: "250_500", label: "₹250–500", min: 250, max: 500, orders: 0, sales: 0, fees: 0, feeRowsReported: 0 },
     { id: "500_1000", label: "₹500–1,000", min: 500, max: 1000, orders: 0, sales: 0, fees: 0, feeRowsReported: 0 },
     { id: "1000_plus", label: "₹1,000+", min: 1000, max: Infinity, orders: 0, sales: 0, fees: 0, feeRowsReported: 0 },
   ];
+
   const bulkOrders = [];
-  for (const tx of orderTx) {
-    const amount = tx.productCharges || 0;
+  for (const level of levels) {
+    const amount = level.sales || 0;
     const bucket = buckets.find((b) => amount >= b.min && amount < b.max) || buckets[buckets.length - 1];
     bucket.orders += 1;
     bucket.sales = roundMoney(bucket.sales + amount);
-    if (!tx.amazonFeesMissing) {
-      bucket.feeRowsReported += 1;
-      bucket.fees = roundMoney(bucket.fees + (tx.amazonFees || 0));
+    if (level.feeRowsReported) {
+      bucket.feeRowsReported += level.feeRowsReported;
+      bucket.fees = roundMoney(bucket.fees + (level.fees || 0));
     }
     if (amount >= bulkThreshold && bulkThreshold > 0) {
       bulkOrders.push({
-        orderId: tx.orderId,
-        productName: tx.productName,
+        orderId: level.orderId,
+        productName: level.productName,
         amount,
-        postedAt: tx.postedAt,
-        sourceRow: tx.sourceRow,
+        postedAt: level.postedAt,
+        sourceRow: level.key,
       });
     }
   }
+
   return {
     buckets: buckets.map((bucket) => ({
       id: bucket.id,
@@ -301,9 +484,10 @@ export function buildBulkImpact(products, bulkOrders, grossProductSales) {
 }
 
 /**
- * Settlement drains for investigation. Refunds are buyer returns, not fees.
- * Positive CSV Other credits are excluded here and shown on the bridge.
- * Each role is summed once — no double-counting with fee rates.
+ * Amazon Economics presentation.
+ * - Marketplace fee drains: selling fees, advertising, inbound, subscription, removal, cancellation.
+ * - Promotional rebates: CSV rebate column — settlement adjustment, NOT auto-classified as marketplace fees.
+ * - Customer product refunds: excluded here (Topline / waterfall only). Refund-row Amazon fees stay in selling_fee.
  */
 function whereAmazonTakesMoney(scoped) {
   const sellingFees = roleSum(scoped, "selling_fee");
@@ -316,26 +500,82 @@ function whereAmazonTakesMoney(scoped) {
   const cancellation = roleSum(scoped, "cancellation_charge");
   const unknown = roleSum(scoped, "unknown");
 
-  const rows = [
-    { id: "selling_fee", label: "Amazon selling fees", amount: sellingFees, note: "CSV Amazon fees aggregate — not referral-only." },
-    { id: "advertising", label: "Advertising", amount: advertising, note: null },
-    { id: "inbound_transportation", label: "Inbound transportation", amount: inbound, note: null },
-    { id: "promotional_rebate", label: "Promotional rebates", amount: promo, note: "Counted once; not included again in refunds." },
-    { id: "refund_product", label: "Refunded product charges", amount: refunds, note: "Returned to buyers — not a marketplace fee." },
-    { id: "subscription_fee", label: "Subscription / service fees", amount: subscription, note: null },
-    { id: "fulfillment_removal", label: "FBA removal / fulfilment services", amount: removal, note: null },
-    { id: "cancellation_charge", label: "Cancellation charges", amount: cancellation, note: null },
-    { id: "unknown", label: "Unclassified amounts", amount: unknown, note: "Preserved for investigation." },
-  ]
-    .map((row) => ({ ...row, amount: roundMoney(row.amount), outflow: roundMoney(Math.min(0, row.amount)) }))
+  void refunds;
+  const marketplaceFeeRows = [
+    {
+      id: "selling_fee",
+      label: "Amazon selling fees",
+      amount: sellingFees,
+      category: "marketplace_fee",
+      note: "CSV Amazon fees aggregate — not referral-only. Includes fees on refund rows when present.",
+    },
+    { id: "advertising", label: "Advertising", amount: advertising, category: "marketplace_fee", note: null },
+    {
+      id: "inbound_transportation",
+      label: "Inbound transportation",
+      amount: inbound,
+      category: "marketplace_fee",
+      note: null,
+    },
+    {
+      id: "subscription_fee",
+      label: "Subscription / service fees",
+      amount: subscription,
+      category: "marketplace_fee",
+      note: null,
+    },
+    {
+      id: "fulfillment_removal",
+      label: "FBA removal / fulfilment services",
+      amount: removal,
+      category: "marketplace_fee",
+      note: null,
+    },
+    {
+      id: "cancellation_charge",
+      label: "Cancellation charges",
+      amount: cancellation,
+      category: "marketplace_fee",
+      note: null,
+    },
+  ];
+  const adjustmentRows = [
+    {
+      id: "promotional_rebate",
+      label: "Promotional rebates",
+      amount: promo,
+      category: "settlement_adjustment",
+      note: "CSV Total promotional rebates. Shown as a settlement adjustment — not classified as an Amazon marketplace fee.",
+    },
+    {
+      id: "unknown",
+      label: "Unclassified amounts",
+      amount: unknown,
+      category: "unclassified",
+      note: "Preserved for investigation.",
+    },
+  ];
+
+  const rows = [...marketplaceFeeRows, ...adjustmentRows]
+    .map((row) => ({
+      ...row,
+      amount: roundMoney(row.amount),
+      outflow: roundMoney(Math.min(0, row.amount)),
+      isMarketplaceFee: row.category === "marketplace_fee",
+    }))
     .filter((row) => row.amount !== 0)
     .sort((a, b) => a.amount - b.amount);
 
-  // Fee % excludes refunds (buyer returns) and excludes unexplained Other credits.
+  // Marketplace fee % excludes product refunds, promotional rebates, and unexplained Other credits.
   const feeOutflows = sumMoney(
-    [sellingFees, advertising, inbound, subscription, removal, cancellation, promo].map((v) => Math.min(0, v || 0)),
+    [sellingFees, advertising, inbound, subscription, removal, cancellation].map((v) => Math.min(0, v || 0)),
   );
-  return { rows, feeOutflows };
+  return {
+    rows,
+    feeOutflows,
+    marketplaceFeeRows: rows.filter((row) => row.isMarketplaceFee),
+    promotionalRebates: roundMoney(promo),
+  };
 }
 
 /**
@@ -469,9 +709,16 @@ export function calculateMarketplace(normalized, filters = createEmptyFilters())
 
   const grossProductSales = sumMoney(orders.map((tx) => tx.productCharges));
   const refundProductCharges = sumMoney(refunds.map((tx) => tx.productCharges));
+  const refundAmountAbs = roundMoney(Math.abs(refundProductCharges || 0));
   const netProductSales = roundMoney(grossProductSales + refundProductCharges);
-  const orderCount = orderStats.orderCount;
-  const aov = ratio(grossProductSales, orderCount);
+  const orderLevels = buildOrderLevelTotals(orders);
+  const refundAnalysis = analyzeRefundOrders(orderLevels, refunds);
+  const grossOrderCount = orderStats.orderCount;
+  const netOrderCount = refundAnalysis.canSubtractFullRefunds
+    ? Math.max(0, grossOrderCount - (refundAnalysis.fullRefundOrderCount || 0))
+    : null;
+  const orderValues = computeOrderValueStats(orderLevels, grossProductSales);
+  const aov = orderValues.aov;
   const sellingFees = roleSum(scoped, "selling_fee");
   const advertising = roleSum(scoped, "advertising");
   const inbound = roleSum(scoped, "inbound_transportation");
@@ -483,7 +730,7 @@ export function calculateMarketplace(normalized, filters = createEmptyFilters())
   const monthly = buildMonthly(orders);
   const weekly = buildWeekly(orders);
   const products = buildProducts(orders, refunds);
-  const orderSizes = orderSizeBuckets(orders);
+  const orderSizes = orderSizeBuckets(orderLevels);
   const productMonthly = buildProductMonthly(orders, { topN: 5, monthCount: 4 });
   const bulkImpact = buildBulkImpact(products, orderSizes.bulkOrders, grossProductSales);
   const top8 = products.slice(0, 8);
@@ -492,11 +739,17 @@ export function calculateMarketplace(normalized, filters = createEmptyFilters())
   const moneyTaken = whereAmazonTakesMoney(scoped);
   const bankTransfers = normalized?.summary?.transfersToBank ?? normalized?.summary?.transfers ?? null;
 
-  // Fee rate: documented marketplace fee outflows / gross product sales.
-  // Excludes refunds (buyer returns) and unexplained Other credits.
+  // Marketplace fee rate: fee outflows / gross product sales.
+  // Excludes customer product refunds, promotional rebates, and unexplained Other credits.
   const deductionsForRate = moneyTaken.feeOutflows;
 
   const warnings = [];
+  if (orderValues.orderCount !== grossOrderCount && grossOrderCount > 0) {
+    warnings.push({
+      code: "order_population_mismatch",
+      message: "Gross AOV/median order population does not match gross distinct order count.",
+    });
+  }
   if (unknownAmount) {
     warnings.push({
       code: "unknown_amounts_present",
@@ -525,7 +778,7 @@ export function calculateMarketplace(normalized, filters = createEmptyFilters())
     bankTransfers,
   });
 
-  return {
+  const result = {
     layer: "calculations",
     status: "calculated",
     period: dates.length ? { start: dates[0], end: dates[dates.length - 1] } : normalized.period,
@@ -533,10 +786,25 @@ export function calculateMarketplace(normalized, filters = createEmptyFilters())
     filters,
     kpis: {
       grossProductSales,
+      refundProductCharges,
+      refundAmountAbs,
       netProductSales,
-      orderCount,
+      orderCount: grossOrderCount,
+      grossOrderCount,
+      refundedOrderCount: refundAnalysis.refundedOrderCount,
+      fullRefundOrderCount: refundAnalysis.fullRefundOrderCount,
+      ordersAffectedByRefunds: refundAnalysis.ordersAffectedByRefunds,
+      netOrderCount,
+      netOrdersBasis: refundAnalysis.netOrdersBasis,
+      canSubtractFullRefunds: refundAnalysis.canSubtractFullRefunds,
       paymentRows: orderStats.paymentRows,
       aov,
+      aovBasis: orderValues.aovFormula,
+      medianOrderValue: orderValues.medianOrderValue,
+      medianBasis: orderValues.medianPopulation,
+      ordersAbove2xMedian: orderValues.ordersAbove2xMedian,
+      salesAbove2xMedian: orderValues.salesAbove2xMedian,
+      salesShareAbove2xMedian: orderValues.salesShareAbove2xMedian,
       unitsSold: null,
       netSettlementMovement,
       amazonProceeds: netSettlementMovement,
@@ -544,20 +812,37 @@ export function calculateMarketplace(normalized, filters = createEmptyFilters())
       advertising,
       inboundTransportation: inbound,
       promotionalRebates,
-      refundProductCharges,
+      promotionalRebatesAreMarketplaceFees: false,
       otherSettlement,
       effectiveSellingFeeRate: ratio(Math.abs(sellingFees || 0), grossProductSales),
       effectiveMarketplaceDeductionRate: ratio(Math.abs(deductionsForRate || 0), grossProductSales),
+      feeRateDenominator: "gross_product_sales",
       top8Concentration,
       productProfit: null,
+      orderValues,
     },
     sections: {
       topline: {
         kpis: {
           grossProductSales,
+          refundProductCharges,
+          refundAmountAbs,
           netProductSales,
-          orderCount,
+          orderCount: grossOrderCount,
+          grossOrderCount,
+          refundedOrderCount: refundAnalysis.refundedOrderCount,
+          fullRefundOrderCount: refundAnalysis.fullRefundOrderCount,
+          ordersAffectedByRefunds: refundAnalysis.ordersAffectedByRefunds,
+          netOrderCount,
+          netOrdersBasis: refundAnalysis.netOrdersBasis,
+          canSubtractFullRefunds: refundAnalysis.canSubtractFullRefunds,
           aov,
+          aovBasis: orderValues.aovFormula,
+          medianOrderValue: orderValues.medianOrderValue,
+          medianBasis: orderValues.medianPopulation,
+          ordersAbove2xMedian: orderValues.ordersAbove2xMedian,
+          salesAbove2xMedian: orderValues.salesAbove2xMedian,
+          salesShareAbove2xMedian: orderValues.salesShareAbove2xMedian,
           unitsSold: null,
           momGrowthLatest: monthly.length > 1 ? monthly[monthly.length - 1].growth : null,
         },
@@ -570,6 +855,8 @@ export function calculateMarketplace(normalized, filters = createEmptyFilters())
           orders: row.orders,
         })),
         orderSizes,
+        orderValues,
+        refundAnalysis,
         bulkOrders: orderSizes.bulkOrders.slice(0, 20),
         bulkImpact,
       },
@@ -578,7 +865,9 @@ export function calculateMarketplace(normalized, filters = createEmptyFilters())
         advertising,
         inboundTransportation: inbound,
         promotionalRebates,
+        promotionalRebatesAreMarketplaceFees: false,
         refundProductCharges,
+        refundsShownInTopline: true,
         otherSettlement,
         unknownAmount,
         referralFees: null,
@@ -587,6 +876,7 @@ export function calculateMarketplace(normalized, filters = createEmptyFilters())
         effectiveSellingFeeRate: ratio(Math.abs(sellingFees || 0), grossProductSales),
         effectiveMarketplaceDeductionRate: ratio(Math.abs(deductionsForRate || 0), grossProductSales),
         whereMoneyGoes: moneyTaken.rows,
+        marketplaceFeeDrains: moneyTaken.marketplaceFeeRows || moneyTaken.rows.filter((row) => row.isMarketplaceFee),
         unexplainedOtherCredits: otherSettlement > 0 ? otherSettlement : 0,
         drilldownByCategory: Object.fromEntries(
           moneyTaken.rows.map((row) => [
@@ -637,4 +927,6 @@ export function calculateMarketplace(normalized, filters = createEmptyFilters())
     warnings,
     transactions: scoped,
   };
+  result.chartInsights = buildChartInsights(result, null);
+  return result;
 }

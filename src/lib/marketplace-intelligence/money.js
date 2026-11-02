@@ -28,6 +28,14 @@ export function roundMoney(value) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }
 
+/** Classic median of a sorted numeric array (averages the two middle values when even). */
+export function medianOfSorted(sorted) {
+  if (!sorted?.length) return null;
+  const mid = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 1) return sorted[mid];
+  return roundMoney((sorted[mid - 1] + sorted[mid]) / 2);
+}
+
 export function sumMoney(values) {
   let total = 0;
   for (const value of values) {

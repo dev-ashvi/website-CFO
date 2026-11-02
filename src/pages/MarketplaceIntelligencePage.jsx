@@ -34,6 +34,7 @@ export default function MarketplaceIntelligencePage() {
   const [conversation, setConversation] = useState([]);
   const [askContext, setAskContext] = useState(null);
   const [askLoading, setAskLoading] = useState(false);
+  const [askLoadingPhase, setAskLoadingPhase] = useState(null);
   const [askError, setAskError] = useState(null);
   const [askExpanded, setAskExpanded] = useState(false);
   const [filters, setFilters] = useState(() => createEmptyFilters());
@@ -135,6 +136,7 @@ export default function MarketplaceIntelligencePage() {
     setAskContext(context);
     setAskError(null);
     setAskLoading(true);
+    setAskLoadingPhase("Question received — preparing investigation…");
 
     const userId = `u-${++askTurnSeq}`;
     setConversation((prev) => [...prev, { id: userId, role: "user", content: text.slice(0, 500) }]);
@@ -143,6 +145,10 @@ export default function MarketplaceIntelligencePage() {
       .filter((turn) => turn.role === "user" || turn.role === "assistant")
       .slice(-4)
       .map((turn) => ({ role: turn.role, content: turn.content }));
+
+    const phaseTimer = setTimeout(() => {
+      setAskLoadingPhase("Comparing verified session metrics…");
+    }, 450);
 
     try {
       const response = await askMarketplaceWyz({
@@ -165,19 +171,28 @@ export default function MarketplaceIntelligencePage() {
           followUps: response.followUps || [],
           chartRefs: response.chartRefs || [],
           liveModel: Boolean(response.liveModel),
+          liveRejected: Boolean(response.liveRejected),
           source: response.source || "guided",
           status: response.status,
+          currency: response.currency || "INR",
+          fallbackReason: response.fallbackReason || null,
         },
       ]);
       if (response.status === "rate_limited") {
         setAskError("Ask WYZ is receiving too many requests right now. Showing the calculated answer instead.");
       } else if (response.status === "awaiting_calculations") {
         setAskError("Upload or load a report first so Ask WYZ has metrics to cite.");
+      } else if (response.status === "provider_error" || response.status === "network_error") {
+        setAskError("Live Ask WYZ is temporarily unavailable. Showing the calculated investigation instead.");
+      } else if (response.liveRejected) {
+        setAskError("Live narration did not meet currency or evidence checks. Showing verified session figures.");
       }
     } catch {
       setAskError("Ask WYZ is temporarily unavailable. Try again in a moment.");
     } finally {
+      clearTimeout(phaseTimer);
       setAskLoading(false);
+      setAskLoadingPhase(null);
     }
   };
 
@@ -308,11 +323,7 @@ export default function MarketplaceIntelligencePage() {
             })}
           </div>
 
-          <div
-            className={`mt-4 grid items-start gap-4 ${
-              askExpanded ? "lg:grid-cols-[minmax(0,1fr)_380px]" : "lg:grid-cols-[minmax(0,1fr)_300px]"
-            }`}
-          >
+          <div className="mt-4 grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
             <SectionPanel
               sectionId={sectionId}
               engine={engine}
@@ -331,6 +342,7 @@ export default function MarketplaceIntelligencePage() {
               }
               conversation={conversation}
               loading={askLoading}
+              loadingPhase={askLoadingPhase}
               error={askError}
               expanded={askExpanded}
               onToggleExpand={() => setAskExpanded((value) => !value)}

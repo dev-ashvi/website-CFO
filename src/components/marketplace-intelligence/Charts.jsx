@@ -21,7 +21,23 @@ const ORANGE = "#fc7c23";
 const MUTED = "#64748b";
 const COLORS = [NAVY, ORANGE, "#3b82f6", "#0f766e", "#b45309", "#64748b", "#7c3aed", "#be123c"];
 
-function ChartShell({ title, children, onInvestigate, investigateLabel = "Ask about this chart" }) {
+function ChartInsights({ insights }) {
+  if (!insights) return null;
+  return (
+    <div className="mt-3 space-y-1.5 border-t border-[rgba(26,54,115,0.08)] pt-3 text-xs leading-5 text-slate-600">
+      <p>
+        <span className="font-semibold text-[#1a3673]">Key insight:</span>{" "}
+        {insights.keyInsight || "Insufficient data"}
+      </p>
+      <p>
+        <span className="font-semibold text-[#c55a12]">Worth investigating:</span>{" "}
+        {insights.worthInvestigating || "Insufficient data"}
+      </p>
+    </div>
+  );
+}
+
+function ChartShell({ title, children, onInvestigate, investigateLabel = "Ask about this chart", insights }) {
   return (
     <div className="rounded-2xl border border-[rgba(26,54,115,0.1)] bg-white p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
@@ -37,13 +53,14 @@ function ChartShell({ title, children, onInvestigate, investigateLabel = "Ask ab
         ) : null}
       </div>
       <div className="h-64 w-full">{children}</div>
+      <ChartInsights insights={insights} />
     </div>
   );
 }
 
-export function MonthlySalesChart({ rows, onInvestigate }) {
+export function MonthlySalesChart({ rows, onInvestigate, insights }) {
   return (
-    <ChartShell title="Monthly product sales (₹)" onInvestigate={onInvestigate}>
+    <ChartShell title="Monthly product sales (₹)" onInvestigate={onInvestigate} insights={insights}>
       <ResponsiveContainer>
         <LineChart data={rows || []} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
@@ -65,9 +82,9 @@ export function MonthlySalesChart({ rows, onInvestigate }) {
   );
 }
 
-export function MonthlyOrdersChart({ rows, onInvestigate }) {
+export function MonthlyOrdersChart({ rows, onInvestigate, insights }) {
   return (
-    <ChartShell title="Monthly orders (distinct order IDs)" onInvestigate={onInvestigate}>
+    <ChartShell title="Monthly orders (distinct order IDs)" onInvestigate={onInvestigate} insights={insights}>
       <ResponsiveContainer>
         <BarChart data={rows || []} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
@@ -82,9 +99,9 @@ export function MonthlyOrdersChart({ rows, onInvestigate }) {
   );
 }
 
-export function WeeklySalesChart({ rows, onInvestigate }) {
+export function WeeklySalesChart({ rows, onInvestigate, insights }) {
   return (
-    <ChartShell title="Weekly product sales (₹)" onInvestigate={onInvestigate}>
+    <ChartShell title="Weekly product sales (₹)" onInvestigate={onInvestigate} insights={insights}>
       <ResponsiveContainer>
         <BarChart data={rows || []} margin={{ top: 8, right: 8, left: 0, bottom: 24 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
@@ -99,7 +116,7 @@ export function WeeklySalesChart({ rows, onInvestigate }) {
   );
 }
 
-export function ProductMixChart({ rows, onInvestigate }) {
+export function ProductMixChart({ rows, onInvestigate, insights }) {
   const data = (rows || []).slice(0, 6).map((row) => ({
     name: row.productName.length > 28 ? `${row.productName.slice(0, 28)}…` : row.productName,
     fullName: row.productName,
@@ -107,7 +124,7 @@ export function ProductMixChart({ rows, onInvestigate }) {
     share: row.revenueShare,
   }));
   return (
-    <ChartShell title="Product mix — top sellers" onInvestigate={onInvestigate}>
+    <ChartShell title="Product mix — top sellers" onInvestigate={onInvestigate} insights={insights}>
       <ResponsiveContainer>
         <PieChart>
           <Pie data={data} dataKey="value" nameKey="name" innerRadius={42} outerRadius={72} paddingAngle={2}>
@@ -134,7 +151,7 @@ export function ProductMixChart({ rows, onInvestigate }) {
   );
 }
 
-export function FeeBreakdownChart({ rows, onInvestigate }) {
+export function FeeBreakdownChart({ rows, onInvestigate, insights }) {
   const data = (rows || [])
     .filter((row) => row.amount < 0)
     .slice(0, 8)
@@ -143,7 +160,7 @@ export function FeeBreakdownChart({ rows, onInvestigate }) {
       amount: Math.abs(row.amount),
     }));
   return (
-    <ChartShell title="Settlement drains (absolute ₹)" onInvestigate={onInvestigate}>
+    <ChartShell title="Marketplace fee drains (absolute ₹)" onInvestigate={onInvestigate} insights={insights}>
       <ResponsiveContainer>
         <BarChart data={data} layout="vertical" margin={{ left: 8, right: 48 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
@@ -159,7 +176,7 @@ export function FeeBreakdownChart({ rows, onInvestigate }) {
   );
 }
 
-export function ConcentrationChart({ products, concentration }) {
+export function ConcentrationChart({ products, concentration, insights }) {
   const data = (products || []).slice(0, 8).map((row, index) => ({
     name: row.productName.length > 24 ? `${row.productName.slice(0, 24)}…` : row.productName,
     sales: row.sales,
@@ -167,7 +184,7 @@ export function ConcentrationChart({ products, concentration }) {
     fill: COLORS[index % COLORS.length],
   }));
   return (
-    <ChartShell title={`Top-eight revenue share (${formatPct(concentration)})`}>
+    <ChartShell title={`Top-eight revenue share (${formatPct(concentration)})`} insights={insights}>
       <ResponsiveContainer>
         <BarChart data={data} layout="vertical" margin={{ left: 8, right: 56 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />

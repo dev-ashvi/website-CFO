@@ -3,8 +3,13 @@
  * Deterministic answers remain the numerical source of truth.
  * Live narration is optional via /api/marketplace-ask (NVIDIA NIM).
  */
+import { formatMonthLabel, humanizePeriodLabels, REPORT_CURRENCY } from "./askPresentation.js";
 import { formatInr, formatPct } from "./money.js";
 import { getSection } from "./sections.js";
+
+function monthLabel(ym) {
+  return formatMonthLabel(ym) || ym;
+}
 
 export const ASK_WYZ_MODE = "deterministic_guided";
 export const ASK_WYZ_MODE_LIVE = "live_nvidia_nim";
@@ -52,27 +57,60 @@ function answerFor(question, metrics, context) {
   const items = [];
   const productFilter = context.product;
 
-  if (/decline after july|after july|sales decline|why did sales/.test(q)) {
+  if (/august|sep(tember)?|aug.*sep|decline after july|after july|sales decline|why did sales/.test(q)) {
     const months = monthSeries(metrics);
-    const july = months.find((row) => /2026-07|jul/i.test(row.month));
+    const aug = months.find((row) => /2026-08|-08$|aug/i.test(row.month));
+    const sep = months.find((row) => /2026-09|-09$|sep/i.test(row.month));
+    const july = months.find((row) => /2026-07|-07$|jul/i.test(row.month));
+    items.push(evidence("gross_product_sales", "Gross Product Sales", kpis.grossProductSales, "Order Payment product charges"));
+    if (aug) {
+      items.push(evidence("aug_sales", `${monthLabel(aug.month)} Gross Product Sales`, aug.sales, "Monthly aggregation"));
+      items.push(evidence("aug_orders", `${monthLabel(aug.month)} Orders`, aug.orders, "Monthly distinct orders"));
+      items.push(evidence("aug_aov", `${monthLabel(aug.month)} Gross AOV`, aug.aov, "Month sales / orders"));
+    }
+    if (sep) {
+      items.push(evidence("sep_sales", `${monthLabel(sep.month)} Gross Product Sales`, sep.sales, "Monthly aggregation"));
+      items.push(evidence("sep_orders", `${monthLabel(sep.month)} Orders`, sep.orders, "Monthly distinct orders"));
+      items.push(evidence("sep_aov", `${monthLabel(sep.month)} Gross AOV`, sep.aov, "Month sales / orders"));
+      if (sep.growth != null) {
+        items.push(evidence("sep_growth", `${monthLabel(sep.month)} MoM`, sep.growth, "MoM vs prior month"));
+      }
+    }
+    if (aug && sep) {
+      const orderChange = aug.orders ? (sep.orders - aug.orders) / aug.orders : null;
+      const aovChange = aug.aov ? (sep.aov - aug.aov) / aug.aov : null;
+      return {
+        text: `Gross Product Sales fell from ${formatInr(aug.sales)} in ${monthLabel(aug.month)} to ${formatInr(
+          sep.sales,
+        )} in ${monthLabel(sep.month)} (${formatPct(sep.growth)} MoM). Orders moved ${formatPct(
+          orderChange,
+        )} and Gross AOV moved ${formatPct(
+          aovChange,
+        )}. These are Gross Product Sales — not Net Product Sales after Refunds. All amounts are Indian rupees (₹).`,
+        evidence: items,
+        followUps: [
+          "Is the decline caused by fewer orders or smaller baskets?",
+          "Which products contributed most to the change?",
+        ],
+      };
+    }
     const later = months.filter((row) => row.month > (july?.month || "2026-07"));
-    items.push(evidence("gross_product_sales", "Gross product sales", kpis.grossProductSales, "Order Payment product charges"));
-    if (july) items.push(evidence("july_sales", `${july.month} sales`, july.sales, "Monthly aggregation"));
+    if (july) items.push(evidence("july_sales", `${monthLabel(july.month)} Gross Product Sales`, july.sales, "Monthly aggregation"));
     for (const row of later.slice(0, 3)) {
-      items.push(evidence(`month:${row.month}`, `${row.month} sales`, row.sales, "Monthly aggregation"));
-      items.push(evidence(`growth:${row.month}`, `${row.month} MoM`, row.growth, "MoM vs prior month"));
+      items.push(evidence(`month:${row.month}`, `${monthLabel(row.month)} Gross Product Sales`, row.sales, "Monthly aggregation"));
+      items.push(evidence(`growth:${row.month}`, `${monthLabel(row.month)} MoM`, row.growth, "MoM vs prior month"));
     }
     const drop = later.find((row) => row.growth != null && row.growth < 0);
     return {
       text: july
-        ? `July sales were ${formatInr(july.sales)}. ${
+        ? `${monthLabel(july.month)} Gross Product Sales were ${formatInr(july.sales)}. ${
             drop
-              ? `The clearest subsequent decline is ${drop.month} at ${formatInr(drop.sales)} (${formatPct(drop.growth)} MoM). Compare order count and AOV in that month to separate volume from basket size.`
+              ? `The clearest subsequent decline is ${monthLabel(drop.month)} at ${formatInr(drop.sales)} (${formatPct(drop.growth)} MoM). Compare Orders and Gross AOV in that month to separate volume from basket size.`
               : later.length
-                ? `Later months in scope: ${later.map((row) => `${row.month} ${formatInr(row.sales)}`).join("; ")}.`
+                ? `Later months in scope: ${later.map((row) => `${monthLabel(row.month)} ${formatInr(row.sales)}`).join("; ")}.`
                 : "No later months are in the current filter scope."
           }`
-        : `Gross product sales are ${formatInr(kpis.grossProductSales)}. July is not present in the current monthly series — widen or clear the date filter if needed.`,
+        : `Gross Product Sales are ${formatInr(kpis.grossProductSales)}. The requested months are not present in the current monthly series — widen or clear the date filter if needed.`,
       evidence: items,
       followUps: [
         "Is the decline caused by fewer orders or smaller baskets?",
@@ -86,10 +124,10 @@ function answerFor(question, metrics, context) {
     const latest = months[months.length - 1];
     const prior = months[months.length - 2];
     items.push(evidence("order_count", "Orders", kpis.orderCount, "Distinct Order IDs"));
-    items.push(evidence("aov", "AOV", kpis.aov, "gross product sales / orders"));
+    items.push(evidence("aov", "Gross AOV", kpis.aov, "gross product sales / gross orders"));
     if (latest && prior) {
-      items.push(evidence("latest_orders", `${latest.month} orders`, latest.orders, "Monthly distinct orders"));
-      items.push(evidence("prior_orders", `${prior.month} orders`, prior.orders, "Monthly distinct orders"));
+    items.push(evidence("latest_orders", `${monthLabel(latest.month)} Orders`, latest.orders, "Monthly distinct orders"));
+    items.push(evidence("prior_orders", `${monthLabel(prior.month)} Orders`, prior.orders, "Monthly distinct orders"));
     }
     let driver = "Need at least two months to separate order volume from basket size.";
     if (latest && prior && prior.orders) {
@@ -98,9 +136,9 @@ function answerFor(question, metrics, context) {
       const aovPrior = prior.orders ? prior.sales / prior.orders : null;
       const aovChange = aovPrior ? (aovLatest - aovPrior) / aovPrior : null;
       if (Math.abs(orderChange) >= Math.abs(aovChange || 0)) {
-        driver = `Order volume moved ${formatPct(orderChange)} from ${prior.month} to ${latest.month}, more than basket-size change ${formatPct(aovChange)}.`;
+        driver = `Orders moved ${formatPct(orderChange)} from ${monthLabel(prior.month)} to ${monthLabel(latest.month)}, more than basket-size change ${formatPct(aovChange)}.`;
       } else {
-        driver = `Basket size (AOV) moved ${formatPct(aovChange)} from ${prior.month} to ${latest.month}, more than order-volume change ${formatPct(orderChange)}.`;
+        driver = `Gross AOV moved ${formatPct(aovChange)} from ${monthLabel(prior.month)} to ${monthLabel(latest.month)}, more than order-volume change ${formatPct(orderChange)}.`;
       }
     }
     return { text: driver, evidence: items, followUps: ["Which weeks look like bulk orders rather than a run-rate change?"] };
@@ -109,27 +147,103 @@ function answerFor(question, metrics, context) {
   if (/monthly sales|growth|move in this period/.test(q)) {
     const months = monthSeries(metrics);
     const latest = months[months.length - 1];
-    items.push(evidence("gross_product_sales", "Gross product sales", kpis.grossProductSales, "Order Payment product charges"));
+    items.push(evidence("gross_product_sales", "Gross Product Sales", kpis.grossProductSales, "Order Payment product charges"));
     if (latest) {
-      items.push(evidence("month_sales", `${latest.month} sales`, latest.sales, "Monthly aggregation"));
-      items.push(evidence("mom_growth", `${latest.month} MoM growth`, latest.growth, "MoM vs prior month"));
+      items.push(evidence("month_sales", `${monthLabel(latest.month)} Gross Product Sales`, latest.sales, "Monthly aggregation"));
+      items.push(evidence("mom_growth", `${monthLabel(latest.month)} MoM growth`, latest.growth, "MoM vs prior month"));
     }
     return {
-      text: `Gross product sales are ${formatInr(kpis.grossProductSales)} across ${kpis.orderCount} distinct orders. ${
+      text: `Gross Product Sales are ${formatInr(kpis.grossProductSales)} across ${kpis.orderCount} distinct Orders. ${
         latest
-          ? `Latest month ${latest.month} is ${formatInr(latest.sales)} with MoM growth ${formatPct(latest.growth)}.`
+          ? `Latest month ${monthLabel(latest.month)} is ${formatInr(latest.sales)} with MoM growth ${formatPct(latest.growth)}.`
           : "Monthly growth needs at least two months in scope."
-      }`,
+      } All amounts are Indian rupees (₹).`,
       evidence: items,
       followUps: ["Is the decline caused by fewer orders or smaller baskets?"],
     };
   }
 
-  if (/order volume|average order value|aov/.test(q)) {
-    items.push(evidence("order_count", "Orders", kpis.orderCount, "Distinct Order IDs"));
-    items.push(evidence("aov", "AOV", kpis.aov, "gross product sales / orders"));
+  if (/gross versus net|net product sales|gross product sales after refund|refund amount/.test(q)) {
+    items.push(evidence("gross_product_sales", "Gross Product Sales", kpis.grossProductSales, "Order Payment product charges"));
+    items.push(evidence("refund_amount", "Refunds", kpis.refundAmountAbs, "Abs. Refund product charges"));
+    items.push(evidence("net_product_sales", "Net Product Sales", kpis.netProductSales, "Gross + signed refund charges"));
     return {
-      text: `Order volume is ${kpis.orderCount} distinct Amazon order IDs. Average order value is ${formatInr(kpis.aov)}, using product charges rather than settlement totals.`,
+      text: `Gross Product Sales are ${formatInr(kpis.grossProductSales)}. Refunds are ${formatInr(
+        kpis.refundAmountAbs,
+      )}. Net Product Sales are ${formatInr(
+        kpis.netProductSales,
+      )} (gross minus customer product refunds). Do not conflate Gross Product Sales with refund-adjusted Net Product Sales. Amounts are Indian rupees (₹).`,
+      evidence: items,
+      followUps: ["How many orders were refunded, and can we report net orders?"],
+    };
+  }
+
+  if (/refunded|net orders|orders affected by refund/.test(q)) {
+    items.push(evidence("gross_order_count", "Gross orders", kpis.grossOrderCount ?? kpis.orderCount, "Distinct Order IDs"));
+    items.push(evidence("refunded_order_count", "Refunded order IDs", kpis.refundedOrderCount, "Distinct refund Order IDs"));
+    items.push(evidence("full_refund_order_count", "Full refunds in gross", kpis.fullRefundOrderCount, "Abs refund ≈ order gross"));
+    items.push(evidence("net_order_count", "Net orders", kpis.netOrderCount, kpis.netOrdersBasis || "not_subtracted"));
+    const text = kpis.canSubtractFullRefunds
+      ? `Gross orders are ${kpis.grossOrderCount ?? kpis.orderCount}. ${kpis.fullRefundOrderCount} distinct order(s) are full refunds present in the gross set, so net orders are ${kpis.netOrderCount}. Refund amount remains ${formatInr(kpis.refundAmountAbs)}.`
+      : `Gross orders are ${kpis.grossOrderCount ?? kpis.orderCount}. ${
+          kpis.ordersAffectedByRefunds ?? kpis.refundedOrderCount
+        } order(s) are affected by refunds, but full vs partial cannot be subtracted cleanly for every case — net orders are not claimed. Do not treat all refunds as full-order cancellations.`;
+    return {
+      text,
+      evidence: items,
+      followUps: ["What is the median order value, and do large orders skew the average?"],
+    };
+  }
+
+  if (/median order|skew the average|2× median|2x median|large order/.test(q)) {
+    items.push(evidence("aov", "Gross AOV", kpis.aov, "gross product sales / gross orders"));
+    items.push(
+      evidence(
+        "median_order_value",
+        "Median order value",
+        kpis.medianOrderValue,
+        "Same gross order population as Gross AOV",
+      ),
+    );
+    items.push(evidence("orders_above_2x_median", "Orders above 2× median", kpis.ordersAbove2xMedian, "Order-level filter"));
+    items.push(evidence("sales_above_2x_median", "Sales above 2× median", kpis.salesAbove2xMedian, "Order-level sum"));
+    items.push(
+      evidence("sales_share_above_2x_median", "Share above 2× median", kpis.salesShareAbove2xMedian, "Sales / gross"),
+    );
+    const skew = kpis.orderValues?.skewMaterial || (kpis.salesShareAbove2xMedian != null && kpis.salesShareAbove2xMedian >= 0.25);
+    return {
+      text: `Median order value is ${formatInr(kpis.medianOrderValue)} vs gross AOV ${formatInr(
+        kpis.aov,
+      )} (same gross order population; unique order-level product charges). ${
+        kpis.ordersAbove2xMedian
+          ? `${kpis.ordersAbove2xMedian} order(s) above 2× median contribute ${formatInr(
+              kpis.salesAbove2xMedian,
+            )} (${formatPct(kpis.salesShareAbove2xMedian)} of gross).${
+              skew ? " Large orders are materially skewing the average." : ""
+            }`
+          : "No orders exceed 2× the median in this scope."
+      }`,
+      evidence: items,
+    };
+  }
+
+  if (/order volume|average order value|aov|gross aov/.test(q)) {
+    items.push(evidence("order_count", "Gross orders", kpis.grossOrderCount ?? kpis.orderCount, "Distinct Order IDs"));
+    items.push(evidence("aov", "Gross AOV", kpis.aov, "gross product sales / gross orders"));
+    items.push(
+      evidence(
+        "median_order_value",
+        "Median order value",
+        kpis.medianOrderValue,
+        "Same gross order population as Gross AOV",
+      ),
+    );
+    return {
+      text: `Gross order volume is ${kpis.grossOrderCount ?? kpis.orderCount} distinct Amazon order IDs. Gross AOV is ${formatInr(
+        kpis.aov,
+      )} (= gross product sales ÷ gross orders); median is ${formatInr(
+        kpis.medianOrderValue,
+      )} on the same gross order population. Neither uses net sales/orders nor raw payment rows.`,
       evidence: items,
     };
   }
@@ -208,12 +322,14 @@ function answerFor(question, metrics, context) {
 
   if (/advertising|refund|promotional/.test(q)) {
     items.push(evidence("advertising", "Advertising", kpis.advertising, "Cost of Advertising"));
-    items.push(evidence("refunds", "Refunded product charges", kpis.refundProductCharges, "Refund rows"));
+    items.push(evidence("refunds", "Refunded product charges", kpis.refundProductCharges, "Refund rows — Topline"));
     items.push(evidence("promo", "Promotional rebates", kpis.promotionalRebates, "Promotional rebate column"));
     return {
-      text: `Advertising ${formatInr(kpis.advertising)}; refunded product charges ${formatInr(
+      text: `Advertising ${formatInr(kpis.advertising)}; promotional rebates ${formatInr(
+        kpis.promotionalRebates,
+      )}. Customer product refunds total ${formatInr(
         kpis.refundProductCharges,
-      )}; promotional rebates ${formatInr(kpis.promotionalRebates)}. Refund reasons are not in these exports.`,
+      )} and are shown in Topline as sales reductions — not as Amazon fee drains. Refund reasons are not in these exports.`,
       evidence: items,
     };
   }
@@ -549,10 +665,11 @@ export function investigate(question, context, metrics = null, reconciliation = 
       filters: safeContext.filters,
       chartId: safeContext.chartId,
     },
-    answer,
+    answer: humanizePeriodLabels(answer),
     evidence,
     followUps: result.followUps || [],
     source: "guided",
+    currency: REPORT_CURRENCY,
   };
 }
 

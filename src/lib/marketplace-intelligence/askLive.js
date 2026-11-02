@@ -3,6 +3,7 @@
  * Posts verified evidence to the public NVIDIA NIM proxy; falls back to guided answers.
  */
 
+import { presentAskExplanation, REPORT_CURRENCY } from "./askPresentation.js";
 import { buildAskPayload } from "./evidence.js";
 import { ASK_WYZ_DISCLOSURE_LIVE, investigate } from "./investigations.js";
 
@@ -10,34 +11,49 @@ export const MARKETPLACE_ASK_ENDPOINT = "/api/marketplace-ask";
 export const ASK_REQUEST_TIMEOUT_MS = 45000;
 
 function mapLiveResponse(payload, guided, context) {
-  const explanation = String(payload?.explanation || guided.answer || "").trim();
+  const presented = presentAskExplanation({
+    aiExplanation: payload?.explanation,
+    guidedAnswer: guided.answer,
+    currency: payload?.currency || guided.currency || REPORT_CURRENCY,
+    question: guided.question,
+    source: payload?.source === "ai" ? "ai" : "guided",
+  });
+
   const followUps = Array.isArray(payload?.followUps)
     ? payload.followUps.map((item) => String(item).slice(0, 160)).filter(Boolean).slice(0, 4)
     : [];
-  const limitations = Array.isArray(payload?.limitations)
-    ? payload.limitations.map((item) => String(item).slice(0, 220)).filter(Boolean).slice(0, 6)
-    : [];
+  const limitations = [
+    ...(Array.isArray(payload?.limitations)
+      ? payload.limitations.map((item) => String(item).slice(0, 220)).filter(Boolean).slice(0, 6)
+      : []),
+    ...(presented.limitationsExtra || []),
+  ].slice(0, 6);
   const chartRefs = Array.isArray(payload?.chartRefs)
     ? payload.chartRefs.map((item) => String(item).slice(0, 40)).filter(Boolean).slice(0, 4)
     : context.chartId
       ? [context.chartId]
       : [];
 
+  const liveAccepted = presented.source === "ai" && payload?.source === "ai" && !presented.liveRejected;
+
   return {
-    mode: payload?.source === "ai" ? "live_nvidia_nim" : "deterministic_guided",
-    liveModel: payload?.source === "ai",
-    status: explanation ? "answered" : "error",
+    mode: liveAccepted ? "live_nvidia_nim" : "deterministic_guided",
+    liveModel: liveAccepted,
+    status: presented.explanation ? "answered" : "error",
     disclosure: ASK_WYZ_DISCLOSURE_LIVE,
     question: guided.question,
     context: guided.context,
-    answer: explanation || "Ask WYZ could not produce an answer for this question.",
+    answer: presented.explanation || "Ask WYZ could not produce an answer for this question.",
     evidence: guided.evidence || [],
     limitations: limitations.length ? limitations : undefined,
     followUps,
     chartRefs,
-    provider: payload?.provider || null,
-    model: payload?.model || null,
-    source: payload?.source || "guided",
+    provider: liveAccepted ? payload?.provider || null : null,
+    model: liveAccepted ? payload?.model || null : null,
+    source: presented.source,
+    currency: REPORT_CURRENCY,
+    fallbackReason: presented.fallbackReason,
+    liveRejected: Boolean(presented.liveRejected),
   };
 }
 
@@ -69,7 +85,12 @@ export async function askMarketplaceWyz({
   });
 
   if (typeof fetchImpl !== "function") {
-    return { ...guided, disclosure: ASK_WYZ_DISCLOSURE_LIVE, source: "guided" };
+    return {
+      ...guided,
+      disclosure: ASK_WYZ_DISCLOSURE_LIVE,
+      source: "guided",
+      currency: REPORT_CURRENCY,
+    };
   }
 
   const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
@@ -95,6 +116,7 @@ export async function askMarketplaceWyz({
           liveModel: false,
           mode: "deterministic_guided",
           status: "rate_limited",
+          currency: REPORT_CURRENCY,
           answer: `${guided.answer} (Live Ask WYZ is temporarily rate-limited; showing the calculated investigation instead.)`,
           followUps: guided.followUps || [],
         };
@@ -105,6 +127,8 @@ export async function askMarketplaceWyz({
         source: "guided",
         liveModel: false,
         mode: "deterministic_guided",
+        currency: REPORT_CURRENCY,
+        status: "provider_error",
         followUps: guided.followUps || [],
       };
     }
@@ -122,6 +146,8 @@ export async function askMarketplaceWyz({
       source: "guided",
       liveModel: false,
       mode: "deterministic_guided",
+      currency: REPORT_CURRENCY,
+      status: "network_error",
       followUps: guided.followUps || [],
     };
   } finally {

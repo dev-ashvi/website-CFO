@@ -90,8 +90,49 @@ describe("api/marketplace-ask NVIDIA proxy (Stage 3.1)", () => {
       validated,
     );
     assert.match(parsed.explanation, /Advertising/);
+    assert.equal(parsed.currency, "INR");
     assert.equal(__test.extractJsonObject("not json"), null);
     assert.equal(__test.guidedFallback(validated).source, "guided");
+  });
+
+  it("rejects USD / foreign-currency model narration instead of rewriting symbols", () => {
+    const validated = {
+      question: "August to September sales",
+      evidence: { currency: "INR", context: { chartId: "monthly-sales" }, limitations: [] },
+      guidedAnswer: { text: "Gross Product Sales fell from ₹30,000 in August 2026 to ₹17,000 in September 2026." },
+    };
+    assert.equal(__test.hasForeignCurrency("Sales fell to $17,000"), true);
+    assert.equal(
+      __test.sanitizeModelOutput(
+        { explanation: "Sales declined from $4,200 in August to $3,500 in September." },
+        validated,
+      ),
+      null,
+    );
+    const humanized = __test.sanitizeModelOutput(
+      { explanation: "Gross Product Sales declined from 2026-08 to 2026-09." },
+      validated,
+    );
+    assert.match(humanized.explanation, /August 2026/);
+    assert.match(humanized.explanation, /September 2026/);
+  });
+
+  it("rejects evidence with non-INR currency codes", () => {
+    assert.equal(
+      __test.validatePayload(
+        validBody({
+          evidence: {
+            schemaVersion: 1,
+            currency: "USD",
+            context: { sectionId: "topline" },
+            kpis: { grossProductSales: 1, orderCount: 1, aov: 1 },
+            limitations: [],
+          },
+        }),
+      ).ok,
+      false,
+    );
+    assert.match(__test.SYSTEM_PROMPT, /Indian rupees \(INR\)/);
   });
 
   it("does not wire authenticated analytics worker or alternate paid providers", async () => {
