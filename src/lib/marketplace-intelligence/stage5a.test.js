@@ -292,8 +292,8 @@ describe("stage 5A discovery families on synthetic calculated metrics", () => {
 
     const refundInsight = intelligence.insights.find((row) => row.id === "refunds_topline");
     assert.ok(refundInsight);
-    assert.match(refundInsight.what, /Topline/i);
-    assert.match(refundInsight.what, /not Amazon Economics fee drains/i);
+    assert.match(refundInsight.what, /refunds cut sales|bring sales from/i);
+    assert.match(refundInsight.what, /not Amazon fee drains/i);
 
     const recon = intelligence.insights.find((row) => row.groupKey === "recon_exceptions");
     assert.ok(recon);

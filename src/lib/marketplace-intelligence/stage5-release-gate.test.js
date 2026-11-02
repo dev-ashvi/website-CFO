@@ -82,7 +82,7 @@ describe("stage 5 release gate — Latest MoM KPI consistency", () => {
     assert.ok(Math.abs(kpis.momGrowthLatest - -0.17) < 0.005);
     assert.match(
       metrics.intelligence.insights.find((r) => r.id === "revenue_mom_2026-08_2026-09").headline,
-      /declined -17\.0%/i,
+      /September sales fell by 17%/i,
     );
   });
 

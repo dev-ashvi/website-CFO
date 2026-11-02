@@ -68,11 +68,16 @@ describe("stage 5B.2 incomplete-period integrity", () => {
     );
     assert.ok(mom);
     assert.equal(mom.provisional, true);
-    assert.match(mom.headline, /incomplete|incomparable|matched|coverage/i);
+    assert.match(mom.headline, /aren't fully comparable|not fully comparable/i);
     assert.doesNotMatch(mom.headline, /declined/i);
-    assert.match(mom.shortWhy, /recorded Orders|recorded Gross AOV/i);
+    assert.match(mom.shortWhy, /available records|Not a verified full-month/i);
     assert.doesNotMatch(mom.shortWhy, /symmetric split/i);
-    assert.match(mom.what, /available records|Incomplete|Incompatible|Matched/i);
+    assert.doesNotMatch(mom.headline, /fell by|declined/i);
+    assert.match(
+      mom.what,
+      /available only through|Compare complete months|available records|Incomplete|Incompatible|Matched/i,
+    );
+    assert.doesNotMatch(mom.what, /2026-08-01 → 2026-08-29/);
 
     const charts = engine.metrics.chartInsights || buildChartInsights(engine.metrics, engine.reconciliation);
     assert.doesNotMatch(charts["monthly-sales"]?.worthInvestigating || "", /declined .*MoM/i);
@@ -99,8 +104,12 @@ describe("stage 5B.2 incomplete-period integrity", () => {
     assert.ok(insight);
     assert.equal(insight.provisional, false);
     assert.equal(insight.comparisonStatus, COMPARISON_STATUS.COMPLETE_COMPARABLE);
-    assert.match(insight.headline, /declined -17\.0%/i);
-    assert.match(insight.shortWhy, /Gross AOV explain/i);
+    assert.match(insight.headline, /September sales fell by 17%/i);
+    assert.match(insight.shortWhy, /average order value accounted for 68%/i);
+    assert.match(insight.shortWhy, /fewer orders accounted for 32%/i);
+    assert.match(insight.what || insight.summary, /₹20,781\.97|₹20,782/);
+    assert.match(insight.what || insight.summary, /₹17,257/);
+    assert.match(insight.whatNext?.[0]?.question || "", /smaller-value orders in September/i);
 
     const planned = planInvestigation({
       insight,

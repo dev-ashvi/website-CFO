@@ -94,8 +94,8 @@ describe("stage 5A.1 insight quality rules", () => {
     assert.ok(!insights.some((row) => row.id === "product_concentration_top8"));
     const small = insights.find((row) => row.id === "product_concentration_small_assortment");
     assert.ok(small);
-    assert.match(small.what, /top-eight concentration is not meaningful/i);
-    assert.match(small.what, /of Gross Product Sales/);
+    assert.match(small.what, /only .* products in scope/i);
+    assert.match(small.what, /of sales/i);
   });
 
   it("keeps top-eight concentration only when more than 8 products exist", () => {
@@ -176,10 +176,9 @@ describe("stage 5A.1 insight quality rules", () => {
     const insights = discoverInsights(metrics, null);
     const move = insights.find((row) => row.id.startsWith("product_move_"));
     assert.ok(move);
-    assert.match(move.headline, /zero recorded sales/i);
-    assert.match(move.headline, /not confirmed demand loss/i);
-    assert.match(move.what, /not the same as a confirmed product demand decline/i);
-    assert.doesNotMatch(move.headline, /confirmed product demand decline/i);
+    assert.match(move.headline, /no recorded sales/i);
+    assert.match(move.what, /not the same as a confirmed demand decline/i);
+    assert.doesNotMatch(move.headline, /confirmed (product )?demand decline/i);
     const pctMetric = move.metrics.find((m) => m.metricId === "pct_vs_prior_product");
     assert.ok(pctMetric);
     assert.match(pctMetric.label, /prior-month Gross Product Sales/i);
@@ -388,7 +387,7 @@ describe("stage 5A.1 TUMMYMUMMY + sample ranked findings", () => {
     // With >8 products, top8 may exist but should not beat a material Aug–Sep decline when scored recently
     const revenue = intelligence.insights.find((row) => row.id === "revenue_mom_2026-08_2026-09");
     assert.ok(revenue);
-    assert.match(revenue.shortWhy, /Orders|Gross AOV/i);
+    assert.match(revenue.shortWhy, /orders|average order value/i);
     assert.equal(revenue.why.method, DECOMPOSITION_PRESENTATION_METHOD);
   });
 

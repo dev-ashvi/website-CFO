@@ -130,10 +130,13 @@ function ToplineSection({ section, chartInsights, onInvestigate }) {
       />
       {skew.skewMaterial ? (
         <p className="rounded-xl bg-[#fff8f3] px-3 py-2 text-sm text-slate-600">
-          Large orders are materially skewing the average: {kpis.ordersAbove2xMedian} order(s) above 2× median
-          contribute {formatInr(kpis.salesAbove2xMedian)} ({formatPct(kpis.salesShareAbove2xMedian)} of gross
-          product sales). Median {formatInr(kpis.medianOrderValue)} is the better typical-order signal than gross AOV{" "}
-          {formatInr(kpis.aov)}.
+          Large orders are materially skewing the average:{" "}
+          {kpis.ordersAbove2xMedian === 1
+            ? "1 large order above twice the typical order contributes"
+            : `${kpis.ordersAbove2xMedian} large orders above twice the typical order contribute`}{" "}
+          {formatInr(kpis.salesAbove2xMedian)} ({formatPct(kpis.salesShareAbove2xMedian)} of gross product
+          sales). Typical order {formatInr(kpis.medianOrderValue)}; average order value {formatInr(kpis.aov)}.
+
         </p>
       ) : null}
       <div className="grid gap-4 lg:grid-cols-2">

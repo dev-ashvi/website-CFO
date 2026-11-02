@@ -1,11 +1,24 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { ArrowRight, ChevronDown, ChevronUp, MessageSquare } from "lucide-react";
 import {
+  formatCount,
   formatInr,
   formatMonthLabel,
   formatPct,
   getSection,
 } from "../../lib/marketplace-intelligence/index.js";
+
+function formatSupportingMetric(m) {
+  if (m.value == null) return "—";
+  if (Math.abs(m.value) <= 2 && !Number.isInteger(m.value)) return formatPct(m.value);
+  if (
+    Number.isInteger(m.value) &&
+    /orders|count|products|sku/i.test(`${m.label || ""} ${m.metricId || ""}`)
+  ) {
+    return formatCount(m.value);
+  }
+  return formatInr(m.value);
+}
 
 /**
  * Founder-facing period subtitle from filter-aware coverage.period.
@@ -30,37 +43,13 @@ function formatBriefPeriodSubtitle(coverage) {
   return `${startLabel} – ${endLabel}`;
 }
 
-function DriverLine({ drivers }) {
-  if (!drivers?.length) return null;
-  return (
-    <p className="mt-2 text-sm leading-6 text-slate-700">
-      {drivers
-        .slice(0, 3)
-        .map((d) => `${d.label} ${d.amount != null ? formatInr(d.amount) : ""}`.trim())
-        .join(" · ")}
-      {drivers[0]?.shareOfChange != null ? (
-        <span className="text-slate-400">
-          {" "}
-          (shares of Δ Gross Product Sales:{" "}
-          {drivers
-            .slice(0, 2)
-            .map((d) => (d.shareOfChange != null ? formatPct(d.shareOfChange) : null))
-            .filter(Boolean)
-            .join(" / ")}
-          )
-        </span>
-      ) : null}
-    </p>
-  );
-}
-
 function ExpandableDetails({ insight }) {
   const [open, setOpen] = useState(false);
-  const hasDetails =
-    insight.hypotheses?.length ||
-    insight.limitations?.length ||
-    insight.metrics?.length ||
-    insight.why?.audit;
+  const panelId = useId();
+  const hasMetrics = Boolean(insight.metrics?.length || insight.why?.audit);
+  const hasHypotheses = Boolean(insight.hypotheses?.length);
+  const hasLimitations = Boolean(insight.limitations?.length);
+  const hasDetails = hasMetrics || hasHypotheses || hasLimitations;
 
   if (!hasDetails) return null;
 
@@ -71,60 +60,55 @@ function ExpandableDetails({ insight }) {
         onClick={() => setOpen((v) => !v)}
         className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-500 hover:text-[#1a3673]"
         aria-expanded={open}
+        aria-controls={panelId}
       >
         {open ? <ChevronUp size={14} aria-hidden /> : <ChevronDown size={14} aria-hidden />}
-        {open ? "Hide details" : "Evidence, hypotheses & limitations"}
+        {open ? "Hide supporting details" : "View supporting details"}
       </button>
       {open ? (
-        <div className="mt-2 space-y-3 text-xs leading-5 text-slate-600">
-          {insight.hypotheses?.length ? (
+        <div id={panelId} className="mt-2 space-y-3 text-xs leading-5 text-slate-600">
+          {hasMetrics ? (
             <div>
-              <p className="font-semibold text-slate-500">Unverified hypotheses</p>
-              <ul className="mt-1 list-disc space-y-1 pl-4">
-                {insight.hypotheses.map((h) => (
-                  <li key={h.text}>{h.text}</li>
-                ))}
-              </ul>
+              <p className="font-semibold text-slate-500">How this was calculated</p>
+              {insight.metrics?.length ? (
+                <ul className="mt-1 space-y-1">
+                  {insight.metrics.slice(0, 8).map((m) => (
+                    <li key={`${m.metricId}-${m.label}`} className="flex justify-between gap-3">
+                      <span>{m.label}</span>
+                      <span className="tabular-nums text-[#1a3673]">
+                        {formatSupportingMetric(m)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+              {insight.why?.audit ? (
+                <p className="mt-2">
+                  Orders effect {formatInr(insight.why.audit.orderEffect)} · Gross AOV effect{" "}
+                  {formatInr(insight.why.audit.aovEffect)} · Interaction{" "}
+                  {formatInr(insight.why.audit.interactionEffect)} · residual{" "}
+                  {formatInr(insight.why.audit.residual)}
+                </p>
+              ) : null}
             </div>
           ) : null}
-          {insight.metrics?.length ? (
+          {hasHypotheses || hasLimitations ? (
             <div>
-              <p className="font-semibold text-slate-500">Supporting metrics (INR)</p>
-              <ul className="mt-1 space-y-1">
-                {insight.metrics.slice(0, 8).map((m) => (
-                  <li key={`${m.metricId}-${m.label}`} className="flex justify-between gap-3">
-                    <span>{m.label}</span>
-                    <span className="tabular-nums text-[#1a3673]">
-                      {m.value == null
-                        ? "—"
-                        : Math.abs(m.value) <= 2 && !Number.isInteger(m.value)
-                          ? formatPct(m.value)
-                          : formatInr(m.value)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-          {insight.why?.audit ? (
-            <div>
-              <p className="font-semibold text-slate-500">Audit three-term decomposition</p>
-              <p className="mt-1">
-                Orders effect {formatInr(insight.why.audit.orderEffect)} · Gross AOV effect{" "}
-                {formatInr(insight.why.audit.aovEffect)} · Interaction{" "}
-                {formatInr(insight.why.audit.interactionEffect)} · residual{" "}
-                {formatInr(insight.why.audit.residual)}
-              </p>
-            </div>
-          ) : null}
-          {insight.limitations?.length ? (
-            <div>
-              <p className="font-semibold text-slate-500">Limitations</p>
-              <ul className="mt-1 list-disc space-y-1 pl-4">
-                {insight.limitations.slice(0, 4).map((line) => (
-                  <li key={line}>{line}</li>
-                ))}
-              </ul>
+              <p className="font-semibold text-slate-500">What still needs checking</p>
+              {hasHypotheses ? (
+                <ul className="mt-1 list-disc space-y-1 pl-4">
+                  {insight.hypotheses.map((h) => (
+                    <li key={h.text}>{h.text}</li>
+                  ))}
+                </ul>
+              ) : null}
+              {hasLimitations ? (
+                <ul className={`list-disc space-y-1 pl-4 ${hasHypotheses ? "mt-2" : "mt-1"}`}>
+                  {insight.limitations.slice(0, 6).map((line) => (
+                    <li key={line}>{line}</li>
+                  ))}
+                </ul>
+              ) : null}
             </div>
           ) : null}
         </div>
@@ -162,14 +146,6 @@ function ActionRow({ insight, onInvestigate, onOpenSection }) {
         {getSection(sectionId).label}
         <ArrowRight size={13} aria-hidden />
       </button>
-      {(insight.links?.chartIds || []).slice(0, 2).map((id) => (
-        <span
-          key={id}
-          className="inline-flex items-center rounded-full border border-dashed border-[rgba(26,54,115,0.2)] px-2.5 py-1 text-[11px] text-slate-500"
-        >
-          {id}
-        </span>
-      ))}
     </div>
   );
 }
@@ -177,27 +153,32 @@ function ActionRow({ insight, onInvestigate, onOpenSection }) {
 function PrimaryFinding({ insight, onInvestigate, onOpenSection }) {
   if (!insight) return null;
   const next = insight.whatNext?.[0];
+  const impact = insight.what || insight.summary;
   return (
     <article className="rounded-2xl border border-[rgba(26,54,115,0.14)] bg-white p-4 shadow-[0_12px_36px_rgba(26,54,115,0.06)] sm:p-5">
       <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#fc7c23]">Primary finding</p>
       <h3 className="mt-1 text-base font-semibold leading-6 text-[#1a3673] sm:text-lg">{insight.headline}</h3>
-      <p className="mt-2 text-sm leading-6 text-slate-700">{insight.what}</p>
-      {insight.shortWhy || insight.why?.drivers?.length ? (
+      {impact ? <p className="mt-2 text-sm leading-6 text-slate-700">{impact}</p> : null}
+      {insight.shortWhy ? (
         <div className="mt-3 rounded-xl bg-[#f7f9fd] px-3 py-2.5">
           <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-            Measurable why
+            Measured drivers
           </p>
-          {insight.shortWhy ? (
-            <p className="mt-1 text-sm leading-6 text-slate-700">{insight.shortWhy}</p>
-          ) : (
-            <DriverLine drivers={insight.why.drivers} />
-          )}
+          <p className="mt-1 text-sm leading-6 text-slate-700">{insight.shortWhy}</p>
+          <p className="mt-1 text-[11px] leading-5 text-slate-500">
+            Mathematical contributions — not verified business causes.
+          </p>
         </div>
       ) : null}
-      {next ? (
+      {next?.question ? (
+        <p className="mt-3 text-sm leading-6 text-slate-600">
+          <span className="font-semibold text-[#1a3673]">Suggested investigation: </span>
+          {next.question}
+        </p>
+      ) : next?.action ? (
         <p className="mt-3 text-sm leading-6 text-slate-600">
           <span className="font-semibold text-[#1a3673]">Suggested next: </span>
-          {next.action || next.question}
+          {next.action}
         </p>
       ) : null}
       <ActionRow insight={insight} onInvestigate={onInvestigate} onOpenSection={onOpenSection} />
@@ -207,22 +188,11 @@ function PrimaryFinding({ insight, onInvestigate, onOpenSection }) {
 }
 
 function SecondaryFinding({ insight, onInvestigate, onOpenSection }) {
+  const body = insight.summary || insight.what;
   return (
-    <article className="rounded-xl border border-[rgba(26,54,115,0.1)] bg-white/90 px-3.5 py-3">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <h4 className="text-sm font-semibold leading-5 text-[#1a3673]">{insight.headline}</h4>
-        {insight.isRecentChange ? (
-          <span className="rounded-full bg-[#fff4ec] px-2 py-0.5 text-[10px] font-semibold text-[#c55a12]">
-            Recent
-          </span>
-        ) : insight.isStableObservation ? (
-          <span className="rounded-full bg-[#eef2fb] px-2 py-0.5 text-[10px] font-semibold text-[#1a3673]">
-            Structural
-          </span>
-        ) : null}
-      </div>
-      <p className="mt-1 text-xs leading-5 text-slate-600">{insight.summary}</p>
-      {insight.shortWhy ? <p className="mt-1.5 text-xs leading-5 text-slate-500">{insight.shortWhy}</p> : null}
+    <article className="break-inside-avoid rounded-xl border border-[rgba(26,54,115,0.1)] bg-white/90 px-3.5 py-3">
+      <h4 className="text-sm font-semibold leading-5 text-[#1a3673]">{insight.headline}</h4>
+      {body ? <p className="mt-1.5 text-xs leading-5 text-slate-600">{body}</p> : null}
       <ActionRow insight={insight} onInvestigate={onInvestigate} onOpenSection={onOpenSection} />
       <ExpandableDetails insight={insight} />
     </article>
@@ -252,7 +222,7 @@ export default function IntelligenceBrief({ intelligence, onInvestigate, onOpenS
           id="mi-intelligence-brief-title"
           className="text-lg font-semibold tracking-tight text-[#1a3673] sm:text-xl"
         >
-          What needs your attention
+          Insights ready for your review
         </h2>
         {periodSubtitle ? (
           <p className="mt-0.5 text-sm text-slate-500">{periodSubtitle}</p>
@@ -270,7 +240,8 @@ export default function IntelligenceBrief({ intelligence, onInvestigate, onOpenS
             <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">
               Also worth reviewing
             </p>
-            <div className="grid gap-2 sm:grid-cols-2">
+            {/* items-start keeps card heights content-driven in the two-column grid */}
+            <div className="grid grid-cols-1 items-start gap-2 sm:grid-cols-2 lg:gap-2.5">
               {brief.secondary.map((insight) => (
                 <SecondaryFinding
                   key={insight.id}

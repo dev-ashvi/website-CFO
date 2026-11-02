@@ -118,8 +118,8 @@ describe("stage 5B.1 partial vs complete month comparisons", () => {
     assert.ok(mom);
     assert.equal(mom.provisional, true);
     assert.notEqual(mom.comparisonStatus, COMPARISON_STATUS.COMPLETE_COMPARABLE);
-    assert.match(mom.headline, /incomplete|incomparable|matched|coverage/i);
-    assert.doesNotMatch(mom.headline, /declined/i);
+    assert.match(mom.headline, /aren't fully comparable|not fully comparable/i);
+    assert.doesNotMatch(mom.headline, /declined|fell by/i);
 
     const scored = scoreInsight(mom);
     assert.ok(scored.ranking.reasons.some((r) => /coverage_penalty/i.test(r)));
@@ -134,8 +134,8 @@ describe("stage 5B.1 partial vs complete month comparisons", () => {
     assert.ok(insight);
     assert.equal(insight.provisional, false);
     assert.equal(insight.comparisonStatus, COMPARISON_STATUS.COMPLETE_COMPARABLE);
-    assert.match(insight.headline, /declined/i);
-    assert.doesNotMatch(insight.headline, /provisional/i);
+    assert.match(insight.headline, /fell by 17%/i);
+    assert.doesNotMatch(insight.headline, /provisional|incomplete/i);
 
     const planned = planInvestigation({
       insight,

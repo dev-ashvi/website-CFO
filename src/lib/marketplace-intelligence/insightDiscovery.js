@@ -23,26 +23,167 @@ import {
   monthParts,
 } from "./periodCoverage.js";
 
-function founderDriverSummary(decomp, primaryDriver, { provisional = false } = {}) {
-  if (!decomp?.comparable || !primaryDriver) {
-    return "Comparable Orders × Gross AOV split unavailable for this period pair.";
-  }
-  const orderLed = primaryDriver.id === "orders";
-  if (provisional) {
-    return orderLed
-      ? "Fewer recorded Orders explain most of the difference between the available records."
-      : "Lower recorded Gross AOV explains most of the difference between the available records.";
-  }
-  const fell = decomp.deltaSales != null && decomp.deltaSales < 0;
-  const outcome = fell ? "sales decline" : "sales change";
-  return orderLed
-    ? `Fewer Orders explain most of the ${outcome}.`
-    : `Lower Gross AOV explains most of the ${outcome}.`;
-}
-
 function monthLabel(ym) {
   return formatMonthLabel(ym) || ym || "";
 }
+
+/** "September 2026" → "September" for short headlines. */
+function monthNameOnly(ym) {
+  return String(monthLabel(ym) || "").replace(/\s+20\d{2}$/, "") || monthLabel(ym) || "";
+}
+
+/** Founder-facing absolute percent, e.g. 0.17 → "17%", 0.527 → "52.7%". */
+function formatFounderPct(ratioValue) {
+  if (ratioValue == null || !Number.isFinite(ratioValue)) return null;
+  const pct = Math.abs(ratioValue) * 100;
+  const rounded = Math.round(pct);
+  if (Math.abs(pct - rounded) < 0.05) return `${rounded}%`;
+  return `${pct.toFixed(1)}%`;
+}
+
+/** Whole-rupee founder display; evidence keeps full precision via formatInr. */
+function formatFounderInr(value) {
+  return formatInr(value, { digits: 0 });
+}
+
+function pluralize(count, singular, plural = `${singular}s`) {
+  return Math.abs(Number(count) || 0) === 1 ? singular : plural;
+}
+
+function countNoun(count, singular, plural = `${singular}s`) {
+  const n = Number(count) || 0;
+  return `${n} ${pluralize(n, singular, plural)}`;
+}
+
+/** Soft share phrasing when a simple fraction reads better than a percent. */
+function founderSharePhrase(share) {
+  if (share == null || !Number.isFinite(share)) return null;
+  const pct = Math.abs(share) * 100;
+  if (pct >= 30 && pct < 36) return "nearly a third";
+  if (pct >= 45 && pct < 55) return "about half";
+  if (pct >= 23 && pct < 28) return "about a quarter";
+  return formatFounderPct(share);
+}
+
+/** ISO date → "29 August" for founder cards; keep ISO in limitations. */
+function formatHumanDayMonth(iso) {
+  if (!iso || !/^\d{4}-\d{2}-\d{2}/.test(String(iso))) return null;
+  const day = Number(String(iso).slice(8, 10));
+  const month = monthNameOnly(String(iso).slice(0, 7));
+  if (!day || !month) return null;
+  return `${day} ${month}`;
+}
+
+/**
+ * Founder-facing incomplete-period body — human dates, no ISO tokens.
+ * Technical coverage strings remain in limitations via founderComparisonNote.
+ */
+function founderProvisionalSalesSummary(coverageCompare, latestYm) {
+  const month = monthNameOnly(latestYm);
+  const endHuman = formatHumanDayMonth(coverageCompare?.current?.coveredEnd);
+  if (coverageCompare?.status === COMPARISON_STATUS.TRAILING_PARTIAL && endHuman) {
+    return `Your ${month} data is available only through ${endHuman}. Compare complete months before drawing conclusions about sales growth or decline.`;
+  }
+  if (coverageCompare?.status === COMPARISON_STATUS.MATCHED_PARTIAL) {
+    const days = coverageCompare.prior?.coveredDays;
+    return days
+      ? `Both months use a matching ${days}-day window, not full months. Compare complete months before drawing conclusions about sales growth or decline.`
+      : `These months use matching partial windows, not full months. Compare complete months before drawing conclusions about sales growth or decline.`;
+  }
+  if (coverageCompare?.status === COMPARISON_STATUS.INCOMPATIBLE) {
+    return `These months don't cover the same date ranges. Compare complete months before drawing conclusions about sales growth or decline.`;
+  }
+  return `Your ${month} data isn't a complete month yet. Compare complete months before drawing conclusions about sales growth or decline.`;
+}
+
+function founderLargeOrderExplanation(ov, share) {
+  const n = ov.ordersAbove2xMedian || 0;
+  const sales = formatFounderInr(ov.salesAbove2xMedian);
+  const typical = formatFounderInr(ov.medianOrderValue);
+  const aov = formatFounderInr(ov.aov);
+  const sharePhrase = founderSharePhrase(share);
+  const sharePct = formatFounderPct(share);
+  const typicalLine = `Your typical order was ${typical}, compared with an average of ${aov}.`;
+
+  if (n === 1) {
+    const impact =
+      sharePhrase && !String(sharePhrase).includes("%")
+        ? `generated ${sharePhrase} of your sales`
+        : `generated ${sharePct || "a material share"} of your sales`;
+    return `Just one order worth ${sales} ${impact}. ${typicalLine}`;
+  }
+
+  const salesClause =
+    sharePct != null
+      ? `${countNoun(n, "large order")} contributed ${sales} to your sales (${sharePct} of sales before refunds).`
+      : `${countNoun(n, "large order")} contributed ${sales} to your sales.`;
+  return `${salesClause} ${typicalLine}`;
+}
+
+function countWord(n) {
+  const words = { 2: "two", 3: "three", 4: "four", 5: "five", 6: "six", 7: "seven", 8: "eight" };
+  return words[n] || String(n);
+}
+
+function contributionLead(id, amount) {
+  if (id === "orders") {
+    if (amount < 0) return "Fewer orders";
+    if (amount > 0) return "More orders";
+    return "Orders";
+  }
+  if (amount < 0) return "Lower average order value";
+  if (amount > 0) return "Higher average order value";
+  return "Average order value";
+}
+
+/**
+ * Founder-facing Orders/AOV split from verified symmetric decomposition.
+ * Labels mathematical contributions only — never business causes.
+ */
+function founderDriverSummary(decomp, primaryDriver, { provisional = false } = {}) {
+  if (!decomp?.comparable || decomp.orderContribution == null || decomp.aovContribution == null) {
+    return "";
+  }
+  const orderShare = ratio(decomp.orderContribution, decomp.deltaSales);
+  const aovShare = ratio(decomp.aovContribution, decomp.deltaSales);
+  if (orderShare == null || aovShare == null) return "";
+  const orderPct = formatFounderPct(orderShare);
+  const aovPct = formatFounderPct(aovShare);
+  const orderLead = contributionLead("orders", decomp.orderContribution);
+  const aovLead = contributionLead("gross_aov", decomp.aovContribution);
+  const fell = decomp.deltaSales != null && decomp.deltaSales < 0;
+  const rose = decomp.deltaSales != null && decomp.deltaSales > 0;
+  const outcome = fell ? "decline" : rose ? "increase" : "change";
+  const aovLed = Math.abs(aovShare) >= Math.abs(orderShare);
+
+  if (provisional) {
+    return aovLed
+      ? `${aovLead} accounted for ${aovPct} of the difference in available records, while ${orderLead.toLowerCase()} accounted for ${orderPct}. Not a verified full-month comparison.`
+      : `${orderLead} accounted for ${orderPct} of the difference in available records, while ${aovLead.toLowerCase()} accounted for ${aovPct}. Not a verified full-month comparison.`;
+  }
+
+  return aovLed
+    ? `${aovLead} accounted for ${aovPct} of the ${outcome}, while ${orderLead.toLowerCase()} accounted for ${orderPct}.`
+    : `${orderLead} accounted for ${orderPct} of the ${outcome}, while ${aovLead.toLowerCase()} accounted for ${aovPct}.`;
+}
+
+function founderDriverInvestigation(decomp, primaryDriver, latestYm) {
+  const month = monthNameOnly(latestYm);
+  if (!decomp?.comparable || !primaryDriver) {
+    return `What changed in your ${month} sales?`;
+  }
+  const fell = decomp.deltaSales != null && decomp.deltaSales < 0;
+  if (primaryDriver.id === "gross_aov") {
+    return fell
+      ? `Why did customers place smaller-value orders in ${month}?`
+      : `Why did average order value rise in ${month}?`;
+  }
+  return fell
+    ? `Why were there fewer orders in ${month}?`
+    : `Why were there more orders in ${month}?`;
+}
+
+const SALES_BEFORE_REFUNDS = "Sales before refunds";
 
 function filterContext(metrics) {
   return {
@@ -109,11 +250,11 @@ function discoverRevenueAndOrders(metrics) {
             end: monthParts(only.month)?.end || null,
             label: monthLabel(only.month),
           },
-          headline: `Only one month in scope: ${monthLabel(only.month)}`,
-          summary: `Gross Product Sales ${formatInr(only.sales)}${partial ? " (partial month)" : ""}.`,
-          what: `Gross Product Sales are ${formatInr(only.sales)} in ${monthLabel(only.month)}${
+          headline: `${monthNameOnly(only.month)} sales were ${formatInr(only.sales)}`,
+          summary: `${SALES_BEFORE_REFUNDS}${partial ? " · partial month in the current filter" : ""}. Month-over-month comparison needs a second month.`,
+          what: `Sales were ${formatInr(only.sales)} in ${monthLabel(only.month)}${
             partial ? " (partial month in the current filter)" : ""
-          }. Month-over-month comparison is unavailable.`,
+          }. A second complete month is needed before comparing growth.`,
           why: {
             method: "insufficient_history",
             drivers: [],
@@ -204,12 +345,9 @@ function discoverRevenueAndOrders(metrics) {
   const priorSpan = formatCoverageSpan(coverageCompare.prior);
   const currentSpan = formatCoverageSpan(coverageCompare.current);
   const coverageNote = founderComparisonNote(coverageCompare);
-  const growthLabel = provisional
-    ? "observed-record difference (not a verified full-month MoM)"
-    : growth == null
-      ? "MoM unavailable"
-      : `${formatPct(growth)} MoM vs prior-month Gross Product Sales`;
   const shortWhy = founderDriverSummary(decomp, primary, { provisional });
+  const absDelta = decomp.deltaSales == null ? null : Math.abs(decomp.deltaSales);
+  const rose = decomp.deltaSales != null && decomp.deltaSales > 0;
   const calcConfidence = !decomp.comparable
     ? CONFIDENCE.MEDIUM
     : coverageCompare.status === COMPARISON_STATUS.INCOMPATIBLE ||
@@ -224,28 +362,33 @@ function discoverRevenueAndOrders(metrics) {
       ? CONFIDENCE.HIGH
       : "incomplete";
 
+  const founderGrowthPct = growth == null ? null : formatFounderPct(growth);
+  const technicalCoverageHeadline = coverageLeadHeadline(
+    coverageCompare,
+    prior.month,
+    latest.month,
+    monthLabel,
+  );
   const headline = provisional
-    ? coverageLeadHeadline(coverageCompare, prior.month, latest.month, monthLabel) ||
-      `Incomplete period coverage: ${monthLabel(prior.month)} vs ${monthLabel(latest.month)}`
-    : fell
-      ? `Gross Product Sales declined ${formatPct(growth)} into ${monthLabel(latest.month)}`
-      : `Gross Product Sales changed from ${monthLabel(prior.month)} to ${monthLabel(latest.month)}`;
+    ? `${monthNameOnly(latest.month)} sales aren't fully comparable yet`
+    : fell && founderGrowthPct
+      ? `${monthNameOnly(latest.month)} sales fell by ${founderGrowthPct}`
+      : rose && founderGrowthPct
+        ? `${monthNameOnly(latest.month)} sales rose by ${founderGrowthPct}`
+        : `${monthNameOnly(prior.month)} to ${monthNameOnly(latest.month)} sales changed`;
 
+  const provisionalSummary = founderProvisionalSalesSummary(coverageCompare, latest.month);
   const summary = provisional
-    ? `${coverageNote || "Incomplete coverage."} Observed Gross Product Sales ${formatInr(prior.sales)} → ${formatInr(latest.sales)} in available records.`
-    : `${formatInr(prior.sales)} → ${formatInr(latest.sales)} (${growthLabel}).`;
+    ? provisionalSummary
+    : fell
+      ? `Sales decreased from ${formatInr(prior.sales)} in ${monthNameOnly(prior.month)} to ${formatInr(latest.sales)} in ${monthNameOnly(latest.month)} — a drop of ${formatInr(absDelta)}. ${SALES_BEFORE_REFUNDS}.`
+      : rose
+        ? `Sales increased from ${formatInr(prior.sales)} in ${monthNameOnly(prior.month)} to ${formatInr(latest.sales)} in ${monthNameOnly(latest.month)} — an increase of ${formatInr(absDelta)}. ${SALES_BEFORE_REFUNDS}.`
+        : `Sales moved from ${formatInr(prior.sales)} in ${monthNameOnly(prior.month)} to ${formatInr(latest.sales)} in ${monthNameOnly(latest.month)}. ${SALES_BEFORE_REFUNDS}.`;
 
   const what = provisional
-    ? `${coverageNote || "Reporting periods are not equivalent."} Observed Gross Product Sales in available records: ${formatInr(
-        prior.sales,
-      )} (${monthLabel(prior.month)}${priorSpan ? `, ${priorSpan}` : ""}) vs ${formatInr(latest.sales)} (${monthLabel(
-        latest.month,
-      )}${currentSpan ? `, ${currentSpan}` : ""}). Orders/AOV figures below describe this observed-record difference only — not verified full-month deterioration. Basis: Gross Product Sales — not Net Product Sales after Refunds.`
-    : `Gross Product Sales moved from ${formatInr(prior.sales)} in ${monthLabel(prior.month)}${
-        partialPrior ? " (partial period)" : ""
-      } to ${formatInr(latest.sales)} in ${monthLabel(latest.month)}${
-        partialLatest ? " (partial period)" : ""
-      } (${growthLabel}). Basis: Gross Product Sales — not Net Product Sales after Refunds.`;
+    ? provisionalSummary
+    : summary;
 
   out.push(
     createInsight({
@@ -281,20 +424,29 @@ function discoverRevenueAndOrders(metrics) {
         "Demand, listing visibility, or stock availability may have changed — not verified in these exports.",
         "Pricing or promotion mix may have shifted baskets — not verified without offer-level data.",
       ),
-      whatNext: [
-        {
-          action: "Inspect Orders vs Gross AOV on the monthly orders chart",
-          question: "Is the decline caused by fewer orders or smaller baskets?",
-          sectionId: "topline",
-          chartId: "monthly-orders",
-        },
-        {
-          action: "Check which products moved with the period",
-          question: "Which products contributed most to the change?",
-          sectionId: "product_performance",
-          chartId: "product-mix",
-        },
-      ],
+      whatNext: provisional
+        ? [
+            {
+              action: "Compare complete months",
+              question: "Check sales trends using complete months.",
+              sectionId: "topline",
+              chartId: "monthly-sales",
+            },
+          ]
+        : [
+            {
+              action: "Inspect orders vs average order value",
+              question: founderDriverInvestigation(decomp, primary, latest.month),
+              sectionId: "topline",
+              chartId: "monthly-orders",
+            },
+            {
+              action: "Check which products moved with the period",
+              question: "Which products contributed most to the change?",
+              sectionId: "product_performance",
+              chartId: "product-mix",
+            },
+          ],
       metrics: [
         metricRef(`sales_${prior.month}`, `${monthLabel(prior.month)} Gross Product Sales`, prior.sales, "Monthly aggregation"),
         metricRef(`sales_${latest.month}`, `${monthLabel(latest.month)} Gross Product Sales`, latest.sales, "Monthly aggregation"),
@@ -334,10 +486,17 @@ function discoverRevenueAndOrders(metrics) {
       isRecentChange: !provisional,
       isStableObservation: false,
       limitations: [
+        ...(technicalCoverageHeadline ? [technicalCoverageHeadline] : []),
         ...(coverageNote ? [coverageNote] : []),
+        ...(priorSpan || currentSpan
+          ? [
+              `Coverage windows (ISO): ${monthLabel(prior.month)} ${priorSpan || "—"} vs ${monthLabel(latest.month)} ${currentSpan || "—"}.`,
+            ]
+          : []),
         ...(coverageCompare.label && provisional ? [coverageCompare.label] : []),
         ...(decomp.incomparableReason ? [`Decomposition limited: ${decomp.incomparableReason}.`] : []),
         "Symmetric contributions split the Orders×AOV interaction equally for presentation; three-term audit fields remain on evidence.",
+        "Driver percentages are mathematical contributions — not verified business causes.",
         "Customer product refunds are separate Topline reductions — not included in this Gross Product Sales movement.",
       ],
       links: {
@@ -367,23 +526,27 @@ function discoverRevenueAndOrders(metrics) {
           label: monthLabel(prior.month),
         },
         headline: provisional
-          ? `Observed-record driver: ${primary.label}`
-          : `Largest mathematical driver: ${primary.label}`,
-        summary: provisional
-          ? `In available records, Orders moved ${formatPct(orderChange)}; Gross AOV moved ${formatPct(aovChange)} (not a verified full-month MoM).`
-          : `Orders ${formatPct(orderChange)} vs prior-month Orders; Gross AOV ${formatPct(aovChange)} vs prior-month Gross AOV.`,
+          ? `Observed records point to ${primary.id === "orders" ? "order count" : "average order value"}`
+          : primary.id === "orders"
+            ? `Order count drove most of the ${fell ? "sales decline" : rose ? "sales increase" : "sales change"}`
+            : `Average order value drove most of the ${fell ? "sales decline" : rose ? "sales increase" : "sales change"}`,
+        summary: shortWhy || (provisional
+          ? `In available records, orders moved ${formatPct(orderChange)}; average order value moved ${formatPct(aovChange)}. Not a verified full-month comparison.`
+          : `Orders moved ${formatPct(orderChange)}; average order value moved ${formatPct(aovChange)}.`),
         shortWhy,
-        what: provisional
-          ? `Across available records from ${monthLabel(prior.month)} to ${monthLabel(latest.month)}, Orders moved ${formatPct(
-              orderChange,
-            )} (${prior.orders} → ${latest.orders}) and Gross AOV moved ${formatPct(aovChange)} (${formatInr(
-              prior.aov,
-            )} → ${formatInr(latest.aov)}). This describes observed records only.`
-          : `From ${monthLabel(prior.month)} to ${monthLabel(latest.month)}, Orders moved ${formatPct(
-              orderChange,
-            )} vs prior-month Orders (${prior.orders} → ${latest.orders}) and Gross AOV moved ${formatPct(
-              aovChange,
-            )} vs prior-month Gross AOV (${formatInr(prior.aov)} → ${formatInr(latest.aov)}).`,
+        what: shortWhy
+          ? `${shortWhy} Exact amounts stay in evidence.`
+          : provisional
+            ? `Across available records from ${monthLabel(prior.month)} to ${monthLabel(latest.month)}, orders moved ${formatPct(
+                orderChange,
+              )} (${prior.orders} → ${latest.orders}) and average order value moved ${formatPct(aovChange)} (${formatInr(
+                prior.aov,
+              )} → ${formatInr(latest.aov)}). This describes observed records only.`
+            : `From ${monthLabel(prior.month)} to ${monthLabel(latest.month)}, orders moved ${formatPct(
+                orderChange,
+              )} (${prior.orders} → ${latest.orders}) and average order value moved ${formatPct(
+                aovChange,
+              )} (${formatInr(prior.aov)} → ${formatInr(latest.aov)}).`,
         why: {
           method: decomp.presentationMethod || decomp.method,
           drivers,
@@ -397,7 +560,7 @@ function discoverRevenueAndOrders(metrics) {
         whatNext: [
           {
             action: "Open monthly orders chart",
-            question: "Is the decline caused by fewer orders or smaller baskets?",
+            question: founderDriverInvestigation(decomp, primary, latest.month),
             sectionId: "topline",
             chartId: "monthly-orders",
           },
@@ -454,18 +617,18 @@ function discoverRevenueAndOrders(metrics) {
           label: `${bestStreak} consecutive months ending ${monthLabel(bestEnd.month)}`,
         },
         headline: streakPartial
-          ? `${bestStreak} consecutive lower observed months ending ${monthLabel(bestEnd.month)} (incomplete)`
-          : `${bestStreak} consecutive Gross Product Sales declines`,
+          ? `Sales look lower for ${countWord(bestStreak)} months ending ${monthNameOnly(bestEnd.month)} — not fully comparable`
+          : `Sales have fallen for ${countWord(bestStreak)} consecutive months`,
         summary: streakPartial
-          ? `Streak ends ${monthLabel(bestEnd.month)} with incomplete coverage — not a verified full-month MoM streak.`
-          : `Streak ends ${monthLabel(bestEnd.month)} (latest MoM ${formatPct(bestEnd.growth)}).`,
+          ? `The streak ends in ${monthLabel(bestEnd.month)} with incomplete coverage — not a verified full-month decline streak.`
+          : `The streak ends in ${monthLabel(bestEnd.month)} (latest change ${formatPct(bestEnd.growth)}). ${SALES_BEFORE_REFUNDS}.`,
         what: streakPartial
-          ? `Observed Gross Product Sales were lower for ${bestStreak} consecutive months ending ${monthLabel(
+          ? `Observed sales were lower for ${bestStreak} consecutive months ending ${monthLabel(
               bestEnd.month,
             )} (incomplete coverage). Do not treat this as a verified full-month decline streak.`
-          : `Gross Product Sales declined for ${bestStreak} consecutive months ending ${monthLabel(
+          : `Sales fell for ${bestStreak} consecutive months ending ${monthLabel(
               bestEnd.month,
-            )} (latest MoM ${formatPct(bestEnd.growth)}). Zero-filled gap months are included when present in the densified series.`,
+            )} (latest change ${formatPct(bestEnd.growth)}). ${SALES_BEFORE_REFUNDS}.`,
         why: {
           method: "consecutive_negative_mom",
           drivers: [
@@ -540,11 +703,11 @@ function discoverOrderSkew(metrics) {
           end: metrics.period?.end || null,
           label: "Current filter scope",
         },
-        headline: "No material large-order skew above 2× median",
-        summary: `Median ${formatInr(ov.medianOrderValue)}; Gross AOV ${formatInr(ov.aov)}.`,
-        what: `Median order value is ${formatInr(ov.medianOrderValue)} vs Gross AOV ${formatInr(
+        headline: "Large orders are not skewing your average",
+        summary: `Your typical order was ${formatFounderInr(ov.medianOrderValue)}, compared with an average of ${formatFounderInr(ov.aov)}.`,
+        what: `Your typical order was ${formatFounderInr(ov.medianOrderValue)}, compared with an average of ${formatFounderInr(
           ov.aov,
-        )} on the same gross unique-order population. No orders exceed 2× the median in this scope.`,
+        )}. No orders sit above twice the typical order in this scope.`,
         why: {
           method: "order_level_2x_median",
           drivers: [],
@@ -587,14 +750,10 @@ function discoverOrderSkew(metrics) {
         label: "Current filter scope",
       },
       headline: material
-        ? "Large orders materially skew Gross AOV"
-        : "Some orders sit above 2× median",
-      summary: `${ov.ordersAbove2xMedian} order(s) above 2× median = ${formatPct(share)} of Gross Product Sales.`,
-      what: `Median order value is ${formatInr(ov.medianOrderValue)} vs Gross AOV ${formatInr(
-        ov.aov,
-      )}. ${ov.ordersAbove2xMedian} order(s) above 2× median contribute ${formatInr(
-        ov.salesAbove2xMedian,
-      )} (${formatPct(share)} of Gross Product Sales).`,
+        ? `Large orders account for ${formatFounderPct(share)} of your sales`
+        : "A few larger orders sit above your typical order size",
+      summary: founderLargeOrderExplanation(ov, share),
+      what: founderLargeOrderExplanation(ov, share),
       why: {
         method: "order_level_2x_median",
         drivers: [
@@ -615,7 +774,7 @@ function discoverOrderSkew(metrics) {
       whatNext: [
         {
           action: "Review bulk-order candidates",
-          question: "What is the median order value, and do large orders skew the average?",
+          question: "How much do large orders influence your sales?",
           sectionId: "topline",
           chartId: "order-skew",
         },
@@ -630,7 +789,11 @@ function discoverOrderSkew(metrics) {
       materiality: materialityFromChange(ov.salesAbove2xMedian, share, gross),
       confidence: CONFIDENCE.HIGH,
       evidenceQuality: "order_level_stats",
-      limitations: ["Skew uses Gross Product Sales order totals — not Net Product Sales."],
+      limitations: [
+        "Large orders are defined as orders above twice the typical (median) order value.",
+        "Skew uses Gross Product Sales order totals — not Net Product Sales.",
+        "This describes overall order mix in the current filter — not a verified cause of any single month's sales change.",
+      ],
       links: { sectionIds: ["topline"], chartIds: ["order-skew"], investigationHints: ["median_skew"] },
       _persistenceScore: 0,
     }),
@@ -670,15 +833,15 @@ function discoverProduct(metrics) {
         },
         headline:
           concentration != null && concentration >= 0.8
-            ? `High product concentration — top eight hold ${formatPct(concentration)} of Gross Product Sales`
-            : `Top product ${top.productName} holds ${formatPct(top1Share)} of Gross Product Sales`,
-        summary: `${top.productName} leads at ${formatInr(top.sales)}; top-eight share ${formatPct(concentration)} of Gross Product Sales.`,
-        shortWhy: `Top-eight revenue share ${formatPct(concentration)} of Gross Product Sales (not a MoM change).`,
-        what: `${top.productName} leads with ${formatInr(top.sales)} (${formatPct(
+            ? `Eight products generate ${formatFounderPct(concentration)} of your sales`
+            : `${top.productName} accounts for ${formatFounderPct(top1Share)} of your sales`,
+        summary: `${top.productName} leads at ${formatInr(top.sales)}. Your top eight products make up ${formatFounderPct(concentration)} of sales before refunds.`,
+        shortWhy: "",
+        what: `${top.productName} leads with ${formatInr(top.sales)} (${formatFounderPct(
           top1Share,
-        )} of Gross Product Sales). Top-eight products account for ${formatPct(
+        )} of sales). Eight products generate ${formatFounderPct(
           concentration,
-        )} of Gross Product Sales (revenue share of total Gross Product Sales — not a period change %, not profit).`,
+        )} of sales before refunds — a share of sales, not a month-over-month change or profit.`,
         why: {
           method: "product_revenue_share",
           drivers: [
@@ -744,14 +907,14 @@ function discoverProduct(metrics) {
           end: metrics.period?.end || null,
           label: "Current filter scope",
         },
-        headline: `Small assortment (${eligibleCount} products) — leader holds ${formatPct(top1Share)} of Gross Product Sales`,
-        summary: `Top product ${top.productName} ${formatInr(top.sales)}; top-three ${formatPct(top3Share)} of Gross Product Sales. Top-eight concentration suppressed.`,
-        shortWhy: `Top-1 share ${formatPct(top1Share)} / top-3 share ${formatPct(top3Share)} of Gross Product Sales (≤8 SKUs — top-eight metric not used).`,
-        what: `Assortment has ${eligibleCount} eligible product(s) in the current filter, so top-eight concentration is not meaningful. ${top.productName} holds ${formatPct(
+        headline: `${top.productName} accounts for ${formatFounderPct(top1Share)} of your sales`,
+        summary: `You have ${eligibleCount} products in scope. Top three generate ${formatFounderPct(top3Share)} of sales before refunds.`,
+        shortWhy: "",
+        what: `With only ${eligibleCount} products in scope, concentration is best read from your leaders: ${top.productName} holds ${formatFounderPct(
           top1Share,
-        )} of Gross Product Sales; top-three products hold ${formatPct(
+        )} of sales; the top three hold ${formatFounderPct(
           top3Share,
-        )} of Gross Product Sales (revenue share of total Gross Product Sales — not a MoM change).`,
+        )}. ${SALES_BEFORE_REFUNDS}.`,
         why: {
           method: "small_assortment_top1_top3_share",
           drivers: [
@@ -843,20 +1006,27 @@ function discoverProduct(metrics) {
       bestMove.prior > 0 ? ratio(bestMove.delta, bestMove.prior) : null;
     const pctVsGross = ratio(bestMove.delta, gross);
     const zeroRecorded = bestMove.current === 0 && bestMove.prior > 0;
+    const productPct = pctVsPriorProduct == null ? null : formatFounderPct(pctVsPriorProduct);
+    const productFell = bestMove.delta < 0;
+    const productRose = bestMove.delta > 0;
     const headline = zeroRecorded
-      ? `${bestMove.productName}: zero recorded sales in ${monthLabel(bestMove.currentMonth)} (not confirmed demand loss)`
-      : `${bestMove.productName}: largest tracked product sales move`;
+      ? `${bestMove.productName} shows no recorded sales in ${monthNameOnly(bestMove.currentMonth)}`
+      : bestMove.incomplete
+        ? `${bestMove.productName} sales changed in available ${monthNameOnly(bestMove.currentMonth)} records`
+        : productFell && productPct
+          ? `${bestMove.productName} sales dropped by ${productPct} in ${monthNameOnly(bestMove.currentMonth)}`
+          : productRose && productPct
+            ? `${bestMove.productName} sales rose by ${productPct} in ${monthNameOnly(bestMove.currentMonth)}`
+            : `${bestMove.productName} sales changed in ${monthNameOnly(bestMove.currentMonth)}`;
     const what = zeroRecorded
-      ? `Among top products with a monthly series, ${bestMove.productName} moved from ${formatInr(
+      ? `${bestMove.productName} moved from ${formatInr(
           bestMove.prior,
-        )} in ${monthLabel(bestMove.priorMonth)} to ${formatInr(
+        )} in ${monthNameOnly(bestMove.priorMonth)} to ${formatInr(
           bestMove.current,
-        )} in ${monthLabel(bestMove.currentMonth)} (Δ ${formatInr(
-          bestMove.delta,
-        )}). Zero recorded Gross Product Sales in the later month is not the same as a confirmed product demand decline — coverage may be incomplete or the SKU may simply have no rows in this export window.`
-      : `Among top products with a monthly series, ${bestMove.productName} shows the largest absolute Gross Product Sales move: ${formatInr(
-          bestMove.prior,
-        )} to ${formatInr(bestMove.current)} (Δ ${formatInr(bestMove.delta)}).`;
+        )} in ${monthNameOnly(bestMove.currentMonth)}. Zero recorded sales is not the same as a confirmed demand decline — coverage may be incomplete or the product may have no rows in this window.`
+      : bestMove.incomplete
+        ? `${bestMove.productName} moved from ${formatInr(bestMove.prior)} to ${formatInr(bestMove.current)} in available records (${formatInr(bestMove.delta)}). Periods are not fully comparable.`
+        : `${bestMove.productName} moved from ${formatInr(bestMove.prior)} in ${monthNameOnly(bestMove.priorMonth)} to ${formatInr(bestMove.current)} in ${monthNameOnly(bestMove.currentMonth)} — a ${productFell ? "drop" : productRose ? "rise" : "change"} of ${formatInr(Math.abs(bestMove.delta))}. ${SALES_BEFORE_REFUNDS}.`;
 
     out.push(
       createInsight({
@@ -871,14 +1041,8 @@ function discoverProduct(metrics) {
           label: `${monthLabel(bestMove.priorMonth)} → ${monthLabel(bestMove.currentMonth)}`,
         },
         headline,
-        summary: `${formatInr(bestMove.prior)} → ${formatInr(bestMove.current)} (Δ ${formatInr(bestMove.delta)}). ${
-          pctVsPriorProduct != null
-            ? `${formatPct(pctVsPriorProduct)} vs this product’s prior-month Gross Product Sales`
-            : "MoM % vs prior product sales unavailable (prior was zero)."
-        }.`,
-        shortWhy: zeroRecorded
-          ? `Zero recorded sales in ${monthLabel(bestMove.currentMonth)}; Δ ${formatInr(bestMove.delta)} vs prior product month — not labelled as confirmed demand decline.`
-          : `Δ ${formatInr(bestMove.delta)} (${formatPct(pctVsPriorProduct)} vs this product’s prior-month Gross Product Sales; ${formatPct(pctVsGross)} of total Gross Product Sales).`,
+        summary: what,
+        shortWhy: "",
         what,
         why: {
           method: "product_monthly_delta",
@@ -979,6 +1143,21 @@ function discoverFees(metrics) {
   const ranked = [...drains].filter((row) => row.amount < 0).sort((a, b) => a.amount - b.amount);
   const top = ranked[0];
   const feeAbs = roundMoney(ranked.reduce((sum, row) => sum + Math.abs(row.amount || 0), 0));
+  const topLabel = top?.label || "Amazon fees";
+  const topAbs = Math.abs(top?.amount || 0);
+  const feeHeadline = top
+    ? `${topLabel} is your biggest identified Amazon charge`
+    : rate != null
+      ? `Identified Amazon charges take ${formatFounderPct(rate)} of your sales`
+      : "Amazon marketplace charges need a closer look";
+  const feeSummary =
+    top && rate != null && feeAbs != null
+      ? `Amazon charged ${formatFounderInr(topAbs)} for ${topLabel.toLowerCase()}. Across the identified marketplace charges, deductions total ${formatFounderInr(feeAbs)}, equivalent to ${formatFounderPct(rate)} of sales before refunds.`
+      : top
+        ? `Amazon charged ${formatFounderInr(topAbs)} for ${topLabel.toLowerCase()}. Identified marketplace charges are shown in supporting details.`
+        : rate != null
+          ? `Across the identified marketplace charges, deductions are equivalent to ${formatFounderPct(rate)} of sales before refunds.`
+          : "Identified marketplace charges are available in supporting details.";
 
   return [
     createInsight({
@@ -992,17 +1171,9 @@ function discoverFees(metrics) {
         end: metrics.period?.end || null,
         label: "Current filter scope",
       },
-      headline: top
-        ? `Marketplace fees led by ${top.label} (${formatInr(top.amount)})`
-        : `Marketplace deduction rate ${formatPct(rate)}`,
-      summary: `Effective marketplace deduction rate ${formatPct(rate)} of Gross Product Sales.`,
-      what: `Classified Amazon marketplace fee drains total ${formatInr(
-        feeAbs != null ? -feeAbs : null,
-      )} against Gross Product Sales ${formatInr(gross)} (rate ${formatPct(
-        rate,
-      )}). Denominator is Gross Product Sales; customer product refunds and promotional rebates are excluded from this rate.${
-        top ? ` Largest drain: ${top.label} at ${formatInr(top.amount)}.` : ""
-      }`,
+      headline: feeHeadline,
+      summary: feeSummary,
+      what: feeSummary,
       why: {
         method: "marketplace_fee_drains_over_gross_sales",
         drivers: ranked.slice(0, 4).map((row) => ({
@@ -1041,8 +1212,9 @@ function discoverFees(metrics) {
       confidence: CONFIDENCE.HIGH,
       evidenceQuality: "classified_fee_lines",
       limitations: [
+        "Figures cover identified marketplace charges only — not every possible Amazon cost.",
         "Amazon selling fees in the CSV are an aggregate — not proven referral-only.",
-        "Promotional rebates are settlement adjustments, not marketplace fees.",
+        "Promotional rebates and customer refunds are excluded from marketplace fee totals.",
       ],
       links: {
         sectionIds: ["amazon_economics"],
@@ -1073,17 +1245,17 @@ function discoverRefundsAndRecon(metrics, reconciliation) {
           end: metrics.period?.end || null,
           label: "Current filter scope",
         },
-        headline: `Customer product refunds ${formatInr(kpis.refundAmountAbs)} reduce Net Product Sales`,
-        summary: `Gross ${formatInr(kpis.grossProductSales)} → Net ${formatInr(kpis.netProductSales)}.`,
-        what: `Refund amount ${formatInr(
+        headline: `Refunds reduced your sales by ${formatFounderInr(kpis.refundAmountAbs)}`,
+        summary: `Sales before refunds ${formatFounderInr(kpis.grossProductSales)}; after refunds ${formatFounderInr(kpis.netProductSales)}.`,
+        what: `Customer refunds of ${formatFounderInr(
           kpis.refundAmountAbs,
-        )} is absolute product charges on Refund rows. Net Product Sales ${formatInr(
+        )} bring sales from ${formatFounderInr(kpis.grossProductSales)} down to ${formatFounderInr(
           kpis.netProductSales,
-        )} = Gross Product Sales − refund amount. ${
+        )}. ${
           kpis.canSubtractFullRefunds
-            ? `Net orders ${kpis.netOrderCount} after ${kpis.fullRefundOrderCount} verified full-order refund(s).`
-            : `Orders affected by refunds: ${kpis.ordersAffectedByRefunds ?? kpis.refundedOrderCount}; net orders not subtracted because refunds are not all verified full-order reversals.`
-        } Refunds are Topline sales reductions — not Amazon Economics fee drains.`,
+            ? `Net orders ${kpis.netOrderCount} after ${countNoun(kpis.fullRefundOrderCount, "verified full-order refund")}.`
+            : `${countNoun(kpis.ordersAffectedByRefunds ?? kpis.refundedOrderCount, "order")} affected by refunds; net orders are not reduced because refunds are not all verified full-order reversals.`
+        } Refunds cut sales — they are not Amazon fee drains.`,
         why: {
           method: "refund_product_charges",
           drivers: [
@@ -1149,11 +1321,14 @@ function discoverRefundsAndRecon(metrics, reconciliation) {
           end: metrics.period?.end || null,
           label: "Current filter scope",
         },
-        headline: `${diffs.length} unresolved reconciliation difference(s)`,
-        summary: `Largest: ${largest.id} (Δ ${formatInr(largest.difference)}).`,
-        what: `${diffs.length} confirmed comparable reconciliation difference(s) remain unresolved. Largest labelled ${
-          largest.id
-        } with Δ ${formatInr(largest.difference)}. Differences are disclosed — not auto-forced to match.`,
+        headline:
+          diffs.length === 1
+            ? "Your Amazon settlement report doesn't fully match these sales figures"
+            : `${diffs.length} settlement figures don't match your sales export`,
+        summary: `Largest gap: ${formatInr(largest.difference)} on ${largest.label || largest.id}. Details stay in evidence.`,
+        what: `${diffs.length} confirmed comparable settlement difference(s) remain unresolved. The largest gap is ${formatInr(
+          largest.difference,
+        )} on ${largest.label || largest.id}. Differences are disclosed — not auto-forced to match.`,
         why: {
           method: "pdf_csv_comparable_difference",
           drivers: diffs.slice(0, 4).map((row) => ({
@@ -1207,9 +1382,9 @@ function discoverRefundsAndRecon(metrics, reconciliation) {
           end: metrics.period?.end || null,
           label: "Current filter scope",
         },
-        headline: "Settlement checks include missing or non-comparable lines",
-        summary: `${missing.length} PDF/CSV check(s) are missing_information or not_comparable.`,
-        what: `${missing.length} reconciliation check(s) are disclosed as missing information or not comparable (for example GST, bank transfers, or PDF Income vs CSV Net Product Sales). Product profit remains unavailable without COGS.`,
+        headline: "Some settlement checks can't be completed from these files",
+        summary: `${missing.length} PDF/CSV check(s) are missing or not comparable — for example GST or bank transfers.`,
+        what: `${missing.length} settlement check(s) are disclosed as missing information or not comparable (for example GST, bank transfers, or PDF income vs sales after refunds). Product profit remains unavailable without product costs.`,
         why: {
           method: "recon_status_disclosure",
           drivers: [],
@@ -1257,9 +1432,9 @@ function discoverRefundsAndRecon(metrics, reconciliation) {
             end: metrics.period?.end || null,
             label: "Current filter scope",
           },
-          headline: "Product profit unavailable — COGS not in these exports",
-          summary: "Settlement movement is not profit.",
-          what: "Product profit cannot be calculated from the Amazon transaction CSV / Unified Summary alone because actual product costs (COGS) are missing.",
+          headline: "Product profit can't be calculated from these Amazon files",
+          summary: "Settlement movement is not profit — product costs are missing.",
+          what: "Product profit cannot be calculated from the Amazon transaction CSV / Unified Summary alone because actual product costs are missing.",
           why: {
             method: "missing_cogs",
             drivers: [],
