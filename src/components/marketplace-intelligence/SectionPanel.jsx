@@ -88,7 +88,20 @@ function ToplineSection({ section, chartInsights, onInvestigate }) {
           { label: "Gross product sales", value: kpis.grossProductSales, kind: "currency", hint: "Order Payment product charges" },
           { label: "Refund amount", value: kpis.refundAmountAbs, kind: "currency", hint: "Abs. product charges on Refund rows" },
           { label: "Net product sales", value: kpis.netProductSales, kind: "currency", hint: "Gross − refund amount" },
-          { label: "Latest MoM growth", value: kpis.momGrowthLatest, kind: "pct" },
+          kpis.momGrowthComparable === false
+            ? {
+                label: "Latest MoM growth",
+                value: kpis.momGrowthDisplay || "Incomplete period — MoM not comparable",
+                kind: "text",
+                display: kpis.momGrowthDisplay || "Incomplete period — MoM not comparable",
+                hint: kpis.momGrowthHint || "Reporting periods are not equivalent for a definitive MoM %.",
+              }
+            : {
+                label: "Latest MoM growth",
+                value: kpis.momGrowthLatest,
+                kind: "pct",
+                hint: kpis.momGrowthHint || "MoM vs prior-month Gross Product Sales",
+              },
         ]}
       />
       <MetricGrid items={orderMetrics} />

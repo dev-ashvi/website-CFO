@@ -2,9 +2,10 @@
  * Marketplace Intelligence engine.
  *
  * Public route: /marketplace-intelligence (no login).
- * Layers: ingestion → calculations → reconciliation → investigations → UI.
+ * Layers: ingestion → calculations → reconciliation → intelligence → investigations → UI.
  */
 import { calculateMarketplace, createEmptyFilters } from "./calculations.js";
+import { buildFinancialIntelligence } from "./financialIntelligence.js";
 import { buildChartInsights } from "./insights.js";
 import { normalizeSources } from "./ingestion.js";
 import { reconcileSettlement } from "./reconciliation.js";
@@ -56,6 +57,44 @@ export { normalizeProductName } from "./classify.js";
 export { reconcileSettlement } from "./reconciliation.js";
 export { medianOfSorted } from "./money.js";
 export {
+  DECOMPOSITION_METHOD,
+  DECOMPOSITION_PRESENTATION_METHOD,
+  DECOMPOSITION_TOLERANCE_INR,
+  decomposeSalesOrdersAov,
+  primaryDriverLabel,
+} from "./decomposition.js";
+export {
+  BRIEF_SCHEMA_VERSION,
+  buildFinancialIntelligence,
+  findInsight,
+  latestMonthDecomposition,
+} from "./financialIntelligence.js";
+export { discoverInsights } from "./insightDiscovery.js";
+export { dedupeInsights, scoreInsight, selectBriefInsights } from "./insightRanking.js";
+export {
+  COMPARISON_STATUS,
+  CONFIDENCE,
+  INSIGHT_CURRENCY,
+  INSIGHT_SCHEMA_VERSION,
+  INSIGHT_TYPES,
+  INVESTIGATION_ITEM_STATUS,
+  METRIC_BASIS,
+  createInsight,
+  defaultConfidenceFacets,
+  metricRef,
+} from "./insightSchema.js";
+export {
+  compareMonthCoverage,
+  coverageLeadHeadline,
+  founderComparisonNote,
+  formatCoverageSpan,
+  isPartialMonth,
+  monthCoverageMeta,
+  monthParts,
+  presentLatestMomGrowth,
+} from "./periodCoverage.js";
+export { connectionToStatus, humanReconGap, statusLabel } from "./investigationLabels.js";
+export {
   ASK_WYZ_DISCLOSURE,
   ASK_WYZ_DISCLOSURE_LIVE,
   ASK_WYZ_MODE,
@@ -72,6 +111,18 @@ export {
   validateAskPayload,
 } from "./evidence.js";
 export { MARKETPLACE_ASK_ENDPOINT, askMarketplaceWyz } from "./askLive.js";
+export {
+  FACT_SCHEMA_VERSION,
+  buildFactStore,
+  factsForWire,
+  getFact,
+  measureBulkOrdersByMonth,
+} from "./investigationFacts.js";
+export {
+  INVESTIGATION_PLAN_VERSION,
+  investigationPlanForWire,
+  planInvestigation,
+} from "./investigationPlanner.js";
 export {
   REPORT_CURRENCY,
   REPORT_CURRENCY_NAME,
@@ -97,6 +148,7 @@ export async function runMarketplaceEngine(session, filters = createEmptyFilters
   const reconciliation = reconcileSettlement(normalized, metrics);
   if (metrics?.status === "calculated") {
     metrics.chartInsights = buildChartInsights(metrics, reconciliation);
+    metrics.intelligence = buildFinancialIntelligence(metrics, reconciliation);
   }
   return {
     sessionId: session?.id || null,

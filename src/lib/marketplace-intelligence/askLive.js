@@ -6,6 +6,7 @@
 import { presentAskExplanation, REPORT_CURRENCY } from "./askPresentation.js";
 import { buildAskPayload } from "./evidence.js";
 import { ASK_WYZ_DISCLOSURE_LIVE, investigate } from "./investigations.js";
+import { investigationPlanForWire, planInvestigation } from "./investigationPlanner.js";
 
 export const MARKETPLACE_ASK_ENDPOINT = "/api/marketplace-ask";
 export const ASK_REQUEST_TIMEOUT_MS = 45000;
@@ -66,6 +67,7 @@ export async function askMarketplaceWyz({
   metrics,
   reconciliation = null,
   history = [],
+  investigation = null,
   fetchImpl = globalThis.fetch,
   endpoint = MARKETPLACE_ASK_ENDPOINT,
   timeoutMs = ASK_REQUEST_TIMEOUT_MS,
@@ -75,6 +77,19 @@ export async function askMarketplaceWyz({
     return guided;
   }
 
+  const planned =
+    investigation?.status === "ready"
+      ? investigation
+      : context?.insightId
+        ? planInvestigation({
+            insightId: context.insightId,
+            metrics,
+            reconciliation,
+            sessionId: context.sessionId,
+          })
+        : null;
+  const investigationWire = investigationPlanForWire(planned);
+
   const wire = buildAskPayload({
     question,
     metrics,
@@ -82,11 +97,18 @@ export async function askMarketplaceWyz({
     context: guided.context,
     guided,
     history,
+    investigationPlan: investigationWire,
   });
+
+  const withPlan = {
+    ...guided,
+    investigation: planned?.status === "ready" ? planned.plan : null,
+    factStore: planned?.factStore || null,
+  };
 
   if (typeof fetchImpl !== "function") {
     return {
-      ...guided,
+      ...withPlan,
       disclosure: ASK_WYZ_DISCLOSURE_LIVE,
       source: "guided",
       currency: REPORT_CURRENCY,
@@ -110,7 +132,7 @@ export async function askMarketplaceWyz({
     if (!res.ok) {
       if (res.status === 429) {
         return {
-          ...guided,
+          ...withPlan,
           disclosure: ASK_WYZ_DISCLOSURE_LIVE,
           source: "guided",
           liveModel: false,
@@ -122,7 +144,7 @@ export async function askMarketplaceWyz({
         };
       }
       return {
-        ...guided,
+        ...withPlan,
         disclosure: ASK_WYZ_DISCLOSURE_LIVE,
         source: "guided",
         liveModel: false,
@@ -138,10 +160,14 @@ export async function askMarketplaceWyz({
     if (!mapped.followUps?.length && guided.followUps?.length) {
       mapped.followUps = guided.followUps;
     }
-    return mapped;
+    return {
+      ...mapped,
+      investigation: withPlan.investigation,
+      factStore: withPlan.factStore,
+    };
   } catch {
     return {
-      ...guided,
+      ...withPlan,
       disclosure: ASK_WYZ_DISCLOSURE_LIVE,
       source: "guided",
       liveModel: false,

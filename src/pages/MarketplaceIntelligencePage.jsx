@@ -4,6 +4,7 @@ import { ArrowLeft, Loader2, Shield } from "lucide-react";
 import Navbar from "../components/Navbar.jsx";
 import AskWyzPanel from "../components/marketplace-intelligence/AskWyzPanel.jsx";
 import FilterBar from "../components/marketplace-intelligence/FilterBar.jsx";
+import IntelligenceBrief from "../components/marketplace-intelligence/IntelligenceBrief.jsx";
 import SectionPanel from "../components/marketplace-intelligence/SectionPanel.jsx";
 import SourcePanel from "../components/marketplace-intelligence/SourcePanel.jsx";
 import {
@@ -14,6 +15,7 @@ import {
   createEmptyFilters,
   createMarketplaceSession,
   detachSourceFile,
+  planInvestigation,
   requestSampleDataset,
   runMarketplaceEngine,
   sessionSummary,
@@ -37,6 +39,7 @@ export default function MarketplaceIntelligencePage() {
   const [askLoadingPhase, setAskLoadingPhase] = useState(null);
   const [askError, setAskError] = useState(null);
   const [askExpanded, setAskExpanded] = useState(false);
+  const [investigation, setInvestigation] = useState(null);
   const [filters, setFilters] = useState(() => createEmptyFilters());
   const [engine, setEngine] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -97,6 +100,7 @@ export default function MarketplaceIntelligencePage() {
     }
     setSession(result.session);
     setConversation([]);
+    setInvestigation(null);
     setAskError(null);
     setFilters(createEmptyFilters());
     setNotice(result.classification.message);
@@ -105,6 +109,7 @@ export default function MarketplaceIntelligencePage() {
   const onClear = (slot) => {
     setSession((current) => detachSourceFile(current, slot));
     setConversation([]);
+    setInvestigation(null);
     setAskError(null);
     setFilters(createEmptyFilters());
     setNotice("File removed from this session.");
@@ -115,25 +120,84 @@ export default function MarketplaceIntelligencePage() {
     const sample = requestSampleDataset(createMarketplaceSession());
     setSession(sample.session);
     setConversation([]);
+    setInvestigation(null);
     setAskError(null);
     setFilters(createEmptyFilters());
     setNotice(sample.message);
   };
 
-  const onAsk = async (question, chartId = null) => {
+  const openInvestigation = (insight) => {
+    if (!insight || !engine?.metrics) return;
+    const planned = planInvestigation({
+      insight,
+      metrics: engine.metrics,
+      reconciliation: engine.reconciliation || null,
+      sessionId: session.id,
+    });
+    setInvestigation(planned);
+    const insightSection = insight.links?.sectionIds?.[0] || insight.whatNext?.[0]?.sectionId || null;
+    const insightChart = insight.whatNext?.[0]?.chartId || insight.links?.chartIds?.[0] || null;
+    if (insightSection) setSectionId(insightSection);
+    setAskContext(
+      buildInvestigationContext({
+        sessionId: session.id,
+        sectionId: insightSection || sectionId,
+        dateRange: filters.dateRange,
+        product: filters.products?.[0] || null,
+        filters,
+        chartId: insightChart,
+        insightId: insight.id,
+        insightHeadline: insight.headline,
+        insightQuestion: insight.whatNext?.[0]?.question || planned.question,
+      }),
+    );
+    setAskExpanded(true);
+    setAskError(null);
+  };
+
+  const onAsk = async (question, chartId = null, insight = null) => {
     if (askLoading) return;
     const text = String(question || "").trim();
     if (!text) return;
 
+    const activeInsight = insight || (investigation?.plan ? { id: investigation.insightId, headline: investigation.plan.insightHeadline, links: investigation.plan.selectedFinding?.links, whatNext: investigation.plan.nextInvestigations } : null);
+    if (insight) openInvestigation(insight);
+
+    const insightSection = activeInsight?.links?.sectionIds?.[0] || activeInsight?.whatNext?.[0]?.sectionId || null;
+    const insightChart =
+      chartId ||
+      activeInsight?.whatNext?.[0]?.chartId ||
+      activeInsight?.links?.chartIds?.[0] ||
+      askContext?.chartId ||
+      null;
+    if (insightSection) setSectionId(insightSection);
+
+    const planned =
+      insight || investigation?.insightId
+        ? planInvestigation({
+            insightId: insight?.id || investigation?.insightId,
+            insight: insight || null,
+            metrics: engine?.metrics || null,
+            reconciliation: engine?.reconciliation || null,
+            sessionId: session.id,
+          })
+        : investigation;
+
+    if (planned?.status === "ready") setInvestigation(planned);
+
     const context = buildInvestigationContext({
       sessionId: session.id,
-      sectionId,
+      sectionId: insightSection || sectionId,
       dateRange: filters.dateRange,
       product: filters.products?.[0] || null,
       filters,
-      chartId: chartId || askContext?.chartId || null,
+      chartId: insightChart,
+      insightId: planned?.insightId || askContext?.insightId || null,
+      insightHeadline: planned?.plan?.insightHeadline || askContext?.insightHeadline || null,
+      insightQuestion: planned?.question || askContext?.insightQuestion || null,
     });
     setAskContext(context);
+    setAskExpanded(true);
     setAskError(null);
     setAskLoading(true);
     setAskLoadingPhase("Question received — preparing investigation…");
@@ -157,6 +221,7 @@ export default function MarketplaceIntelligencePage() {
         metrics: engine?.metrics || null,
         reconciliation: engine?.reconciliation || null,
         history,
+        investigation: planned?.status === "ready" ? planned : null,
       });
 
       const assistantId = `a-${++askTurnSeq}`;
@@ -297,6 +362,20 @@ export default function MarketplaceIntelligencePage() {
             </div>
           ) : null}
 
+          {ready ? (
+            <IntelligenceBrief
+              intelligence={engine.metrics.intelligence}
+              onInvestigate={({ insight, sectionId: nextSection }) => {
+                if (nextSection) setSectionId(nextSection);
+                // Deterministic plan first — NVIDIA only when user requests AI explanation.
+                openInvestigation(insight);
+              }}
+              onOpenSection={(nextSection) => {
+                if (nextSection) setSectionId(nextSection);
+              }}
+            />
+          ) : null}
+
           <div className="mt-6 flex gap-2 overflow-x-auto pb-1">
             {SECTIONS.map((section) => {
               const active = section.id === sectionId;
@@ -347,6 +426,11 @@ export default function MarketplaceIntelligencePage() {
               expanded={askExpanded}
               onToggleExpand={() => setAskExpanded((value) => !value)}
               onAsk={(question) => onAsk(question)}
+              investigation={investigation}
+              onRequestAi={(question) => onAsk(question)}
+              onOpenSection={(nextSection) => {
+                if (nextSection) setSectionId(nextSection);
+              }}
             />
           </div>
         </div>

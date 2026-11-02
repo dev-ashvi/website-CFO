@@ -27,6 +27,9 @@ export function buildInvestigationContext({
   product = null,
   filters = null,
   chartId = null,
+  insightId = null,
+  insightHeadline = null,
+  insightQuestion = null,
 } = {}) {
   const section = getSection(sectionId);
   return {
@@ -38,6 +41,9 @@ export function buildInvestigationContext({
     product,
     filters: filters && typeof filters === "object" ? { ...filters } : {},
     chartId,
+    insightId: insightId ? String(insightId).slice(0, 80) : null,
+    insightHeadline: insightHeadline ? String(insightHeadline).slice(0, 160) : null,
+    insightQuestion: insightQuestion ? String(insightQuestion).slice(0, 200) : null,
     suggestedQuestions: section.questions,
   };
 }
@@ -147,15 +153,32 @@ function answerFor(question, metrics, context) {
   if (/monthly sales|growth|move in this period/.test(q)) {
     const months = monthSeries(metrics);
     const latest = months[months.length - 1];
+    const toplineKpis = metrics?.sections?.topline?.kpis || kpis;
+    const momComparable = toplineKpis.momGrowthComparable !== false;
     items.push(evidence("gross_product_sales", "Gross Product Sales", kpis.grossProductSales, "Order Payment product charges"));
     if (latest) {
       items.push(evidence("month_sales", `${monthLabel(latest.month)} Gross Product Sales`, latest.sales, "Monthly aggregation"));
-      items.push(evidence("mom_growth", `${monthLabel(latest.month)} MoM growth`, latest.growth, "MoM vs prior month"));
+      if (momComparable && latest.growth != null) {
+        items.push(evidence("mom_growth", `${monthLabel(latest.month)} MoM growth`, latest.growth, "MoM vs prior month"));
+      } else {
+        items.push(
+          evidence(
+            "mom_growth_status",
+            "Latest MoM growth",
+            null,
+            toplineKpis.momGrowthDisplay || "Incomplete period — MoM not comparable",
+          ),
+        );
+      }
     }
     return {
       text: `Gross Product Sales are ${formatInr(kpis.grossProductSales)} across ${kpis.orderCount} distinct Orders. ${
         latest
-          ? `Latest month ${monthLabel(latest.month)} is ${formatInr(latest.sales)} with MoM growth ${formatPct(latest.growth)}.`
+          ? momComparable && latest.growth != null
+            ? `Latest month ${monthLabel(latest.month)} is ${formatInr(latest.sales)} with MoM growth ${formatPct(latest.growth)}.`
+            : `Latest month ${monthLabel(latest.month)} is ${formatInr(latest.sales)}. ${
+                toplineKpis.momGrowthDisplay || "Incomplete period — MoM not comparable"
+              }. Observed-record differences may still appear in detailed analysis, clearly qualified.`
           : "Monthly growth needs at least two months in scope."
       } All amounts are Indian rupees (₹).`,
       evidence: items,
@@ -617,6 +640,8 @@ export function investigate(question, context, metrics = null, reconciliation = 
         product: safeContext.product,
         filters: safeContext.filters,
         chartId: safeContext.chartId,
+        insightId: safeContext.insightId,
+        insightHeadline: safeContext.insightHeadline,
       },
       answer: null,
       evidence: [],
@@ -651,6 +676,22 @@ export function investigate(question, context, metrics = null, reconciliation = 
     }`;
   }
 
+  // Ground Ask WYZ in a selected deterministic insight when opened from the brief.
+  const selectedInsight = safeContext.insightId
+    ? (metrics?.intelligence?.insights || []).find((row) => row.id === safeContext.insightId)
+    : null;
+  if (selectedInsight) {
+    const insightMetrics = (selectedInsight.metrics || []).slice(0, 8).map((row) =>
+      evidenceItem(row.metricId, row.label, row.value, row.source || "insight"),
+    );
+    evidence = [...insightMetrics, ...(evidence || [])].slice(0, 12);
+    const driverLine = (selectedInsight.why?.drivers || [])
+      .slice(0, 3)
+      .map((d) => `${d.label}: ${d.amount != null ? formatInr(d.amount) : d.detail}`)
+      .join("; ");
+    answer = `${selectedInsight.what}${driverLine ? ` Measurable drivers — ${driverLine}.` : ""} ${answer}`;
+  }
+
   return {
     mode: ASK_WYZ_MODE,
     liveModel: false,
@@ -664,6 +705,8 @@ export function investigate(question, context, metrics = null, reconciliation = 
       product: safeContext.product,
       filters: safeContext.filters,
       chartId: safeContext.chartId,
+      insightId: safeContext.insightId,
+      insightHeadline: safeContext.insightHeadline,
     },
     answer: humanizePeriodLabels(answer),
     evidence,

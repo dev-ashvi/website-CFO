@@ -4,6 +4,7 @@
 import { inDateRange, monthKey, weekKey } from "./dates.js";
 import { buildChartInsights } from "./insights.js";
 import { growthRate, medianOfSorted, ratio, roundMoney, sumMoney } from "./money.js";
+import { presentLatestMomGrowth } from "./periodCoverage.js";
 import { MISSING_PRODUCT_COST, MISSING_REFERRAL_SPLIT, MISSING_UNITS } from "./schema.js";
 
 /** Absolute tolerance when comparing refund product charges to order gross. */
@@ -728,6 +729,8 @@ export function calculateMarketplace(normalized, filters = createEmptyFilters())
   const unknownAmount = roleSum(scoped, "unknown");
   const netSettlementMovement = sumMoney(scoped.map((tx) => tx.totalInr));
   const monthly = buildMonthly(orders);
+  const period = dates.length ? { start: dates[0], end: dates[dates.length - 1] } : normalized.period;
+  const momPresentation = presentLatestMomGrowth(monthly, period, filters?.dateRange || null);
   const weekly = buildWeekly(orders);
   const products = buildProducts(orders, refunds);
   const orderSizes = orderSizeBuckets(orderLevels);
@@ -781,7 +784,7 @@ export function calculateMarketplace(normalized, filters = createEmptyFilters())
   const result = {
     layer: "calculations",
     status: "calculated",
-    period: dates.length ? { start: dates[0], end: dates[dates.length - 1] } : normalized.period,
+    period,
     currency: "INR",
     filters,
     kpis: {
@@ -844,7 +847,12 @@ export function calculateMarketplace(normalized, filters = createEmptyFilters())
           salesAbove2xMedian: orderValues.salesAbove2xMedian,
           salesShareAbove2xMedian: orderValues.salesShareAbove2xMedian,
           unitsSold: null,
-          momGrowthLatest: monthly.length > 1 ? monthly[monthly.length - 1].growth : null,
+          // Raw observed growth retained; UI uses momGrowthComparable / momGrowthDisplay.
+          momGrowthLatest: momPresentation.value,
+          momGrowthComparable: momPresentation.comparable,
+          momGrowthStatus: momPresentation.status,
+          momGrowthDisplay: momPresentation.display,
+          momGrowthHint: momPresentation.hint,
         },
         monthly,
         weekly,

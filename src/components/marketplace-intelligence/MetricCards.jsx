@@ -1,16 +1,26 @@
 import { formatCount, formatInr, formatPct } from "../../lib/marketplace-intelligence/index.js";
 
-export function MetricCard({ label, value, kind = "currency", hint }) {
+export function MetricCard({ label, value, kind = "currency", hint, display: displayOverride = null }) {
   let display = "—";
-  if (kind === "currency") display = formatInr(value);
+  if (displayOverride != null) display = String(displayOverride);
+  else if (kind === "currency") display = formatInr(value);
   else if (kind === "pct") display = formatPct(value);
   else if (kind === "count") display = formatCount(value);
+  else if (kind === "text" && value != null) display = String(value);
   else if (value != null) display = String(value);
+
+  const compact = Boolean(displayOverride) || kind === "text";
 
   return (
     <div className="rounded-2xl border border-[rgba(26,54,115,0.12)] bg-white px-4 py-3 shadow-[0_8px_24px_rgba(26,54,115,0.04)]">
       <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{label}</p>
-      <p className="mt-1 text-xl font-semibold tracking-tight tabular-nums text-[#1a3673]">{display}</p>
+      <p
+        className={`mt-1 font-semibold tracking-tight text-[#1a3673] ${
+          compact ? "text-sm leading-5" : "text-xl tabular-nums"
+        }`}
+      >
+        {display}
+      </p>
       {hint ? <p className="mt-1 text-xs leading-5 text-slate-500">{hint}</p> : null}
     </div>
   );

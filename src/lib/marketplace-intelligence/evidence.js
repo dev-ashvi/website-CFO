@@ -225,6 +225,8 @@ export function selectEvidenceMetrics(metrics, reconciliation, context = {}) {
       sectionId,
       sectionLabel: getSection(sectionId).label,
       chartId: context.chartId ? clipText(context.chartId, 40) : null,
+      insightId: context.insightId ? clipText(context.insightId, 80) : null,
+      insightHeadline: context.insightHeadline ? clipText(context.insightHeadline, 160) : null,
       product: context.product ? sanitizeProductLabel(context.product) : null,
       dateRange: context.dateRange
         ? {
@@ -282,6 +284,7 @@ export function selectEvidenceMetrics(metrics, reconciliation, context = {}) {
 
 /**
  * Build the wire payload for POST /api/marketplace-ask.
+ * Optional investigationPlan is compact Stage 5B context (factIds + connections).
  */
 export function buildAskPayload({
   question,
@@ -290,6 +293,7 @@ export function buildAskPayload({
   context = {},
   guided = null,
   history = [],
+  investigationPlan = null,
 } = {}) {
   const evidence = selectEvidenceMetrics(metrics, reconciliation, context);
   const safeHistory = (Array.isArray(history) ? history : [])
@@ -312,21 +316,29 @@ export function buildAskPayload({
             label: clipText(item.label, 80),
             value: typeof item.value === "number" ? roundMoney(item.value) ?? roundRatio(item.value) : null,
             source: clipText(item.source, 80),
+            factId: item.factId ? clipText(item.factId, 80) : null,
           })),
         }
       : null,
     history: safeHistory,
+    investigation: investigationPlan || null,
   };
 
   const encoded = JSON.stringify(payload);
   if (encoded.length <= MAX_PAYLOAD_CHARS) return payload;
 
-  // Trim products / monthly / history if oversized.
+  // Trim products / monthly / history / investigation if oversized.
   payload.evidence.products = payload.evidence.products.slice(0, 5);
   payload.evidence.monthly = payload.evidence.monthly.slice(-3);
   payload.evidence.productMonthly = (payload.evidence.productMonthly || []).slice(0, 3);
   payload.evidence.feeBurdenByOrderSize = (payload.evidence.feeBurdenByOrderSize || []).slice(0, 4);
   payload.history = payload.history.slice(-2);
+  if (payload.investigation?.facts) {
+    payload.investigation.facts = payload.investigation.facts.slice(0, 12);
+  }
+  if (payload.investigation?.connections) {
+    payload.investigation.connections = payload.investigation.connections.slice(0, 4);
+  }
   return payload;
 }
 

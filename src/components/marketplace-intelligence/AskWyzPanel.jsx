@@ -1,20 +1,38 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Loader2, Maximize2, MessageSquare, Minimize2, SendHorizontal, Sparkles, X } from "lucide-react";
-import { ASK_WYZ_DISCLOSURE_LIVE, formatInr, formatPct, getSection } from "../../lib/marketplace-intelligence/index.js";
+import {
+  ASK_WYZ_DISCLOSURE_LIVE,
+  formatCount,
+  formatInr,
+  formatPct,
+  getSection,
+} from "../../lib/marketplace-intelligence/index.js";
+import InvestigationWorkspace from "./InvestigationWorkspace.jsx";
 
-function formatEvidenceValue(value) {
+function formatEvidenceValue(value, label = "", metricId = "") {
   if (value == null) return "—";
-  if (typeof value === "number" && Math.abs(value) <= 2 && Number.isFinite(value) && !Number.isInteger(value)) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return String(value);
+  const hint = `${label} ${metricId}`.toLowerCase();
+  if (Math.abs(value) <= 2 && !Number.isInteger(value)) return formatPct(value);
+  if (/(share|rate|growth|mom|ratio|pct|percent)/.test(hint) && Math.abs(value) <= 2) {
     return formatPct(value);
   }
-  if (typeof value === "number") return formatInr(value);
-  return String(value);
+  if (
+    Number.isInteger(value) &&
+    /(order|count|orders_above|refunded|streak|month)/.test(hint) &&
+    !/(sales|aov|fee|amount|refund amount|charges|settlement|promo|value|effect|delta)/.test(hint)
+  ) {
+    return formatCount(value);
+  }
+  return formatInr(value);
 }
 
 function ContextChips({ context }) {
   if (!context) return null;
   const chips = [
     context.sectionId ? `Section: ${getSection(context.sectionId).label}` : null,
+    context.insightHeadline ? `Insight: ${context.insightHeadline}` : null,
+    context.insightId && !context.insightHeadline ? `Insight: ${context.insightId}` : null,
     context.product ? `Product: ${context.product}` : null,
     context.chartId ? `Chart: ${context.chartId}` : null,
     context.dateRange?.start || context.dateRange?.end
@@ -77,7 +95,9 @@ function TurnCard({ turn, spacious = false }) {
             {turn.evidence.slice(0, spacious ? 10 : 6).map((item) => (
               <li key={`${item.metricId}-${item.label}`} className="flex justify-between gap-3">
                 <span>{item.label}</span>
-                <span className="font-semibold tabular-nums text-[#1a3673]">{formatEvidenceValue(item.value)}</span>
+                <span className="font-semibold tabular-nums text-[#1a3673]">
+                  {formatEvidenceValue(item.value, item.label, item.metricId)}
+                </span>
               </li>
             ))}
           </ul>
@@ -163,24 +183,53 @@ function PanelBody({
   inputId,
   spacious = false,
   bottomRef,
+  investigation = null,
+  onRequestAi = null,
+  onOpenSection = null,
 }) {
+  const hasInvestigation = spacious && investigation?.status === "ready";
+
   return (
     <>
-      <p className={`${spacious ? "text-sm" : "text-xs"} leading-5 text-[#d5e0f2]`}>{ASK_WYZ_DISCLOSURE_LIVE}</p>
-      <ContextChips context={context} />
+      {hasInvestigation ? (
+        <p className="text-[11px] leading-5 text-[#9eb0d0]">
+          Session metrics · INR only · AI optional. Files never leave this browser.
+        </p>
+      ) : (
+        <>
+          <p className={`${spacious ? "text-sm" : "text-xs"} leading-5 text-[#d5e0f2]`}>
+            {ASK_WYZ_DISCLOSURE_LIVE}
+          </p>
+          <ContextChips context={context} />
+        </>
+      )}
+
+      {hasInvestigation ? (
+        <div className="mt-3">
+          <InvestigationWorkspace
+            investigation={investigation}
+            onRequestAi={onRequestAi}
+            onAskQuestion={submit}
+            onOpenSection={onOpenSection}
+            aiLoading={loading}
+          />
+        </div>
+      ) : null}
 
       <div
         className={`mt-4 space-y-2 overflow-y-auto pr-1 ${
-          spacious ? "min-h-[14rem] flex-1 max-h-none" : "max-h-64"
+          spacious ? "min-h-[8rem] flex-1 max-h-none" : "max-h-64"
         }`}
         role="log"
         aria-relevant="additions"
       >
         {conversation.length === 0 ? (
-          <p className="text-sm text-[#9eb0d0]">
-            Ask a question or pick a suggestion. Numbers always come from this session’s calculations in Indian rupees
-            (₹).
-          </p>
+          hasInvestigation ? null : (
+            <p className="text-sm text-[#9eb0d0]">
+              Ask a question or pick a suggestion. Numbers always come from this session’s calculations in Indian
+              rupees (₹).
+            </p>
+          )
         ) : (
           conversation.map((turn) => <TurnCard key={turn.id} turn={turn} spacious={spacious} />)
         )}
@@ -212,22 +261,26 @@ function PanelBody({
         </div>
       ) : null}
 
-      <p className="mt-4 shrink-0 text-[10px] font-semibold uppercase tracking-wide text-[#fcb07a]">
-        Suggested for {section.label}
-      </p>
-      <div className="mt-1.5 flex shrink-0 flex-col gap-1.5">
-        {section.questions.slice(0, spacious ? 6 : 3).map((question) => (
-          <button
-            key={question}
-            type="button"
-            disabled={loading}
-            onClick={() => submit(question)}
-            className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-left text-xs leading-5 text-white transition-colors hover:bg-white/10 disabled:opacity-50 sm:text-sm"
-          >
-            {question}
-          </button>
-        ))}
-      </div>
+      {!hasInvestigation ? (
+        <>
+          <p className="mt-4 shrink-0 text-[10px] font-semibold uppercase tracking-wide text-[#fcb07a]">
+            Suggested for {section.label}
+          </p>
+          <div className="mt-1.5 flex shrink-0 flex-col gap-1.5">
+            {section.questions.slice(0, spacious ? 6 : 3).map((question) => (
+              <button
+                key={question}
+                type="button"
+                disabled={loading}
+                onClick={() => submit(question)}
+                className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-left text-xs leading-5 text-white transition-colors hover:bg-white/10 disabled:opacity-50 sm:text-sm"
+              >
+                {question}
+              </button>
+            ))}
+          </div>
+        </>
+      ) : null}
 
       <div className="shrink-0">
         <AskComposer
@@ -253,6 +306,9 @@ export default function AskWyzPanel({
   onAsk,
   expanded = false,
   onToggleExpand,
+  investigation = null,
+  onRequestAi = null,
+  onOpenSection = null,
 }) {
   const section = getSection(sectionId);
   const [draft, setDraft] = useState("");
@@ -334,6 +390,7 @@ export default function AskWyzPanel({
           submit={submit}
           inputId={compactInputId}
           bottomRef={bottomRef}
+          investigation={null}
         />
       </aside>
 
@@ -359,9 +416,7 @@ export default function AskWyzPanel({
                     Ask WYZ investigation
                   </h2>
                 </div>
-                <p className="mt-1 text-xs text-[#9eb0d0]">
-                  Wider reading view · verified metrics stay separate from AI explanation · INR only
-                </p>
+                <p className="mt-1 text-xs text-[#9eb0d0]">INR investigation · AI optional</p>
               </div>
               <div className="flex items-center gap-2">
                 <button
@@ -398,6 +453,9 @@ export default function AskWyzPanel({
                 inputId={drawerInputId}
                 spacious
                 bottomRef={bottomRef}
+                investigation={investigation}
+                onRequestAi={onRequestAi}
+                onOpenSection={onOpenSection}
               />
             </div>
           </section>

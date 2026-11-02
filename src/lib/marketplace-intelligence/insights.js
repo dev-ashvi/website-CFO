@@ -5,6 +5,12 @@
  */
 import { formatMonthLabel } from "./askPresentation.js";
 import { formatInr, formatPct } from "./money.js";
+import {
+  compareMonthCoverage,
+  coverageLeadHeadline,
+  founderComparisonNote,
+  isPartialMonth,
+} from "./periodCoverage.js";
 
 function monthLabel(ym) {
   return formatMonthLabel(ym) || ym;
@@ -15,23 +21,6 @@ function pair(keyInsight, worthInvestigating) {
     keyInsight: keyInsight || "Insufficient data",
     worthInvestigating: worthInvestigating || "Insufficient data",
   };
-}
-
-function monthParts(ym) {
-  const [y, m] = String(ym || "").split("-").map(Number);
-  if (!y || !m) return null;
-  const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
-  return { y, m, lastDay, start: `${ym}-01`, end: `${ym}-${String(lastDay).padStart(2, "0")}` };
-}
-
-function isPartialMonth(ym, period, dateRange) {
-  const parts = monthParts(ym);
-  if (!parts) return false;
-  const startBound = dateRange?.start || period?.start || null;
-  const endBound = dateRange?.end || period?.end || null;
-  if (startBound && startBound > parts.start && startBound.slice(0, 7) === ym) return true;
-  if (endBound && endBound < parts.end && endBound.slice(0, 7) === ym) return true;
-  return false;
 }
 
 /**
@@ -106,12 +95,22 @@ function monthlySalesInsights(monthly, period, dateRange) {
       if (declines >= 2) break;
     }
     if (declines >= 2 && declineEnd) {
+      const endPartial = isPartialMonth(declineEnd.month, period, dateRange);
       return pair(
         key,
-        `Gross Product Sales declined for ${declines} consecutive months ending ${monthLabel(declineEnd.month)} (latest MoM ${formatPct(declineEnd.growth)}). Zero-sales month(s) in span: ${zeroMonths
-          .slice(0, 2)
-          .map((row) => monthLabel(row.month))
-          .join(", ")}.`,
+        endPartial
+          ? `Observed Gross Product Sales were lower for ${declines} consecutive months ending ${monthLabel(
+              declineEnd.month,
+            )} (incomplete coverage). Zero-sales month(s) in span: ${zeroMonths
+              .slice(0, 2)
+              .map((row) => monthLabel(row.month))
+              .join(", ")}.`
+          : `Gross Product Sales declined for ${declines} consecutive months ending ${monthLabel(
+              declineEnd.month,
+            )} (latest MoM ${formatPct(declineEnd.growth)}). Zero-sales month(s) in span: ${zeroMonths
+              .slice(0, 2)
+              .map((row) => monthLabel(row.month))
+              .join(", ")}.`,
       );
     }
     return pair(
@@ -128,16 +127,35 @@ function monthlySalesInsights(monthly, period, dateRange) {
     if (dense[i].growth != null && dense[i].growth < 0) declines += 1;
     else declines = 0;
     if (declines >= 2) {
-      const partialLatest = isPartialMonth(dense[i].month, period, dateRange);
+      const endPartial = isPartialMonth(dense[i].month, period, dateRange);
       return pair(
         key,
-        `Gross Product Sales declined for ${declines} consecutive months ending ${monthLabel(dense[i].month)}${
-          partialLatest ? " (partial)" : ""
-        } (latest MoM ${formatPct(dense[i].growth)}).`,
+        endPartial
+          ? `Observed Gross Product Sales were lower for ${declines} consecutive months ending ${monthLabel(
+              dense[i].month,
+            )} (incomplete coverage — not a verified full-month MoM streak).`
+          : `Gross Product Sales declined for ${declines} consecutive months ending ${monthLabel(
+              dense[i].month,
+            )} (latest MoM ${formatPct(dense[i].growth)}).`,
       );
     }
   }
   const latest = dense[dense.length - 1];
+  const prior = dense.length >= 2 ? dense[dense.length - 2] : null;
+  if (prior?.month && latest?.month) {
+    const cmp = compareMonthCoverage(prior.month, latest.month, period, dateRange);
+    if (cmp.provisional) {
+      const lead =
+        coverageLeadHeadline(cmp, prior.month, latest.month, monthLabel) ||
+        founderComparisonNote(cmp);
+      return pair(
+        key,
+        `${lead}. Observed Gross Product Sales ${formatInr(prior.sales)} → ${formatInr(
+          latest.sales,
+        )} in available records — not a verified full-month MoM decline.`,
+      );
+    }
+  }
   const partialLatest = isPartialMonth(latest.month, period, dateRange);
   return pair(
     key,
@@ -147,7 +165,7 @@ function monthlySalesInsights(monthly, period, dateRange) {
   );
 }
 
-function monthlyOrdersInsights(monthly) {
+function monthlyOrdersInsights(monthly, period, dateRange) {
   if (!monthly?.length) return pair(null, null);
   if (monthly.length < 2) {
     const only = monthly[0];
@@ -168,6 +186,15 @@ function monthlyOrdersInsights(monthly) {
   const aovChange =
     prior.aov && latest.aov != null ? (latest.aov - prior.aov) / prior.aov : null;
   if (aovChange == null) return pair(key, "Insufficient data for order vs basket comparison.");
+  const cmp = compareMonthCoverage(prior.month, latest.month, period, dateRange);
+  if (cmp.provisional) {
+    return pair(
+      key,
+      `Observed-record difference from ${monthLabel(prior.month)} to ${monthLabel(latest.month)}: Orders ${formatPct(
+        orderChange,
+      )}, Gross AOV ${formatPct(aovChange)}. Not a verified full-month Orders vs AOV MoM.`,
+    );
+  }
   const driver =
     Math.abs(orderChange) >= Math.abs(aovChange)
       ? `Orders moved ${formatPct(orderChange)} vs Gross AOV ${formatPct(aovChange)} from ${monthLabel(prior.month)} to ${monthLabel(latest.month)}.`
@@ -283,7 +310,7 @@ export function buildChartInsights(metrics, reconciliation = null) {
 
   return {
     "monthly-sales": monthlySalesInsights(topline.monthly, period, dateRange),
-    "monthly-orders": monthlyOrdersInsights(topline.monthly),
+    "monthly-orders": monthlyOrdersInsights(topline.monthly, period, dateRange),
     weekly: weeklyInsights(topline.weekly, topline.bulkOrders),
     "product-mix": productMixInsights(topline.productMix || products.products, metrics.kpis?.top8Concentration),
     "fee-breakdown": feeInsights(economics.whereMoneyGoes, economics.marketplaceFeeDrains),
