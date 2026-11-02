@@ -17,7 +17,7 @@ const nav = [
     ],
   },
   {
-    label: "WYZ Tools",
+    label: "WYZ Modules",
     children: [
       { label: "Cashflow Assessment", href: "/runway-simulator" },
       { label: "Marketplace Intelligence", href: "/marketplace-intelligence" },
