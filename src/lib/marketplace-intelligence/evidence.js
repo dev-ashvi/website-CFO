@@ -339,6 +339,37 @@ export function buildAskPayload({
   if (payload.investigation?.connections) {
     payload.investigation.connections = payload.investigation.connections.slice(0, 4);
   }
+
+  // Stage 5 investigation facts already carry the key amounts — drop bulky
+  // chart/recon detail so Ask-from-finding stays under the NVIDIA wire limit.
+  if (JSON.stringify(payload).length > MAX_PAYLOAD_CHARS) {
+    payload.evidence.chartInsights = [];
+    payload.evidence.productMonthly = [];
+    payload.evidence.feeBurdenByOrderSize = [];
+    payload.evidence.bulkOrders = [];
+    payload.evidence.bulkImpact = null;
+    payload.evidence.waterfall = (payload.evidence.waterfall || []).slice(0, 4);
+    payload.evidence.limitations = (payload.evidence.limitations || []).slice(0, 6);
+    if (payload.evidence.reconciliation?.comparisons) {
+      payload.evidence.reconciliation.comparisons = payload.evidence.reconciliation.comparisons.slice(0, 4);
+    }
+    if (payload.guidedAnswer?.text) {
+      payload.guidedAnswer.text = clipText(payload.guidedAnswer.text, 400);
+    }
+    if (payload.investigation?.facts) {
+      payload.investigation.facts = payload.investigation.facts.slice(0, 8);
+    }
+    if (payload.investigation?.missingData) {
+      payload.investigation.missingData = payload.investigation.missingData.slice(0, 4);
+    }
+    if (payload.investigation?.unverifiedHypotheses) {
+      payload.investigation.unverifiedHypotheses = payload.investigation.unverifiedHypotheses.slice(0, 3);
+    }
+    if (payload.investigation?.nextInvestigations) {
+      payload.investigation.nextInvestigations = payload.investigation.nextInvestigations.slice(0, 3);
+    }
+  }
+
   return payload;
 }
 
